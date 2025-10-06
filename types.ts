@@ -11,7 +11,7 @@ export interface Module {
   lessons: Lesson[];
 }
 
-export type AppView = 'lesson' | 'pattern' | 'timed' | 'canvas';
+export type AppView = 'lesson' | 'pattern' | 'timed' | 'canvas' | 'simulator';
 
 export interface MultipleChoiceQuestion {
     question: string;

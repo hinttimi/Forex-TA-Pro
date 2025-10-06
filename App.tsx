@@ -9,6 +9,7 @@ import { MODULES } from './constants';
 import { PatternRecognitionView } from './components/practice/PatternRecognitionView';
 import { TimedChallengeView } from './components/practice/TimedChallengeView';
 import { FreePracticeCanvasView } from './components/practice/FreePracticeCanvasView';
+import { TradeSimulatorView } from './components/practice/TradeSimulatorView';
 
 const allLessons = MODULES.flatMap(module => module.lessons);
 
@@ -94,6 +95,8 @@ const App: React.FC = () => {
         return <TimedChallengeView />;
       case 'canvas':
         return <FreePracticeCanvasView />;
+      case 'simulator':
+        return <TradeSimulatorView />;
       case 'lesson':
       default:
         return currentLesson ? (

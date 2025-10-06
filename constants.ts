@@ -101,17 +101,34 @@ Explain that mastering these patterns is a key step to reading price action. Use
       },
     ]
   },
-    {
-    title: 'Level 5: Fair Value Gaps',
+  {
+    title: 'Level 5: The Professional Framework',
     lessons: [
        {
-        key: 'l5-fvg',
+        key: 'l5-premium-discount',
+        title: 'Premium vs. Discount',
+        contentPrompt: 'You are an expert ICT trading mentor. Explain the concept of **Premium vs. Discount** pricing. Describe how to use the Fibonacci tool to find the 50% Equilibrium level of a trading range. Emphasize that high-probability long setups are found in the discount, and high-probability short setups are found in the premium. This is the key to buying low and selling high.',
+        chartPrompt: 'A dark-themed candlestick chart showing a clear swing from a low to a high. A Fibonacci tool is drawn on this range. The area above the 0.5 level is shaded red and labeled "Premium (Sell Zone)". The area below the 0.5 level is shaded green and labeled "Discount (Buy Zone)".',
+      },
+       {
+        key: 'l5-refining-pois',
+        title: 'Refining Points of Interest (POIs)',
+        contentPrompt: 'You are a professional trading mentor specializing in Smart Money Concepts. Explain how to identify a **high-probability Point of Interest (POI)**. Create a checklist: 1. Did the move from the POI cause a **Break of Structure (BOS)**? 2. Did the POI itself cause a **Liquidity Sweep** of a previous high/low? 3. Is the POI **unmitigated**? 4. Is the POI located in a logical **Premium/Discount** zone?',
+        chartPrompt: 'A complex, dark-themed candlestick chart. Show an uptrend. Price creates a minor high, then pulls back, creating a small "inducement" order block. Price then sweeps the low of that pullback, creating a *second*, more powerful "Bullish Order Block". Label the first one "Weak POI (Inducement)" and the second one "Strong POI (Swept Liquidity)". Show price ignoring the first and reacting strongly to the second.',
+      },
+    ]
+  },
+    {
+    title: 'Level 6: Fair Value Gaps',
+    lessons: [
+       {
+        key: 'l6-fvg',
         title: 'Identifying Fair Value Gaps',
         contentPrompt: 'You are a professional trading mentor specializing in Smart Money Concepts. Explain what a **Fair Value Gap (FVG)** or imbalance is. Describe it as an inefficient 3-candle pattern where there is a gap between the first candle\'s high and the third candle\'s low. Explain they act as a magnet for price. Use markdown for emphasis.',
         chartPrompt: 'A dark-themed forex candlestick chart showing a large, impulsive green candle. Highlight the gap between the wick of the candle before it and the wick of the candle after it. Label this area clearly as "Fair Value Gap" or "FVG".',
       },
        {
-        key: 'l5-fvg-retest',
+        key: 'l6-fvg-retest',
         title: 'FVG Retest Strategy',
         contentPrompt: 'You are a professional trading mentor specializing in Smart Money Concepts. Explain how Fair Value Gaps (FVGs) are used for entries. Describe that after an FVG is created, traders watch for price to retrace back into the gap to "rebalance" it. This retracement offers a high-probability entry point in the direction of the original impulsive move. Use markdown for emphasis.',
         chartPrompt: 'A dark-themed forex candlestick chart showing a "Fair Value Gap" being created. Use a dotted arrow to show how price later returns to trade into the FVG (but not necessarily fill it completely) before continuing its original move. Label the entry point.',
@@ -119,16 +136,16 @@ Explain that mastering these patterns is a key step to reading price action. Use
     ]
   },
   {
-    title: 'Level 6: Advanced Concepts',
+    title: 'Level 7: Advanced Concepts',
     lessons: [
       {
-        key: 'l6-ote',
+        key: 'l7-ote',
         title: 'Optimal Trade Entry (OTE)',
         contentPrompt: 'You are an expert ICT trading mentor. Explain the **Optimal Trade Entry (OTE)**. Describe it as using the Fibonacci tool, drawing from the swing low to high (or vice versa). The OTE is the "sweet spot" for an entry, typically between the 62% and 79% retracement levels, often aligning with an Order Block or FVG. Use markdown for emphasis.',
         chartPrompt: 'A dark-themed candlestick chart showing a major swing from a low to a high. A Fibonacci retracement tool is drawn on this swing. Highlight the area between the 0.62 and 0.79 levels and label it "OTE". Show price retracing into this zone and then reversing.',
       },
       {
-        key: 'l6-inducement',
+        key: 'l7-inducement',
         title: 'Inducement (Smart Money Traps)',
         contentPrompt: 'You are an expert ICT trading mentor. Explain the concept of **Inducement**. Describe it as a small, seemingly obvious pullback (like a minor support/resistance level) designed to lure in early or impatient traders (the "inducement"). Smart money then sweeps the liquidity from these early positions before moving to the true point of interest. Use markdown for emphasis.',
         chartPrompt: 'A dark-themed candlestick chart showing a downtrend. A minor pullback creates a small high. Label this "Inducement". Show price coming up, breaking this minor high (sweeping liquidity), and *then* tapping into a true "Bearish Order Block" located slightly higher, before the real move down begins.',
@@ -136,16 +153,16 @@ Explain that mastering these patterns is a key step to reading price action. Use
     ]
   },
    {
-    title: 'Level 7: Complete Strategy',
+    title: 'Level 8: Complete Strategy',
     lessons: [
        {
-        key: 'l7-entry-model',
+        key: 'l8-entry-model',
         title: 'The Full A-Grade Setup',
         contentPrompt: 'You are an expert ICT trading mentor. Outline a complete, high-probability trade setup checklist. 1. **Higher Timeframe Direction**: Is it bullish or bearish? 2. **Liquidity Grab**: Wait for a sweep of a key low or high. 3. **Lower Timeframe Reversal**: Look for a **Change of Character (CHoCH)** after the sweep. 4. **Entry Point**: Identify a resulting **Order Block** or **Fair Value Gap (FVG)** to enter on. Use markdown for emphasis.',
         chartPrompt: 'A series of two connected dark-themed charts. The first, labeled "4H Chart", shows a clear uptrend. Circle a specific higher low. The second chart, labeled "15M Chart (Zoomed in)", shows price first dipping below that 4H low (label this "Liquidity Grab"). Then, show price aggressively moving up, causing a "CHoCH". Highlight an "Order Block" that formed and label "Potential Entry Zone".',
       },
       {
-        key: 'l7-risk-management',
+        key: 'l8-risk-management',
         title: 'Risk Management & Sizing',
         contentPrompt: 'You are an expert trading mentor. Explain the vital importance of **Risk Management**. Cover the 1-2% rule (never risk more than 1-2% of your account on a single trade). Explain how to place a **stop-loss** logically (e.g., below the low of an Order Block) and how to calculate **position size** based on stop-loss distance and risk percentage. Use markdown for emphasis.',
         chartPrompt: 'A simple, dark-themed infographic. Show a pie chart representing a trading account, with a tiny 1% slice colored red and labeled "Max Risk per Trade". Next to it, show a sample trade with a clear "Entry" price, "Stop Loss" price, and "Take Profit" price, with the distance between Entry and Stop Loss labeled "Risk".',
@@ -153,16 +170,16 @@ Explain that mastering these patterns is a key step to reading price action. Use
     ]
   },
   {
-    title: 'Level 8: Mastery',
+    title: 'Level 9: Mastery',
     lessons: [
        {
-        key: 'l8-multi-timeframe',
+        key: 'l9-multi-timeframe',
         title: 'Multi-Timeframe Analysis',
         contentPrompt: 'You are an expert trading mentor. Explain the concept of **Multi-Timeframe Analysis**. Describe a top-down approach: use a **high timeframe** (e.g., Daily, 4H) to establish the overall trend and key levels, a **medium timeframe** (e.g., 1H, 15M) to find your setup and point of interest, and a **low timeframe** (e.g., 5M, 1M) to pinpoint the exact entry. Use markdown for emphasis.',
         chartPrompt: 'An image showing three charts side-by-side for a dark theme. Labeled "Daily", "1-Hour", and "5-Minute". The Daily chart shows a clear uptrend. The 1-Hour chart zooms in on a pullback to an order block within that uptrend. The 5-Minute chart zooms in further, showing a CHoCH at the order block for a precise entry signal.',
       },
        {
-        key: 'l8-psychology',
+        key: 'l9-psychology',
         title: 'Trading Psychology',
         contentPrompt: 'You are an expert trading mentor. Discuss the critical role of **Psychology** in trading. Cover the main enemies of a trader: **Fear** (of losing, of missing out/FOMO), **Greed** (taking oversized positions, not taking profit), and the need for **Patience** and **Discipline** to follow your trading plan without deviation. Use markdown for emphasis.',
         chartPrompt: 'An abstract, dark-themed image. On one side, show a brain icon with chaotic lines labeled "Fear, Greed, FOMO, Impatience". An arrow points to a chart showing erratic, losing trades. On the other side, show a brain icon with calm, orderly lines labeled "Discipline, Patience, Strategy". An arrow points to a chart showing consistent, well-executed trades.',

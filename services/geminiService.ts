@@ -54,6 +54,28 @@ export const generateChartImage = async (prompt: string): Promise<string> => {
   }
 };
 
+/**
+ * Generates feedback for a user's simulated trade.
+ * @param chartPrompt - The prompt used to generate the chart scenario.
+ * @param tradeDetails - A string describing the user's trade (side, entry, SL, TP).
+ * @returns The AI-generated feedback as a string.
+ */
+export const generateTradeFeedback = async (chartPrompt: string, tradeDetails: string): Promise<string> => {
+    const prompt = `You are an expert trading mentor specializing in Smart Money Concepts. A student is practicing on a simulated chart that was generated with the prompt: "${chartPrompt}". The student placed the following trade: ${tradeDetails}.
+Based on the visual patterns you were asked to generate, analyze the quality of this trade setup *before it plays out*. Is the entry logical relative to the Point of Interest? Is the stop loss placed in a safe location (e.g., below the swing low for a long)? Is the take profit targeting a realistic liquidity level? Provide clear, concise, and constructive feedback in markdown format. Start with a one-sentence summary (e.g., "This is a well-planned setup.") and then provide bullet points for your reasoning.`;
+
+    try {
+        const response = await ai.models.generateContent({
+            model: 'gemini-2.5-flash',
+            contents: prompt,
+        });
+        return response.text;
+    } catch (error) {
+        console.error("Error generating trade feedback:", error);
+        throw new Error("Failed to generate trade feedback from Gemini API.");
+    }
+};
+
 const quizQuestionSchema = {
     type: Type.OBJECT,
     properties: {

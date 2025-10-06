@@ -7,6 +7,7 @@ import { TrophyIcon } from './icons/TrophyIcon';
 import { EyeIcon } from './icons/EyeIcon';
 import { ClockIcon } from './icons/ClockIcon';
 import { PencilSquareIcon } from './icons/PencilSquareIcon';
+import { RocketLaunchIcon } from './icons/RocketLaunchIcon';
 
 interface SidebarProps {
   modules: Module[];
@@ -98,6 +99,21 @@ export const Sidebar: React.FC<SidebarProps> = ({ modules, onSelectLesson, selec
                        currentView === 'canvas' ? 'text-cyan-400' : 'text-gray-500'
                     }`} />
                     <span>Free Practice Canvas</span>
+                </button>
+            </li>
+             <li>
+                <button
+                    onClick={() => onSetPracticeView('simulator')}
+                    className={`w-full text-left flex items-center px-3 py-2 text-sm rounded-md transition-colors duration-150 ${
+                      currentView === 'simulator'
+                        ? 'bg-cyan-500/10 text-cyan-300 font-semibold'
+                        : 'text-gray-300 hover:bg-gray-700 hover:text-white'
+                    }`}
+                  >
+                    <RocketLaunchIcon className={`w-4 h-4 mr-3 flex-shrink-0 ${
+                       currentView === 'simulator' ? 'text-cyan-400' : 'text-gray-500'
+                    }`} />
+                    <span>Trade Simulator</span>
                 </button>
             </li>
         </ul>
