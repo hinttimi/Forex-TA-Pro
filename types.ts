@@ -1,3 +1,4 @@
+import React from 'react';
 
 export interface Lesson {
   key: string;
@@ -11,10 +12,18 @@ export interface Module {
   lessons: Lesson[];
 }
 
-export type AppView = 'lesson' | 'pattern' | 'timed' | 'canvas' | 'simulator';
+export type AppView = 'lesson' | 'pattern' | 'timed' | 'canvas' | 'simulator' | 'saved' | 'achievements' | 'trading_plan';
 
 export interface MultipleChoiceQuestion {
     question: string;
     options: string[];
     correctAnswer: string; // The text of the correct option
+}
+
+export interface Badge {
+  id: string;
+  title: string;
+  description: string;
+  // FIX: React was not imported, causing an error on the line below.
+  icon: React.FC<{ className?: string }>;
 }

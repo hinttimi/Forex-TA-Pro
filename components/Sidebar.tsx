@@ -8,6 +8,9 @@ import { EyeIcon } from './icons/EyeIcon';
 import { ClockIcon } from './icons/ClockIcon';
 import { PencilSquareIcon } from './icons/PencilSquareIcon';
 import { RocketLaunchIcon } from './icons/RocketLaunchIcon';
+import { BookmarkSquareIcon } from './icons/BookmarkSquareIcon';
+import { MedalIcon } from './icons/MedalIcon';
+import { DocumentTextIcon } from './icons/DocumentTextIcon';
 
 interface SidebarProps {
   modules: Module[];
@@ -114,6 +117,60 @@ export const Sidebar: React.FC<SidebarProps> = ({ modules, onSelectLesson, selec
                        currentView === 'simulator' ? 'text-cyan-400' : 'text-gray-500'
                     }`} />
                     <span>Trade Simulator</span>
+                </button>
+            </li>
+             <li>
+                <button
+                    onClick={() => onSetPracticeView('saved')}
+                    className={`w-full text-left flex items-center px-3 py-2 text-sm rounded-md transition-colors duration-150 ${
+                      currentView === 'saved'
+                        ? 'bg-cyan-500/10 text-cyan-300 font-semibold'
+                        : 'text-gray-300 hover:bg-gray-700 hover:text-white'
+                    }`}
+                  >
+                    <BookmarkSquareIcon className={`w-4 h-4 mr-3 flex-shrink-0 ${
+                       currentView === 'saved' ? 'text-cyan-400' : 'text-gray-500'
+                    }`} />
+                    <span>Saved Analysis</span>
+                </button>
+            </li>
+        </ul>
+      </div>
+
+       <div className="mt-8 pt-6 border-t border-gray-700">
+        <h2 className="text-sm font-semibold text-gray-400 uppercase tracking-wider mb-3 flex items-center">
+            <MedalIcon className="w-5 h-5 mr-2" />
+            Progress
+        </h2>
+        <ul className="space-y-2">
+            <li>
+                <button
+                    onClick={() => onSetPracticeView('achievements')}
+                    className={`w-full text-left flex items-center px-3 py-2 text-sm rounded-md transition-colors duration-150 ${
+                      currentView === 'achievements'
+                        ? 'bg-cyan-500/10 text-cyan-300 font-semibold'
+                        : 'text-gray-300 hover:bg-gray-700 hover:text-white'
+                    }`}
+                  >
+                    <TrophyIcon className={`w-4 h-4 mr-3 flex-shrink-0 ${
+                       currentView === 'achievements' ? 'text-cyan-400' : 'text-gray-500'
+                    }`} />
+                    <span>Achievements</span>
+                </button>
+            </li>
+            <li>
+                <button
+                    onClick={() => onSetPracticeView('trading_plan')}
+                    className={`w-full text-left flex items-center px-3 py-2 text-sm rounded-md transition-colors duration-150 ${
+                      currentView === 'trading_plan'
+                        ? 'bg-cyan-500/10 text-cyan-300 font-semibold'
+                        : 'text-gray-300 hover:bg-gray-700 hover:text-white'
+                    }`}
+                  >
+                    <DocumentTextIcon className={`w-4 h-4 mr-3 flex-shrink-0 ${
+                       currentView === 'trading_plan' ? 'text-cyan-400' : 'text-gray-500'
+                    }`} />
+                    <span>My Trading Plan</span>
                 </button>
             </li>
         </ul>

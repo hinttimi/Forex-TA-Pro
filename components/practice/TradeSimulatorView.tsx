@@ -9,49 +9,98 @@ import { CursorArrowRaysIcon } from '../icons/CursorArrowRaysIcon';
 import { ArrowPathIcon } from '../icons/ArrowPathIcon';
 import { SparklesIcon } from '../icons/SparklesIcon';
 import { ArrowRightIcon } from '../icons/ArrowRightIcon';
+import { ArrowsPointingOutIcon } from '../icons/ArrowsPointingOutIcon';
+import { XMarkIcon } from '../icons/XMarkIcon';
+import { BookmarkSquareIcon } from '../icons/BookmarkSquareIcon';
+import { useCompletion } from '../../hooks/useCompletion';
+import { useBadges } from '../../hooks/useBadges';
+
+// --- Constants ---
+const CHART_WIDTH = 1280;
+const CHART_HEIGHT = 720;
+const PAUSE_CURTAIN_WIDTH_PERCENT = 45; // a bit less than 50% to give a clue
+const HIT_TOLERANCE = 10;
+const RESIZE_HANDLE_SIZE = 8;
+const SIMULATOR_APPRENTICE_GOAL = 5;
+const ARCHIVIST_GOAL = 3;
+
+
+// --- Helper Functions ---
+const distance = (p1: {x:number, y:number}, p2: {x:number, y:number}) => Math.sqrt((p1.x - p2.x) ** 2 + (p1.y - p2.y) ** 2);
+
+const isPointOnLine = (p: {x:number, y:number}, start: {x:number, y:number}, end: {x:number, y:number}) => {
+    const d1 = distance(p, start);
+    const d2 = distance(p, end);
+    const lineLen = distance(start, end);
+    return Math.abs(d1 + d2 - lineLen) < HIT_TOLERANCE / 2;
+};
 
 // --- Types ---
 type Tool = 'select' | 'trendline' | 'horizontal';
 type Shape = { id: number; type: Exclude<Tool, 'select'>; color: string; points: { x: number; y: number }[]; lineWidth: number; };
-type Interaction = | { type: 'none' } | { type: 'drawing' } | { type: 'moving'; id: number };
+type Interaction =
+  | { type: 'none' }
+  | { type: 'drawing' }
+  | { type: 'moving'; id: number }
+  | { type: 'resizing'; id: number; handle: 'start' | 'end' };
 type GameState = 'idle' | 'loading' | 'analyzing' | 'placing_trade' | 'feedback' | 'reviewing';
 type TradeSide = 'buy' | 'sell';
 type Trade = { side: TradeSide | null; entry: number | null; stopLoss: number | null; takeProfit: number | null; };
 type PlacementStep = 'entry' | 'stopLoss' | 'takeProfit' | 'done';
 
-const CHART_WIDTH = 1280;
-const CHART_HEIGHT = 720;
-const PAUSE_CURTAIN_WIDTH_PERCENT = 45; // a bit less than 50% to give a clue
+const getShapeAtPosition = (coords: {x: number, y: number}, shapes: Shape[]): Shape | null => {
+    for (let i = shapes.length - 1; i >= 0; i--) {
+        const shape = shapes[i];
+        const [start, end] = shape.points;
+        if (shape.type === 'trendline' && end && isPointOnLine(coords, start, end)) return shape;
+        if (shape.type === 'horizontal' && Math.abs(coords.y - start.y) < HIT_TOLERANCE) return shape;
+    }
+    return null;
+}
+
+const getHandleAtPosition = (coords: {x: number, y: number}, shape: Shape): 'start' | 'end' | null => {
+    const [start, end] = shape.points;
+    if (distance(coords, start) < RESIZE_HANDLE_SIZE) return 'start';
+    if (end && distance(coords, end) < RESIZE_HANDLE_SIZE) return 'end';
+    return null;
+}
 
 // Helper to format Y coordinate as a price
 const formatPrice = (y: number | null) => y === null ? '?.???' : (1000 - (y / CHART_HEIGHT) * 100).toFixed(3);
 
 
 const FormattedContent: React.FC<{ text: string }> = ({ text }) => {
-    const parts = text.split(/\*\*(.*?)\*\*/g).map((part, i) =>
+    const lines = text.split('\n').filter(p => p.trim() !== '');
+    
+    const renderInlineMarkdown = (lineText: string) => lineText.split(/\*\*(.*?)\*\*/g).map((part, i) =>
         i % 2 === 1 ? <strong key={i} className="font-bold text-cyan-300">{part}</strong> : part
     );
-    const paragraphs = text.split('\n').filter(p => p.trim() !== '');
 
-    return (
-        <div>
-            {paragraphs.map((p, i) => {
-                if (p.trim().startsWith('* ')) {
-                    return (
-                        <ul key={i} className="list-disc list-inside space-y-2 my-3">
-                            {paragraphs.filter(line => line.trim().startsWith('* ')).map((item, j) => (
-                                <li key={j}>{item.substring(2)}</li>
-                            ))}
-                        </ul>
-                    );
-                }
-                if (!paragraphs[i-1] || !paragraphs[i-1].trim().startsWith('* ')) {
-                    return <p key={i} className="mb-4 leading-relaxed">{p.split(/\*\*(.*?)\*\*/g).map((part, j) => j % 2 === 1 ? <strong key={j} className="font-bold text-cyan-300">{part}</strong> : part)}</p>;
-                }
-                return null;
-            })}
-        </div>
-    );
+    const elements: React.ReactElement[] = [];
+    let listItems: React.ReactElement[] = [];
+
+    const flushListItems = () => {
+        if (listItems.length > 0) {
+            elements.push(<ul key={`ul-${elements.length}`} className="list-disc space-y-1 my-3 pl-5">{listItems}</ul>);
+            listItems = [];
+        }
+    };
+
+    lines.forEach((line, index) => {
+        const trimmedLine = line.trim();
+        const isListItem = trimmedLine.startsWith('* ');
+
+        if (isListItem) {
+            listItems.push(<li key={index}>{renderInlineMarkdown(trimmedLine.substring(2))}</li>);
+        } else {
+            flushListItems();
+            elements.push(<p key={index} className="mb-3 leading-relaxed">{renderInlineMarkdown(trimmedLine)}</p>);
+        }
+    });
+    
+    flushListItems();
+
+    return <>{elements}</>;
 };
 
 
@@ -59,20 +108,26 @@ export const TradeSimulatorView: React.FC = () => {
     const [gameState, setGameState] = useState<GameState>('idle');
     const [chartImageUrl, setChartImageUrl] = useState<string>('');
     const [chartGenPrompt, setChartGenPrompt] = useState('');
+    const [isModalOpen, setIsModalOpen] = useState(false);
     
     // Drawing state
     const [shapes, setShapes] = useState<Shape[]>([]);
     const [activeTool, setActiveTool] = useState<Tool>('trendline');
     const [drawingPoints, setDrawingPoints] = useState<{x: number, y: number}[]>([]);
     const [interaction, setInteraction] = useState<Interaction>({ type: 'none' });
-    
+    const [selectedShapeId, setSelectedShapeId] = useState<number | null>(null);
+
     // Trade state
     const [trade, setTrade] = useState<Trade>({ side: null, entry: null, stopLoss: null, takeProfit: null });
     const [placementStep, setPlacementStep] = useState<PlacementStep>('entry');
 
-    // Feedback state
+    // Feedback and saving state
     const [feedback, setFeedback] = useState('');
     const [isLoadingFeedback, setIsLoadingFeedback] = useState(false);
+    const [isAnalysisSaved, setIsAnalysisSaved] = useState(false);
+    
+    const { logSimulatorCompletion, logSavedAnalysis, getCompletionCount } = useCompletion();
+    const { unlockBadge } = useBadges();
 
     const canvasRef = useRef<HTMLCanvasElement>(null);
     const imageRef = useRef<HTMLImageElement | null>(null);
@@ -82,9 +137,17 @@ export const TradeSimulatorView: React.FC = () => {
         setGameState('loading');
         setChartImageUrl('');
         setShapes([]);
+        setSelectedShapeId(null);
         setTrade({ side: null, entry: null, stopLoss: null, takeProfit: null });
         setPlacementStep('entry');
         setFeedback('');
+        setActiveTool('trendline');
+        setIsAnalysisSaved(false);
+        
+        logSimulatorCompletion();
+        if (getCompletionCount('simulatorRuns') + 1 >= SIMULATOR_APPRENTICE_GOAL) {
+            unlockBadge('simulator-apprentice');
+        }
 
         const prompt = "You are an AI chart generator. Create a dark-themed forex candlestick chart showing a clear, high-probability trade setup based on Smart Money Concepts. The setup could be a bullish or bearish scenario involving a liquidity sweep, a change of character, and a clear point of interest (like an order block or FVG). The chart must show the full price action from setup to resolution. The setup should occur around the horizontal middle of the chart.";
         setChartGenPrompt(prompt);
@@ -98,11 +161,16 @@ export const TradeSimulatorView: React.FC = () => {
         }
     };
 
-    // --- Canvas Drawing Logic (adapted from FreePracticeCanvasView) ---
-    const getCanvasCoordinates = (event: React.MouseEvent<HTMLCanvasElement>): { x: number; y: number } => {
-        const canvas = canvasRef.current!;
+    const getCanvasCoordinates = (event: React.MouseEvent<HTMLCanvasElement>): { x: number; y: number } | null => {
+        const canvas = canvasRef.current;
+        if (!canvas) return null;
         const rect = canvas.getBoundingClientRect();
-        return { x: event.clientX - rect.left, y: event.clientY - rect.top };
+        const scaleX = canvas.width / rect.width;
+        const scaleY = canvas.height / rect.height;
+        return { 
+            x: (event.clientX - rect.left) * scaleX, 
+            y: (event.clientY - rect.top) * scaleY 
+        };
     };
 
     const redrawCanvas = useCallback(() => {
@@ -115,24 +183,32 @@ export const TradeSimulatorView: React.FC = () => {
             ctx.drawImage(imageRef.current, 0, 0, canvas.width, canvas.height);
         }
 
-        // Draw user shapes
         shapes.forEach(shape => {
             ctx.strokeStyle = shape.color;
             ctx.lineWidth = shape.lineWidth;
             const [start, end] = shape.points;
-            if (!end) return;
             ctx.beginPath();
             if (shape.type === 'horizontal') {
                 ctx.moveTo(0, start.y);
                 ctx.lineTo(canvas.width, start.y);
-            } else {
+            } else if (end) {
                 ctx.moveTo(start.x, start.y);
                 ctx.lineTo(end.x, end.y);
             }
             ctx.stroke();
         });
 
-        // Draw temporary drawing shape
+        const selectedShape = shapes.find(s => s.id === selectedShapeId);
+        if(selectedShape) {
+            ctx.fillStyle = '#FFFFFF';
+            selectedShape.points.forEach(p => {
+                if(!p) return;
+                ctx.beginPath();
+                ctx.rect(p.x - RESIZE_HANDLE_SIZE / 2, p.y - RESIZE_HANDLE_SIZE / 2, RESIZE_HANDLE_SIZE, RESIZE_HANDLE_SIZE);
+                ctx.fill();
+            });
+        }
+
         if (interaction.type === 'drawing' && drawingPoints.length > 1) {
             ctx.strokeStyle = '#a78bfa';
             ctx.lineWidth = 2;
@@ -148,7 +224,6 @@ export const TradeSimulatorView: React.FC = () => {
             ctx.stroke();
         }
 
-        // Draw trade lines
         const drawTradeLine = (y: number, color: string, label: string) => {
             ctx.beginPath();
             ctx.strokeStyle = color;
@@ -162,12 +237,11 @@ export const TradeSimulatorView: React.FC = () => {
             ctx.font = '14px sans-serif';
             ctx.fillText(label, 10, y - 5);
         };
-        if(trade.entry) drawTradeLine(trade.entry, '#60a5fa', 'Entry');
-        if(trade.stopLoss) drawTradeLine(trade.stopLoss, '#f87171', 'Stop Loss');
-        if(trade.takeProfit) drawTradeLine(trade.takeProfit, '#34d399', 'Take Profit');
+        if(trade.entry !== null) drawTradeLine(trade.entry, '#60a5fa', 'Entry');
+        if(trade.stopLoss !== null) drawTradeLine(trade.stopLoss, '#f87171', 'Stop Loss');
+        if(trade.takeProfit !== null) drawTradeLine(trade.takeProfit, '#34d399', 'Take Profit');
 
-        // Draw pause curtain
-        if (gameState === 'analyzing' || gameState === 'placing_trade') {
+        if (gameState === 'analyzing' || gameState === 'placing_trade' || gameState === 'feedback') {
             const curtainX = CHART_WIDTH * (1 - PAUSE_CURTAIN_WIDTH_PERCENT / 100);
             ctx.fillStyle = 'rgba(17, 24, 39, 0.9)';
             ctx.fillRect(curtainX, 0, canvas.width - curtainX, canvas.height);
@@ -178,7 +252,7 @@ export const TradeSimulatorView: React.FC = () => {
             ctx.textAlign = 'left';
         }
 
-    }, [shapes, interaction.type, drawingPoints, activeTool, trade, gameState]);
+    }, [shapes, interaction.type, drawingPoints, activeTool, trade, gameState, selectedShapeId]);
     
     useEffect(() => {
         const img = new Image();
@@ -187,10 +261,25 @@ export const TradeSimulatorView: React.FC = () => {
         img.onload = () => { imageRef.current = img; redrawCanvas(); };
     }, [chartImageUrl, redrawCanvas]);
 
-    useEffect(() => { redrawCanvas(); }, [shapes, trade, gameState, redrawCanvas]);
+    useEffect(() => { redrawCanvas(); }, [shapes, trade, gameState, redrawCanvas, isModalOpen]);
+
+    useEffect(() => {
+        const handleKeyDown = (e: KeyboardEvent) => {
+            if((e.key === 'Delete' || e.key === 'Backspace') && selectedShapeId !== null && gameState === 'analyzing') {
+                setShapes(prev => prev.filter(s => s.id !== selectedShapeId));
+                setSelectedShapeId(null);
+            }
+            if (e.key === 'Escape' && isModalOpen) {
+                setIsModalOpen(false);
+            }
+        };
+        window.addEventListener('keydown', handleKeyDown);
+        return () => window.removeEventListener('keydown', handleKeyDown);
+    }, [selectedShapeId, gameState, isModalOpen]);
 
     const handleMouseDown = (e: React.MouseEvent<HTMLCanvasElement>) => {
         const coords = getCanvasCoordinates(e);
+        if (!coords) return;
         
         if (gameState === 'placing_trade') {
             if (placementStep === 'entry') setTrade(t => ({...t, entry: coords.y}));
@@ -199,20 +288,65 @@ export const TradeSimulatorView: React.FC = () => {
             return;
         }
 
-        if (gameState === 'analyzing') {
+        if (gameState !== 'analyzing') return;
+        
+        dragStartPointRef.current = coords;
+
+        if (activeTool === 'select') {
+            const selectedShape = shapes.find(s => s.id === selectedShapeId);
+            if (selectedShape) {
+                const handle = getHandleAtPosition(coords, selectedShape);
+                if (handle) {
+                    setInteraction({ type: 'resizing', id: selectedShape.id, handle });
+                    return;
+                }
+            }
+            const shapeToSelect = getShapeAtPosition(coords, shapes);
+            if (shapeToSelect) {
+                setSelectedShapeId(shapeToSelect.id);
+                setInteraction({ type: 'moving', id: shapeToSelect.id });
+            } else {
+                setSelectedShapeId(null);
+            }
+        } else {
+            setSelectedShapeId(null);
             setInteraction({ type: 'drawing' });
             setDrawingPoints([coords]);
         }
     };
     
     const handleMouseMove = (e: React.MouseEvent<HTMLCanvasElement>) => {
-        if (interaction.type === 'drawing' && drawingPoints.length > 0) {
-            const coords = getCanvasCoordinates(e);
-            setDrawingPoints([drawingPoints[0], coords]);
+        const coords = getCanvasCoordinates(e);
+        if (!coords || gameState !== 'analyzing') return;
+        
+        const dx = coords.x - dragStartPointRef.current.x;
+        const dy = coords.y - dragStartPointRef.current.y;
+
+        switch (interaction.type) {
+            case 'drawing':
+                if (drawingPoints.length > 0) setDrawingPoints([drawingPoints[0], coords]);
+                break;
+            case 'moving':
+                setShapes(prev => prev.map(s => s.id === interaction.id
+                    ? { ...s, points: s.points.map(p => ({ x: p.x + dx, y: p.y + dy })) }
+                    : s
+                ));
+                dragStartPointRef.current = coords;
+                break;
+            case 'resizing':
+                setShapes(prev => prev.map(s => {
+                    if (s.id !== interaction.id) return s;
+                    const newPoints = [...s.points];
+                    if (interaction.handle === 'start') newPoints[0] = coords;
+                    else newPoints[1] = coords;
+                    return { ...s, points: newPoints };
+                }));
+                break;
         }
     };
     
     const handleMouseUp = () => {
+        if (gameState !== 'analyzing') return;
         if (interaction.type === 'drawing' && drawingPoints.length > 1) {
             const newShape: Shape = { id: Date.now(), type: activeTool as Exclude<Tool, 'select'>, color: '#facc15', points: drawingPoints, lineWidth: 2, };
             setShapes(prev => [...prev, newShape]);
@@ -225,18 +359,19 @@ export const TradeSimulatorView: React.FC = () => {
         setTrade({ side, entry: null, stopLoss: null, takeProfit: null });
         setGameState('placing_trade');
         setPlacementStep('entry');
+        setActiveTool('select');
     };
 
     useEffect(() => {
-        if(trade.entry && placementStep === 'entry') setPlacementStep('stopLoss');
-        else if (trade.stopLoss && placementStep === 'stopLoss') setPlacementStep('takeProfit');
-        else if (trade.takeProfit && placementStep === 'takeProfit') setPlacementStep('done');
+        if(trade.entry !== null && placementStep === 'entry') setPlacementStep('stopLoss');
+        else if (trade.stopLoss !== null && placementStep === 'stopLoss') setPlacementStep('takeProfit');
+        else if (trade.takeProfit !== null && placementStep === 'takeProfit') setPlacementStep('done');
     }, [trade, placementStep]);
 
     const handleGetFeedback = async () => {
         setGameState('feedback');
         setIsLoadingFeedback(true);
-        const tradeDetails = `Side: ${trade.side}, Entry at Y=${trade.entry}, Stop Loss at Y=${trade.stopLoss}, Take Profit at Y=${trade.takeProfit} on a ${CHART_WIDTH}x${CHART_HEIGHT} canvas.`;
+        const tradeDetails = `Side: ${trade.side}, Entry at price ${formatPrice(trade.entry)}, Stop Loss at ${formatPrice(trade.stopLoss)}, Take Profit at ${formatPrice(trade.takeProfit)}.`;
         try {
             const fb = await generateTradeFeedback(chartGenPrompt, tradeDetails);
             setFeedback(fb);
@@ -246,13 +381,33 @@ export const TradeSimulatorView: React.FC = () => {
             setIsLoadingFeedback(false);
         }
     };
+
+    const handleSaveAnalysis = () => {
+        if (!canvasRef.current) return;
+        
+        const dataUrl = canvasRef.current.toDataURL('image/png');
+        try {
+            const existing = JSON.parse(localStorage.getItem('savedAnalyses') || '[]');
+            const newItem = { id: Date.now(), imageData: dataUrl };
+            const updated = [newItem, ...existing];
+            localStorage.setItem('savedAnalyses', JSON.stringify(updated));
+            setIsAnalysisSaved(true);
+            logSavedAnalysis();
+            if (getCompletionCount('savedAnalyses') + 1 >= ARCHIVIST_GOAL) {
+                unlockBadge('archivist');
+            }
+        } catch (error) {
+            console.error("Failed to save analysis to local storage:", error);
+            alert("Could not save analysis. Local storage might be full or disabled.");
+        }
+    };
     
     const getPlacementInstruction = () => {
         switch (placementStep) {
             case 'entry': return 'Click on the chart to set your Entry price.';
             case 'stopLoss': return 'Now, click to set your Stop Loss.';
             case 'takeProfit': return 'Finally, click to set your Take Profit.';
-            case 'done': return 'Trade is set. You can now get feedback or see the result.';
+            case 'done': return 'Trade is set. Get feedback or see the result.';
         }
     }
 
@@ -271,28 +426,45 @@ export const TradeSimulatorView: React.FC = () => {
         return <div className="flex flex-col items-center justify-center h-full"><LoadingSpinner /><p className="mt-2 text-gray-400">AI is generating a unique trade scenario...</p></div>
     }
 
+    const canvasElement = (
+        <canvas 
+            ref={canvasRef} 
+            width={CHART_WIDTH} 
+            height={CHART_HEIGHT} 
+            className="w-full h-full"
+            onMouseDown={handleMouseDown} 
+            onMouseMove={handleMouseMove} 
+            onMouseUp={handleMouseUp} 
+            onMouseLeave={handleMouseUp}
+            style={{ cursor: gameState === 'analyzing' ? (activeTool === 'select' ? 'default' : 'crosshair') : (gameState === 'placing_trade' && placementStep !== 'done' ? 'pointer' : 'default') }}
+        />
+    );
+
 
     return (
-        <div className="flex flex-col lg:flex-row gap-6">
-            {/* Chart Area */}
+        <>
+        <div className={`flex flex-col lg:flex-row gap-6 ${isModalOpen ? 'hidden' : ''}`}>
             <div className="flex-1">
-                <div className="w-full aspect-video bg-gray-800 rounded-lg border border-gray-700 overflow-hidden relative">
-                    <canvas ref={canvasRef} width={CHART_WIDTH} height={CHART_HEIGHT} className="w-full h-full"
-                        onMouseDown={handleMouseDown} onMouseMove={handleMouseMove} onMouseUp={handleMouseUp} onMouseLeave={handleMouseUp}
-                        style={{ cursor: gameState === 'analyzing' ? 'crosshair' : (gameState === 'placing_trade' ? 'pointer' : 'default') }}
-                    />
+                <div className="w-full aspect-video bg-gray-800 rounded-lg border border-gray-700 overflow-hidden relative group">
+                    {canvasElement}
+                    <button 
+                        onClick={() => setIsModalOpen(true)}
+                        className="absolute top-2 left-2 p-2 bg-gray-800/60 rounded-full text-white hover:bg-gray-700 transition-all opacity-0 group-hover:opacity-100 focus:opacity-100"
+                        aria-label="Expand chart"
+                    >
+                        <ArrowsPointingOutIcon className="w-5 h-5" />
+                    </button>
                 </div>
             </div>
 
-            {/* Control Panel */}
             <div className="w-full lg:w-80 bg-gray-800/50 border border-gray-700 rounded-lg p-4 flex flex-col space-y-4">
                 <h2 className="text-xl font-bold text-white text-center">Trade Panel</h2>
                 
                 { (gameState === 'analyzing' || gameState === 'placing_trade') &&
                     <>
                     <div className="grid grid-cols-2 gap-2">
-                        <button onClick={() => handlePlaceTrade('buy')} className={`py-2 rounded font-semibold transition-colors ${trade.side === 'buy' ? 'bg-green-500 text-white' : 'bg-gray-700 hover:bg-green-600'}`}>BUY</button>
-                        <button onClick={() => handlePlaceTrade('sell')} className={`py-2 rounded font-semibold transition-colors ${trade.side === 'sell' ? 'bg-red-500 text-white' : 'bg-gray-700 hover:bg-red-600'}`}>SELL</button>
+                        <button onClick={() => handlePlaceTrade('buy')} disabled={gameState === 'placing_trade'} className={`py-2 rounded font-semibold transition-colors ${trade.side === 'buy' ? 'bg-green-500 text-white ring-2 ring-white' : 'bg-gray-700 hover:bg-green-600 disabled:bg-gray-800 disabled:text-gray-500'}`}>BUY</button>
+                        <button onClick={() => handlePlaceTrade('sell')} disabled={gameState === 'placing_trade'} className={`py-2 rounded font-semibold transition-colors ${trade.side === 'sell' ? 'bg-red-500 text-white ring-2 ring-white' : 'bg-gray-700 hover:bg-red-600 disabled:bg-gray-800 disabled:text-gray-500'}`}>SELL</button>
                     </div>
                     { gameState === 'placing_trade' && 
                         <div className="p-3 bg-cyan-900/20 border border-cyan-500/30 rounded text-center text-cyan-300 text-sm">
@@ -304,14 +476,18 @@ export const TradeSimulatorView: React.FC = () => {
                         <div className="flex justify-between items-center bg-gray-900/50 p-2 rounded"><span>Stop Loss:</span> <span className="font-mono text-red-300">{formatPrice(trade.stopLoss)}</span></div>
                         <div className="flex justify-between items-center bg-gray-900/50 p-2 rounded"><span>Take Profit:</span> <span className="font-mono text-green-300">{formatPrice(trade.takeProfit)}</span></div>
                     </div>
-                    <div className="pt-2 border-t border-gray-600">
-                        <h3 className="text-sm text-gray-400 mb-2">Analysis Tools</h3>
-                        <div className="flex items-center space-x-2 bg-gray-900/50 p-1 rounded-md">
-                             <button onClick={() => setActiveTool('trendline')} className={`p-2 rounded ${activeTool === 'trendline' ? 'bg-cyan-500/20' : ''}`}><PencilIcon className="w-5 h-5"/></button>
-                             <button onClick={() => setActiveTool('horizontal')} className={`p-2 rounded ${activeTool === 'horizontal' ? 'bg-cyan-500/20' : ''}`}><MinusIcon className="w-5 h-5"/></button>
-                             <button onClick={() => setShapes([])} className="p-2 rounded text-red-400 hover:bg-red-500/20"><TrashIcon className="w-5 h-5"/></button>
+                    { gameState === 'analyzing' &&
+                        <div className="pt-2 border-t border-gray-600">
+                            <h3 className="text-sm text-gray-400 mb-2">Analysis Tools</h3>
+                            <div className="flex items-center space-x-2 bg-gray-900/50 p-1 rounded-md">
+                                 <button onClick={() => setActiveTool('select')} title="Select & Move" className={`p-2 rounded ${activeTool === 'select' ? 'bg-cyan-500/20 text-cyan-300' : 'text-gray-400 hover:bg-gray-700'}`}><CursorArrowRaysIcon className="w-5 h-5"/></button>
+                                 <button onClick={() => setActiveTool('trendline')} title="Trendline" className={`p-2 rounded ${activeTool === 'trendline' ? 'bg-cyan-500/20 text-cyan-300' : 'text-gray-400 hover:bg-gray-700'}`}><PencilIcon className="w-5 h-5"/></button>
+                                 <button onClick={() => setActiveTool('horizontal')} title="Horizontal Line" className={`p-2 rounded ${activeTool === 'horizontal' ? 'bg-cyan-500/20 text-cyan-300' : 'text-gray-400 hover:bg-gray-700'}`}><MinusIcon className="w-5 h-5"/></button>
+                                 <button onClick={() => { setShapes([]); setSelectedShapeId(null); }} title="Clear All Drawings" className="p-2 rounded text-red-400 hover:bg-red-500/20"><TrashIcon className="w-5 h-5"/></button>
+                            </div>
                         </div>
-                    </div>
+                    }
+                    <div className="flex-grow"></div>
                     <button onClick={handleGetFeedback} disabled={placementStep !== 'done'} className="w-full mt-auto py-2.5 bg-purple-500 text-white font-semibold rounded disabled:bg-gray-600 disabled:cursor-not-allowed hover:bg-purple-400 flex items-center justify-center">
                         <SparklesIcon className="w-5 h-5 mr-2" /> Get AI Feedback
                     </button>
@@ -323,9 +499,16 @@ export const TradeSimulatorView: React.FC = () => {
                         <h3 className="text-lg font-semibold text-white mb-2">AI Mentor Feedback</h3>
                         {isLoadingFeedback ? <div className="flex-1 flex items-center justify-center"><LoadingSpinner /></div> : <div className="text-sm text-gray-300 bg-gray-900/50 p-3 rounded-md overflow-y-auto max-h-64"><FormattedContent text={feedback} /></div>}
                         <div className="mt-auto space-y-2 pt-4">
-                            <button onClick={() => setGameState('reviewing')} disabled={isLoadingFeedback} className="w-full py-2.5 bg-cyan-500 text-gray-900 font-semibold rounded disabled:bg-gray-600 flex items-center justify-center">
+                           { gameState === 'feedback' &&
+                             <button onClick={() => setGameState('reviewing')} disabled={isLoadingFeedback} className="w-full py-2.5 bg-cyan-500 text-gray-900 font-semibold rounded disabled:bg-gray-600 flex items-center justify-center">
                                 Play Forward & See Result <ArrowRightIcon className="w-5 h-5 ml-2" />
                             </button>
+                           }
+                           { gameState === 'reviewing' &&
+                             <button onClick={handleSaveAnalysis} disabled={isAnalysisSaved} className="w-full py-2.5 bg-indigo-500 text-white font-semibold rounded disabled:bg-gray-600 flex items-center justify-center hover:bg-indigo-400">
+                                <BookmarkSquareIcon className="w-5 h-5 mr-2" /> {isAnalysisSaved ? 'Saved!' : 'Save Analysis'}
+                            </button>
+                           }
                              <button onClick={handleGenerateChart} className="w-full py-2 bg-gray-600 text-white font-semibold rounded hover:bg-gray-500 flex items-center justify-center">
                                 <ArrowPathIcon className="w-5 h-5 mr-2" /> New Scenario
                             </button>
@@ -334,5 +517,33 @@ export const TradeSimulatorView: React.FC = () => {
                 }
             </div>
         </div>
+
+        {isModalOpen && (
+            <div 
+                className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-80 backdrop-blur-sm animate-[fade-in_0.2s_ease-out]"
+                onClick={() => setIsModalOpen(false)}
+            >
+                <div 
+                    className="relative w-[95vw] h-[95vh] bg-gray-800 rounded-lg border border-gray-700 overflow-hidden shadow-2xl" 
+                    onClick={e => e.stopPropagation()}
+                >
+                    {canvasElement}
+                    <button 
+                        onClick={() => setIsModalOpen(false)}
+                        className="absolute top-2 right-2 p-2 bg-gray-800/60 rounded-full text-white hover:bg-gray-700"
+                        aria-label="Close expanded view"
+                    >
+                        <XMarkIcon className="w-6 h-6" />
+                    </button>
+                </div>
+            </div>
+        )}
+        <style>{`
+            @keyframes fade-in {
+                from { opacity: 0; }
+                to { opacity: 1; }
+            }
+        `}</style>
+        </>
     );
 };

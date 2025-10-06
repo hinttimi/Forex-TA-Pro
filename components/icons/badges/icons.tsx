@@ -1,0 +1,62 @@
+
+import React from 'react';
+import { BadgeShell } from './BadgeShell';
+
+const IconWrapper: React.FC<React.PropsWithChildren<{ className?: string }>> = ({ children, className }) => (
+    <BadgeShell className={className}>
+        <g stroke="#451a03" strokeWidth="4" strokeLinecap="round" strokeLinejoin="round" fill="none">
+         {children}
+        </g>
+    </BadgeShell>
+);
+
+export const FirstStepIcon: React.FC<{ className?: string }> = ({ className }) => (
+    <IconWrapper className={className}>
+        <path d="M50,90 V70 M35,70 h30 M50,70 L70,50 M50,70 L30,50 M50,50 V10" />
+    </IconWrapper>
+);
+
+export const FoundationIcon: React.FC<{ className?: string }> = ({ className }) => (
+    <IconWrapper className={className}>
+        <path d="M10,80 H90 M15,80 V60 H85 V80 M20,60 V40 H80 V60 M25,40 V20 H75 V40 M50,20 L50,10" />
+    </IconWrapper>
+);
+
+export const StructureExpertIcon: React.FC<{ className?: string }> = ({ className }) => (
+    <IconWrapper className={className}>
+        <path d="M10 80 L30 60 L20 60 L40 40 L30 40 L50 20 L70 40 L60 40 L80 60 L70 60 L90 80" />
+    </IconWrapper>
+);
+
+export const LiquidityHunterIcon: React.FC<{ className?: string }> = ({ className }) => (
+    <IconWrapper className={className}>
+        <path d="M20,70 h60 M10,50 h80 M30,30 h40 M50,10 V90 M50,50 a20,20 0 1,1 0,-0.01" />
+        <text x="50" y="70" fontSize="30" fill="#451a03" textAnchor="middle" stroke="none">$</text>
+    </IconWrapper>
+);
+
+export const SharpEyeIcon: React.FC<{ className?: string }> = ({ className }) => (
+    <IconWrapper className={className}>
+        <path d="M10,50 Q50,20 90,50 M10,50 Q50,80 90,50" />
+        <circle cx="50" cy="50" r="15" />
+    </IconWrapper>
+);
+
+export const BeatTheClockIcon: React.FC<{ className?: string }> = ({ className }) => (
+    <IconWrapper className={className}>
+        <circle cx="50" cy="50" r="40" />
+        <path d="M50,50 L50,20 M50,50 L75,50" />
+    </IconWrapper>
+);
+
+export const SimulatorApprenticeIcon: React.FC<{ className?: string }> = ({ className }) => (
+    <IconWrapper className={className}>
+        <path d="M50 15 L70 30 L60 35 L75 50 L65 55 L80 70 L50 85 L20 70 L35 55 L25 50 L40 35 L30 30 Z" />
+    </IconWrapper>
+);
+
+export const ArchivistIcon: React.FC<{ className?: string }> = ({ className }) => (
+    <IconWrapper className={className}>
+        <path d="M20,10 H80 V90 H20 Z M30,20 H70 M30,35 H70 M30,50 H70 M30,65 H70" />
+    </IconWrapper>
+);

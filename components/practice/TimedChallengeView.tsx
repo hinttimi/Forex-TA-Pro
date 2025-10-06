@@ -5,6 +5,7 @@ import { MODULES } from '../../constants';
 import { MultipleChoiceQuestion } from '../../types';
 import { LoadingSpinner } from '../LoadingSpinner';
 import { ArrowPathIcon } from '../icons/ArrowPathIcon';
+import { useBadges } from '../../hooks/useBadges';
 
 const CHALLENGE_LENGTH = 10;
 const TIME_PER_QUESTION = 20; // in seconds
@@ -23,6 +24,7 @@ export const TimedChallengeView: React.FC = () => {
     const [selectedAnswer, setSelectedAnswer] = useState<string | null>(null);
     const [isCorrect, setIsCorrect] = useState<boolean | null>(null);
     
+    const { unlockBadge } = useBadges();
     const timerRef = useRef<number | null>(null);
     const answerTimeoutRef = useRef<number | null>(null);
 
@@ -60,11 +62,12 @@ export const TimedChallengeView: React.FC = () => {
     const moveToNext = useCallback(() => {
         if (questionIndex + 1 >= CHALLENGE_LENGTH) {
             setChallengeState('finished');
+            unlockBadge('beat-the-clock');
         } else {
             setQuestionIndex(prev => prev + 1);
             loadNextQuestion();
         }
-    }, [questionIndex, loadNextQuestion]);
+    }, [questionIndex, loadNextQuestion, unlockBadge]);
 
     useEffect(() => {
         if (timer === 0 && challengeState === 'active') {

@@ -1,5 +1,5 @@
 
-import React, { useState, useCallback } from 'react';
+import React, { useState, useCallback, useEffect } from 'react';
 import { Sidebar } from './components/Sidebar';
 import { LessonView } from './components/LessonView';
 import { Header } from './components/Header';
@@ -10,10 +10,18 @@ import { PatternRecognitionView } from './components/practice/PatternRecognition
 import { TimedChallengeView } from './components/practice/TimedChallengeView';
 import { FreePracticeCanvasView } from './components/practice/FreePracticeCanvasView';
 import { TradeSimulatorView } from './components/practice/TradeSimulatorView';
+import { SavedAnalysisView } from './components/practice/SavedAnalysisView';
+// Badge Imports
+import { AchievementsView } from './components/AchievementsView';
+import { BadgesProvider } from './context/BadgesContext';
+import { BadgeNotification } from './components/BadgeNotification';
+import { useCompletion } from './hooks/useCompletion';
+import { useBadges } from './hooks/useBadges';
+import { TradingPlanView } from './components/TradingPlanView';
 
 const allLessons = MODULES.flatMap(module => module.lessons);
 
-const App: React.FC = () => {
+const AppContent: React.FC = () => {
   const [currentView, setCurrentView] = useState<AppView>('lesson');
   const [currentLesson, setCurrentLesson] = useState<Lesson | null>(MODULES[0].lessons[0]);
   const [lessonContent, setLessonContent] = useState<string>('');
@@ -21,6 +29,9 @@ const App: React.FC = () => {
   const [isLoadingContent, setIsLoadingContent] = useState<boolean>(false);
   const [isLoadingChart, setIsLoadingChart] = useState<boolean>(false);
   const [error, setError] = useState<string | null>(null);
+  
+  const { logLessonCompleted, getCompletedLessons } = useCompletion();
+  const { unlockBadge } = useBadges();
 
   const handleSelectLesson = useCallback(async (lesson: Lesson) => {
     setCurrentView('lesson');
@@ -32,63 +43,104 @@ const App: React.FC = () => {
     try {
       const content = await generateLessonContent(lesson.contentPrompt);
       setLessonContent(content);
+      logLessonCompleted(lesson.key);
     } catch (e) {
       console.error(e);
       setError('Failed to load lesson content. Please check your API key and try again.');
     } finally {
       setIsLoadingContent(false);
     }
-  }, []);
-  
-  const handleSetPracticeView = (view: AppView) => {
-    if (view !== 'lesson') {
-        setCurrentView(view);
-        setCurrentLesson(null);
+  }, [logLessonCompleted]);
+
+  // Badge check effect
+  useEffect(() => {
+    const completed = getCompletedLessons();
+    if (completed.size > 0) {
+      unlockBadge('first-step');
     }
-  };
+    
+    const level1Keys = MODULES[0].lessons.map(l => l.key);
+    if (level1Keys.every(key => completed.has(key))) {
+        unlockBadge('foundation-builder');
+    }
+    
+    const level2Keys = MODULES[1].lessons.map(l => l.key);
+    if (level2Keys.every(key => completed.has(key))) {
+        unlockBadge('structure-expert');
+    }
+
+    const level3Keys = MODULES[2].lessons.map(l => l.key);
+    if (level3Keys.every(key => completed.has(key))) {
+        unlockBadge('liquidity-hunter');
+    }
+  }, [lessonContent, unlockBadge, getCompletedLessons]); // Reruns when new lesson content is loaded
+
+  useEffect(() => {
+    handleSelectLesson(MODULES[0].lessons[0]);
+  }, [handleSelectLesson]);
 
   const handleVisualize = useCallback(async () => {
     if (!currentLesson) return;
-    setChartImageUrl('');
-    setError(null);
     setIsLoadingChart(true);
+    setChartImageUrl('');
     try {
       const imageUrl = await generateChartImage(currentLesson.chartPrompt);
       setChartImageUrl(imageUrl);
     } catch (e) {
       console.error(e);
-      setError('Failed to generate chart. The AI might be busy, please try again in a moment.');
+      setError('Failed to generate chart. Please try again.');
     } finally {
       setIsLoadingChart(false);
     }
   }, [currentLesson]);
+
+  const handleSetView = (view: AppView) => {
+    setCurrentView(view);
+    setError(null);
+  }
+
+  const findLessonIndex = (lessonKey: string) => {
+    return allLessons.findIndex(l => l.key === lessonKey);
+  }
+
+  const handleNextLesson = () => {
+    if (!currentLesson) return;
+    const currentIndex = findLessonIndex(currentLesson.key);
+    if (currentIndex < allLessons.length - 1) {
+      handleSelectLesson(allLessons[currentIndex + 1]);
+    }
+  };
+
+  const handlePreviousLesson = () => {
+    if (!currentLesson) return;
+    const currentIndex = findLessonIndex(currentLesson.key);
+    if (currentIndex > 0) {
+      handleSelectLesson(allLessons[currentIndex - 1]);
+    }
+  };
   
-  // Load initial lesson on mount
-  React.useEffect(() => {
-    if (currentLesson) {
-        handleSelectLesson(currentLesson);
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  const currentIndex = currentLesson ? findLessonIndex(currentLesson.key) : -1;
+  const hasNextLesson = currentIndex < allLessons.length - 1;
+  const hasPreviousLesson = currentIndex > 0;
 
-  const currentLessonIndex = currentLesson ? allLessons.findIndex(l => l.key === currentLesson.key) : -1;
-  const hasPreviousLesson = currentLessonIndex > 0;
-  const hasNextLesson = currentLessonIndex >= 0 && currentLessonIndex < allLessons.length - 1;
-
-  const handlePreviousLesson = useCallback(() => {
-    if (hasPreviousLesson) {
-      handleSelectLesson(allLessons[currentLessonIndex - 1]);
-    }
-  }, [currentLessonIndex, hasPreviousLesson, handleSelectLesson]);
-
-  const handleNextLesson = useCallback(() => {
-    if (hasNextLesson) {
-      handleSelectLesson(allLessons[currentLessonIndex + 1]);
-    }
-  }, [currentLessonIndex, hasNextLesson, handleSelectLesson]);
-
-  const renderMainContent = () => {
-    switch(currentView) {
+  const renderView = () => {
+    switch (currentView) {
+      case 'lesson':
+        return currentLesson ? (
+          <LessonView
+            lesson={currentLesson}
+            content={lessonContent}
+            chartImageUrl={chartImageUrl}
+            onVisualize={handleVisualize}
+            isLoadingContent={isLoadingContent}
+            isLoadingChart={isLoadingChart}
+            error={error}
+            onNextLesson={handleNextLesson}
+            onPreviousLesson={handlePreviousLesson}
+            hasNextLesson={hasNextLesson}
+            hasPreviousLesson={hasPreviousLesson}
+          />
+        ) : null;
       case 'pattern':
         return <PatternRecognitionView />;
       case 'timed':
@@ -97,47 +149,42 @@ const App: React.FC = () => {
         return <FreePracticeCanvasView />;
       case 'simulator':
         return <TradeSimulatorView />;
-      case 'lesson':
+      case 'saved':
+        return <SavedAnalysisView />;
+      case 'achievements':
+        return <AchievementsView />;
+      case 'trading_plan':
+        return <TradingPlanView />;
       default:
-        return currentLesson ? (
-            <LessonView
-              lesson={currentLesson}
-              content={lessonContent}
-              chartImageUrl={chartImageUrl}
-              onVisualize={handleVisualize}
-              isLoadingContent={isLoadingContent}
-              isLoadingChart={isLoadingChart}
-              error={error}
-              onPreviousLesson={handlePreviousLesson}
-              onNextLesson={handleNextLesson}
-              hasPreviousLesson={hasPreviousLesson}
-              hasNextLesson={hasNextLesson}
-            />
-          ) : (
-            <div className="flex items-center justify-center h-full">
-              <p className="text-2xl text-gray-500">Select a lesson to begin your journey.</p>
-            </div>
-          );
+        return null;
     }
   };
 
   return (
     <div className="flex h-screen bg-gray-900 text-gray-100 font-sans">
-      <Sidebar 
-        modules={MODULES} 
-        onSelectLesson={handleSelectLesson} 
+      <Sidebar
+        modules={MODULES}
+        onSelectLesson={handleSelectLesson}
         selectedLessonKey={currentLesson?.key}
         currentView={currentView}
-        onSetPracticeView={handleSetPracticeView}
+        onSetPracticeView={handleSetView}
       />
-      <div className="flex flex-col flex-1">
+      <div className="flex-1 flex flex-col overflow-hidden">
         <Header />
-        <main className="flex-1 p-6 lg:p-10 overflow-y-auto">
-          {renderMainContent()}
+        <main className="flex-1 overflow-y-auto p-6 lg:p-10">
+          {renderView()}
         </main>
       </div>
+       <BadgeNotification />
     </div>
   );
 };
+
+const App: React.FC = () => (
+  <BadgesProvider>
+    <AppContent />
+  </BadgesProvider>
+);
+
 
 export default App;

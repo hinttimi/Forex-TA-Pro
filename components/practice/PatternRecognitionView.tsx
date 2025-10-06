@@ -4,8 +4,10 @@ import { generateChartImage } from '../../services/geminiService';
 import { MODULES } from '../../constants';
 import { Lesson } from '../../types';
 import { LoadingSpinner } from '../LoadingSpinner';
-import { PhotoIcon } from '../icons/PhotoIcon';
 import { ArrowRightIcon } from '../icons/ArrowRightIcon';
+import { ChartDisplay } from '../ChartDisplay';
+import { useCompletion } from '../../hooks/useCompletion';
+import { useBadges } from '../../hooks/useBadges';
 
 const getRandomElement = <T,>(arr: T[]): T => arr[Math.floor(Math.random() * arr.length)];
 
@@ -25,6 +27,8 @@ const shuffleArray = <T,>(array: T[]): T[] => {
   return newArray;
 };
 
+const SHARP_EYE_GOAL = 10;
+
 export const PatternRecognitionView: React.FC = () => {
     const [isLoading, setIsLoading] = useState(true);
     const [chartImageUrl, setChartImageUrl] = useState('');
@@ -33,6 +37,9 @@ export const PatternRecognitionView: React.FC = () => {
     const [selectedAnswer, setSelectedAnswer] = useState<string | null>(null);
     const [isCorrect, setIsCorrect] = useState<boolean | null>(null);
     const [score, setScore] = useState({ correct: 0, total: 0 });
+
+    const { logCorrectPattern, getCompletionCount } = useCompletion();
+    const { unlockBadge } = useBadges();
 
     const loadNewPattern = useCallback(async () => {
         setIsLoading(true);
@@ -75,6 +82,13 @@ export const PatternRecognitionView: React.FC = () => {
             correct: prev.correct + (correct ? 1 : 0),
             total: prev.total + 1,
         }));
+        if (correct) {
+            logCorrectPattern();
+            const newCount = getCompletionCount('correctPatterns') + 1;
+            if (newCount >= SHARP_EYE_GOAL) {
+                unlockBadge('sharp-eye');
+            }
+        }
     };
 
     const getButtonClass = (lessonKey: string) => {
@@ -89,29 +103,20 @@ export const PatternRecognitionView: React.FC = () => {
         }
         return 'bg-gray-700 opacity-50';
     };
+    
+    const correctPatternsCount = getCompletionCount('correctPatterns');
 
     return (
         <div className="max-w-4xl mx-auto text-center">
             <h1 className="text-4xl font-extrabold text-white mb-2 tracking-tight">Pattern Recognition</h1>
             <p className="text-gray-400 mb-6">Identify the key technical analysis pattern on the chart.</p>
 
-            <div className="w-full aspect-video bg-gray-800/50 rounded-lg border border-gray-700 flex items-center justify-center p-4 mb-6">
-                {isLoading && (
-                    <div className="flex flex-col items-center text-gray-400">
-                        <LoadingSpinner />
-                        <span className="mt-2 text-sm">AI is drawing the next challenge...</span>
-                    </div>
-                )}
-                {!isLoading && chartImageUrl && (
-                    <img src={chartImageUrl} alt="Chart pattern challenge" className="max-w-full max-h-full object-contain rounded-md" />
-                )}
-                {!isLoading && !chartImageUrl && (
-                    <div className="text-center text-gray-500">
-                        <PhotoIcon className="w-16 h-16 mx-auto mb-2" />
-                        <p>Chart will appear here.</p>
-                    </div>
-                )}
-            </div>
+            <ChartDisplay 
+                imageUrl={chartImageUrl}
+                isLoading={isLoading}
+                loadingText="AI is drawing the next challenge..."
+                containerClassName="w-full aspect-video bg-gray-800/50 rounded-lg border border-gray-700 flex items-center justify-center p-4 mb-6"
+            />
             
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 {options.map(lesson => (
@@ -140,8 +145,9 @@ export const PatternRecognitionView: React.FC = () => {
                 </div>
             )}
 
-            <div className="mt-8 pt-4 border-t border-gray-700">
-                <p className="text-xl text-gray-300">Score: <span className="font-bold text-cyan-400">{score.correct} / {score.total}</span></p>
+            <div className="mt-8 pt-4 border-t border-gray-700 flex justify-center items-center space-x-8">
+                <p className="text-xl text-gray-300">Session Score: <span className="font-bold text-cyan-400">{score.correct} / {score.total}</span></p>
+                <p className="text-xl text-gray-300">"Sharp Eye" Progress: <span className="font-bold text-cyan-400">{correctPatternsCount} / {SHARP_EYE_GOAL}</span></p>
             </div>
              <style>{`
                 @keyframes fade-in {

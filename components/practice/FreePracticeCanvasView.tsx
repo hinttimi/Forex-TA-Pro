@@ -10,6 +10,8 @@ import { TrashIcon } from '../icons/TrashIcon';
 import { CursorArrowRaysIcon } from '../icons/CursorArrowRaysIcon';
 import { FibonacciSettings } from './FibonacciSettings';
 import { AngleIcon } from '../icons/AngleIcon';
+import { ArrowsPointingOutIcon } from '../icons/ArrowsPointingOutIcon';
+import { XMarkIcon } from '../icons/XMarkIcon';
 
 type Tool = 'select' | 'trendline' | 'horizontal' | 'fibonacci' | 'text' | 'angle';
 
@@ -101,6 +103,7 @@ export const FreePracticeCanvasView: React.FC = () => {
   const [activeColor, setActiveColor] = useState<string>(COLORS[0]);
   const [lineWidth, setLineWidth] = useState(2);
   const [fontSize, setFontSize] = useState(16);
+  const [isModalOpen, setIsModalOpen] = useState(false);
 
   const [shapes, setShapes] = useState<Shape[]>([]);
   const [drawingPoints, setDrawingPoints] = useState<{x: number, y: number}[]>([]);
@@ -128,14 +131,22 @@ export const FreePracticeCanvasView: React.FC = () => {
     finally { setIsLoading(false); }
   };
 
-  const getCanvasCoordinates = (event: React.MouseEvent<HTMLCanvasElement>): { x: number; y: number } => {
-    const canvas = canvasRef.current!;
+  const getCanvasCoordinates = (event: React.MouseEvent<HTMLCanvasElement>): { x: number; y: number } | null => {
+    const canvas = canvasRef.current;
+    if (!canvas) return null;
     const rect = canvas.getBoundingClientRect();
-    return { x: event.clientX - rect.left, y: event.clientY - rect.top };
+    const scaleX = canvas.width / rect.width;
+    const scaleY = canvas.height / rect.height;
+    return { 
+      x: (event.clientX - rect.left) * scaleX, 
+      y: (event.clientY - rect.top) * scaleY 
+    };
   };
 
   const handleMouseDown = (e: React.MouseEvent<HTMLCanvasElement>) => {
     const coords = getCanvasCoordinates(e);
+    if (!coords) return;
+    
     dragStartPointRef.current = coords;
 
     if (activeTool === 'select') {
@@ -174,6 +185,8 @@ export const FreePracticeCanvasView: React.FC = () => {
 
   const handleMouseMove = (e: React.MouseEvent<HTMLCanvasElement>) => {
     const coords = getCanvasCoordinates(e);
+    if (!coords) return;
+    
     const dx = coords.x - dragStartPointRef.current.x;
     const dy = coords.y - dragStartPointRef.current.y;
 
@@ -347,7 +360,7 @@ export const FreePracticeCanvasView: React.FC = () => {
     img.onload = () => { imageRef.current = img; redrawCanvas(); };
   }, [imageUrl, redrawCanvas]);
 
-  useEffect(() => { redrawCanvas(); }, [shapes, redrawCanvas]);
+  useEffect(() => { redrawCanvas(); }, [shapes, redrawCanvas, isModalOpen]);
 
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
@@ -355,10 +368,13 @@ export const FreePracticeCanvasView: React.FC = () => {
             setShapes(prev => prev.filter(s => s.id !== selectedShapeId));
             setSelectedShapeId(null);
         }
+        if (e.key === 'Escape' && isModalOpen) {
+            setIsModalOpen(false);
+        }
     };
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [selectedShapeId]);
+  }, [selectedShapeId, isModalOpen]);
 
   const clearDrawings = () => { setShapes([]); setSelectedShapeId(null); };
 
@@ -392,6 +408,20 @@ export const FreePracticeCanvasView: React.FC = () => {
   const levelsForSettings = isFibSelected ? (selectedShape.levels || DEFAULT_FIB_LEVELS) : fibLevels;
   const setLevelsForSettings = isFibSelected ? handleUpdateSelectedFibLevels : setFibLevels;
 
+  const canvasElement = (
+    <canvas 
+      ref={canvasRef} 
+      width={1280} 
+      height={720} 
+      className="w-full h-full"
+      onMouseDown={handleMouseDown} 
+      onMouseMove={handleMouseMove} 
+      onMouseUp={handleMouseUp} 
+      onMouseLeave={handleMouseUp}
+      style={{ cursor: activeTool === 'select' ? 'default' : 'crosshair' }}
+    />
+  );
+
   return (
     <div className="max-w-7xl mx-auto flex flex-col items-center">
       <h1 className="text-4xl font-extrabold text-white mb-2 tracking-tight">Free Practice Canvas</h1>
@@ -410,47 +440,80 @@ export const FreePracticeCanvasView: React.FC = () => {
       {error && <div className="mt-6 bg-red-500/10 border border-red-500/30 text-red-300 px-4 py-3 rounded-lg text-center">{error}</div>}
 
       {imageUrl && !isLoading && (
-        <div className="w-full flex flex-col items-center">
-            <div className="w-full aspect-video bg-gray-800 rounded-lg border border-gray-700 overflow-hidden">
-                <canvas ref={canvasRef} width={1280} height={720} className="w-full h-full"
-                    onMouseDown={handleMouseDown} onMouseMove={handleMouseMove} onMouseUp={handleMouseUp} onMouseLeave={handleMouseUp}
-                    style={{ cursor: activeTool === 'select' ? 'default' : 'crosshair' }}/>
-            </div>
+        <>
+            <div className={`w-full flex-col items-center ${isModalOpen ? 'hidden' : 'flex'}`}>
+                <div className="w-full aspect-video bg-gray-800 rounded-lg border border-gray-700 overflow-hidden relative group">
+                    {canvasElement}
+                    <button 
+                        onClick={() => setIsModalOpen(true)}
+                        className="absolute top-2 left-2 p-2 bg-gray-800/60 rounded-full text-white hover:bg-gray-700 transition-all opacity-0 group-hover:opacity-100 focus:opacity-100"
+                        aria-label="Expand chart"
+                    >
+                        <ArrowsPointingOutIcon className="w-5 h-5" />
+                    </button>
+                </div>
 
-            <div className="mt-4 p-2 bg-gray-800 rounded-lg border border-gray-700 flex items-center space-x-2 flex-wrap justify-center">
-                 <ToolButton tool="select" label="Select & Move"><CursorArrowRaysIcon className="w-5 h-5" /></ToolButton>
-                 <ToolButton tool="trendline" label="Trendline"><PencilIcon className="w-5 h-5" /></ToolButton>
-                 <ToolButton tool="horizontal" label="Horizontal Ray"><MinusIcon className="w-5 h-5" /></ToolButton>
-                 <ToolButton tool="fibonacci" label="Fibonacci Retracement"><FibonacciIcon className="w-5 h-5" /></ToolButton>
-                 <ToolButton tool="angle" label="Angle Measurement"><AngleIcon className="w-5 h-5" /></ToolButton>
-                 <ToolButton tool="text" label="Text Annotation"><ChatBubbleLeftIcon className="w-5 h-5" /></ToolButton>
-                 <div className="w-px h-6 bg-gray-600 mx-2"></div>
-                 {COLORS.map(color => <button key={color} onClick={() => setActiveColor(color)} className={`w-6 h-6 rounded-full transition-transform duration-150 ${activeColor === color ? 'ring-2 ring-offset-2 ring-offset-gray-800 ring-white' : 'scale-90 hover:scale-100'}`} style={{ backgroundColor: color }} aria-label={`Select color ${color}`}/>)}
-                 <div className="w-px h-6 bg-gray-600 mx-2"></div>
-                 <div className="text-gray-400 text-xs mr-1">Line:</div>
-                 <SizeButton size={1} setSize={setLineWidth} currentSize={lineWidth} label="S" />
-                 <SizeButton size={2} setSize={setLineWidth} currentSize={lineWidth} label="M" />
-                 <SizeButton size={4} setSize={setLineWidth} currentSize={lineWidth} label="L" />
-                 <div className="w-px h-6 bg-gray-600 mx-2"></div>
-                 <div className="text-gray-400 text-xs mr-1">Text:</div>
-                 <SizeButton size={14} setSize={setFontSize} currentSize={fontSize} label="S" />
-                 <SizeButton size={18} setSize={setFontSize} currentSize={fontSize} label="M" />
-                 <SizeButton size={24} setSize={setFontSize} currentSize={fontSize} label="L" />
-                 <div className="w-px h-6 bg-gray-600 mx-2"></div>
-                 <button onClick={clearDrawings} title="Clear Drawings" className="p-2 rounded-md hover:bg-red-500/20 text-red-400 transition-colors"><TrashIcon className="w-5 h-5" /></button>
+                <div className="mt-4 p-2 bg-gray-800 rounded-lg border border-gray-700 flex items-center space-x-2 flex-wrap justify-center">
+                    <ToolButton tool="select" label="Select & Move"><CursorArrowRaysIcon className="w-5 h-5" /></ToolButton>
+                    <ToolButton tool="trendline" label="Trendline"><PencilIcon className="w-5 h-5" /></ToolButton>
+                    <ToolButton tool="horizontal" label="Horizontal Ray"><MinusIcon className="w-5 h-5" /></ToolButton>
+                    <ToolButton tool="fibonacci" label="Fibonacci Retracement"><FibonacciIcon className="w-5 h-5" /></ToolButton>
+                    <ToolButton tool="angle" label="Angle Measurement"><AngleIcon className="w-5 h-5" /></ToolButton>
+                    <ToolButton tool="text" label="Text Annotation"><ChatBubbleLeftIcon className="w-5 h-5" /></ToolButton>
+                    <div className="w-px h-6 bg-gray-600 mx-2"></div>
+                    {COLORS.map(color => <button key={color} onClick={() => setActiveColor(color)} className={`w-6 h-6 rounded-full transition-transform duration-150 ${activeColor === color ? 'ring-2 ring-offset-2 ring-offset-gray-800 ring-white' : 'scale-90 hover:scale-100'}`} style={{ backgroundColor: color }} aria-label={`Select color ${color}`}/>)}
+                    <div className="w-px h-6 bg-gray-600 mx-2"></div>
+                    <div className="text-gray-400 text-xs mr-1">Line:</div>
+                    <SizeButton size={1} setSize={setLineWidth} currentSize={lineWidth} label="S" />
+                    <SizeButton size={2} setSize={setLineWidth} currentSize={lineWidth} label="M" />
+                    <SizeButton size={4} setSize={setLineWidth} currentSize={lineWidth} label="L" />
+                    <div className="w-px h-6 bg-gray-600 mx-2"></div>
+                    <div className="text-gray-400 text-xs mr-1">Text:</div>
+                    <SizeButton size={14} setSize={setFontSize} currentSize={fontSize} label="S" />
+                    <SizeButton size={18} setSize={setFontSize} currentSize={fontSize} label="M" />
+                    <SizeButton size={24} setSize={setFontSize} currentSize={fontSize} label="L" />
+                    <div className="w-px h-6 bg-gray-600 mx-2"></div>
+                    <button onClick={clearDrawings} title="Clear Drawings" className="p-2 rounded-md hover:bg-red-500/20 text-red-400 transition-colors"><TrashIcon className="w-5 h-5" /></button>
+                </div>
+                
+                {(isFibSelected || isFibToolActive) && (
+                    <FibonacciSettings
+                        levels={levelsForSettings}
+                        setLevels={setLevelsForSettings}
+                    />
+                )}
+                
+                <button onClick={handleGenerateChart} className="mt-4 px-4 py-2 bg-gray-700 text-gray-200 text-sm font-semibold rounded-lg shadow-sm hover:bg-gray-600 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-offset-gray-900 focus:ring-cyan-500 transition-all duration-200">
+                    Generate Another Chart
+                </button>
             </div>
-            
-            {(isFibSelected || isFibToolActive) && (
-                <FibonacciSettings
-                    levels={levelsForSettings}
-                    setLevels={setLevelsForSettings}
-                />
+            {isModalOpen && (
+                <div 
+                    className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-80 backdrop-blur-sm animate-[fade-in_0.2s_ease-out]"
+                    onClick={() => setIsModalOpen(false)}
+                >
+                    <div 
+                        className="relative w-[95vw] h-[95vh] bg-gray-800 rounded-lg border border-gray-700 overflow-hidden shadow-2xl" 
+                        onClick={e => e.stopPropagation()}
+                    >
+                        {canvasElement}
+                        <button 
+                            onClick={() => setIsModalOpen(false)}
+                            className="absolute top-2 right-2 p-2 bg-gray-800/60 rounded-full text-white hover:bg-gray-700"
+                            aria-label="Close expanded view"
+                        >
+                            <XMarkIcon className="w-6 h-6" />
+                        </button>
+                    </div>
+                </div>
             )}
-            
-             <button onClick={handleGenerateChart} className="mt-4 px-4 py-2 bg-gray-700 text-gray-200 text-sm font-semibold rounded-lg shadow-sm hover:bg-gray-600 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-offset-gray-900 focus:ring-cyan-500 transition-all duration-200">
-                Generate Another Chart
-            </button>
-        </div>
+             <style>{`
+                @keyframes fade-in {
+                    from { opacity: 0; }
+                    to { opacity: 1; }
+                }
+            `}</style>
+        </>
       )}
     </div>
   );
