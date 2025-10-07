@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect, useCallback } from 'react';
-import { generateMentorResponse, ai, generateChartImage } from '../services/geminiService';
+import { generateMentorResponse, getAiClient, generateChartImage } from '../services/geminiService';
 import { SparklesIcon } from './icons/SparklesIcon';
 import { PaperAirplaneIcon } from './icons/PaperAirplaneIcon';
 import { PhotoIcon } from './icons/PhotoIcon';
@@ -11,6 +11,7 @@ import { LiveSession, Modality, LiveServerMessage, Blob } from '@google/genai';
 import { ChartDisplay } from './ChartDisplay';
 import { SpeakerWaveIcon } from './icons/SpeakerWaveIcon';
 import { SpeakerXMarkIcon } from './icons/SpeakerXMarkIcon';
+import { useApiKey } from '../hooks/useApiKey';
 
 // --- Types ---
 interface Message {
@@ -115,6 +116,7 @@ export const AIMentorView: React.FC = () => {
     const [uploadedImage, setUploadedImage] = useState<string | null>(null);
     const [isLoading, setIsLoading] = useState(false);
     const [error, setError] = useState<string | null>(null);
+    const { apiKey, openKeyModal } = useApiKey();
     
     // Voice state
     const [voiceState, setVoiceState] = useState<VoiceState>('idle');
@@ -201,6 +203,10 @@ export const AIMentorView: React.FC = () => {
 
     const handleSendMessage = async () => {
         if ((!userInput.trim() && !uploadedImage) || isLoading) return;
+        if (!apiKey) {
+            openKeyModal();
+            return;
+        }
 
         stopSpeaking();
         setError(null);
@@ -212,7 +218,7 @@ export const AIMentorView: React.FC = () => {
         setUploadedImage(null);
 
         try {
-            const responseText = await generateMentorResponse(userMessage.text, userMessage.image);
+            const responseText = await generateMentorResponse(apiKey, userMessage.text, userMessage.image);
             
             const chartRegex = /\[CHART:\s*(.*?)\]/s;
             const chartMatch = responseText.match(chartRegex);
@@ -230,7 +236,7 @@ export const AIMentorView: React.FC = () => {
             if (chartMatch && chartMatch[1]) {
                 const chartPrompt = chartMatch[1];
                 try {
-                    const imageUrl = await generateChartImage(chartPrompt);
+                    const imageUrl = await generateChartImage(apiKey, chartPrompt);
                     setMessages(prev => prev.map(m => 
                         m.id === modelMessageId ? { ...m, image: imageUrl, isImageLoading: false } : m
                     ));
@@ -243,7 +249,7 @@ export const AIMentorView: React.FC = () => {
             }
         } catch (e) {
             console.error(e);
-            const errorMsg = "Sorry, I couldn't get a response from the AI Mentor. Please try again.";
+            const errorMsg = "Sorry, I couldn't get a response from the AI Mentor. Please check your API key and try again.";
             setError(errorMsg);
             setMessages(prev => [...prev, { id: Date.now(), role: 'model', text: errorMsg }]);
         } finally {
@@ -313,10 +319,16 @@ export const AIMentorView: React.FC = () => {
             return;
         }
 
+        if (!apiKey) {
+            openKeyModal();
+            return;
+        }
+
         setVoiceState('connecting');
         setError(null);
         
         try {
+            const ai = getAiClient(apiKey);
             const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
             audioResourcesRef.current.stream = stream;
             
@@ -389,7 +401,7 @@ export const AIMentorView: React.FC = () => {
                     },
                     onerror: (e: ErrorEvent) => {
                         console.error('Voice chat error:', e);
-                        setError('An error occurred with the voice chat.');
+                        setError('An error occurred with the voice chat. Please check your API key.');
                         stopVoiceChat();
                     },
                     onclose: () => stopVoiceChat(),

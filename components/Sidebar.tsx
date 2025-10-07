@@ -20,6 +20,10 @@ import { MagnifyingGlassChartIcon } from './icons/MagnifyingGlassChartIcon';
 import { CalendarDaysIcon } from './icons/CalendarDaysIcon';
 import { BeakerIcon } from './icons/BeakerIcon';
 import { MagnifyingGlassIcon } from './icons/MagnifyingGlassIcon';
+import { PlayIcon } from './icons/PlayIcon';
+import { useApiKey } from '../hooks/useApiKey';
+import { KeyIcon } from './icons/KeyIcon';
+import { Cog6ToothIcon } from './icons/Cog6ToothIcon';
 
 interface SidebarProps {
   modules: Module[];
@@ -35,6 +39,7 @@ interface SidebarProps {
 export const Sidebar: React.FC<SidebarProps> = ({ modules, onSelectLesson, selectedLessonKey, currentView, onSetPracticeView, completedLessons, isOpen, onClose }) => {
   const [expandedModules, setExpandedModules] = useState<Set<string>>(new Set(modules.length > 0 ? [modules[0].title] : []));
   const [searchQuery, setSearchQuery] = useState('');
+  const { openKeyModal } = useApiKey();
 
   const allLessons = useMemo(() => modules.flatMap(module => module.lessons.map(lesson => ({ ...lesson, moduleTitle: module.title }))), [modules]);
 
@@ -308,6 +313,21 @@ export const Sidebar: React.FC<SidebarProps> = ({ modules, onSelectLesson, selec
                   </li>
                   <li>
                       <button
+                          onClick={() => onSetPracticeView('live_simulator')}
+                          className={`w-full text-left flex items-center px-3 py-2 text-sm rounded-md transition-colors duration-150 ${
+                            currentView === 'live_simulator'
+                              ? 'bg-cyan-500/10 text-cyan-300 font-semibold'
+                              : 'text-gray-300 hover:bg-gray-700 hover:text-white'
+                          }`}
+                        >
+                          <PlayIcon className={`w-4 h-4 mr-3 flex-shrink-0 ${
+                            currentView === 'live_simulator' ? 'text-cyan-400' : 'text-gray-500'
+                          }`} />
+                          <span>Live Chart Simulation</span>
+                      </button>
+                  </li>
+                  <li>
+                      <button
                           onClick={() => onSetPracticeView('backtester')}
                           className={`w-full text-left flex items-center px-3 py-2 text-sm rounded-md transition-colors duration-150 ${
                             currentView === 'backtester'
@@ -342,7 +362,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ modules, onSelectLesson, selec
             <div className="mt-8 pt-6 border-t border-gray-700">
               <h2 className="text-sm font-semibold text-gray-400 uppercase tracking-wider mb-3 flex items-center">
                   <MedalIcon className="w-5 h-5 mr-2" />
-                  Progress
+                  Progress & Settings
               </h2>
               <ul className="space-y-2">
                   <li>
@@ -373,6 +393,21 @@ export const Sidebar: React.FC<SidebarProps> = ({ modules, onSelectLesson, selec
                             currentView === 'trading_plan' ? 'text-cyan-400' : 'text-gray-500'
                           }`} />
                           <span>My Trading Plan</span>
+                      </button>
+                  </li>
+                  <li>
+                      <button
+                          onClick={() => onSetPracticeView('settings')}
+                          className={`w-full text-left flex items-center px-3 py-2 text-sm rounded-md transition-colors duration-150 ${
+                            currentView === 'settings'
+                              ? 'bg-cyan-500/10 text-cyan-300 font-semibold'
+                              : 'text-gray-300 hover:bg-gray-700 hover:text-white'
+                          }`}
+                        >
+                          <Cog6ToothIcon className={`w-4 h-4 mr-3 flex-shrink-0 ${
+                            currentView === 'settings' ? 'text-cyan-400' : 'text-gray-500'
+                          }`} />
+                          <span>Settings</span>
                       </button>
                   </li>
               </ul>

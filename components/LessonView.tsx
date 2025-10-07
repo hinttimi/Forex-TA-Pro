@@ -7,6 +7,7 @@ import { ExclamationTriangleIcon } from './icons/ExclamationTriangleIcon';
 import { generateChartImage, generateLessonContent } from '../services/geminiService';
 import { SparklesIcon } from './icons/SparklesIcon';
 import { QuestionMarkCircleIcon } from './icons/QuestionMarkCircleIcon';
+import { useApiKey } from '../hooks/useApiKey';
 
 interface LessonViewProps {
   lesson: Lesson;
@@ -92,9 +93,14 @@ const CandlestickPatternExplorer: React.FC = () => {
     const [activePattern, setActivePattern] = useState<string | null>(null);
     const [explorerError, setExplorerError] = useState<string | null>(null);
 
+    const { apiKey } = useApiKey();
     const patterns = ['Bullish Engulfing', 'Bearish Engulfing', 'Hammer', 'Doji', 'Morning Star', 'Evening Star'];
 
     const handlePatternSelect = async (patternName: string) => {
+        if (!apiKey) {
+            setExplorerError('Please set your Gemini API key to use the explorer.');
+            return;
+        }
         setActivePattern(patternName);
         setIsExplorerLoading(true);
         setExplorerChartUrl('');
@@ -105,15 +111,15 @@ const CandlestickPatternExplorer: React.FC = () => {
             const explanationPrompt = `You are a trading mentor. Explain the "${patternName}" candlestick pattern in 2-3 concise sentences. Describe what it looks like, where it typically occurs, and what it signifies for traders. Use markdown for **bold** emphasis.`;
 
             const [imageUrl, explanation] = await Promise.all([
-                generateChartImage(chartPrompt, `pattern-chart-${patternName}`),
-                generateLessonContent(explanationPrompt, `pattern-expl-${patternName}`)
+                generateChartImage(apiKey, chartPrompt, `pattern-chart-${patternName}`),
+                generateLessonContent(apiKey, explanationPrompt, `pattern-expl-${patternName}`)
             ]);
 
             setExplorerChartUrl(imageUrl);
             setExplorerExplanation(explanation);
         } catch (e) {
             console.error(e);
-            setExplorerError('Failed to generate pattern analysis. The AI may be busy, please try again.');
+            setExplorerError('Failed to generate pattern analysis. Please check your API key.');
         } finally {
             setIsExplorerLoading(false);
         }
@@ -197,7 +203,7 @@ export const LessonView: React.FC<LessonViewProps> = ({
         </div>
       )}
 
-      {!isLoadingContent && (
+      {!isLoadingContent && content && (
         <div className="mt-10 border-t border-gray-700 pt-8">
             <div className="flex items-start">
                 <QuestionMarkCircleIcon className="w-8 h-8 text-cyan-400 mr-3 mt-1 flex-shrink-0" />

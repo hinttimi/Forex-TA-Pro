@@ -12,7 +12,7 @@ export interface Module {
   lessons: Lesson[];
 }
 
-export type AppView = 'lesson' | 'pattern' | 'timed' | 'canvas' | 'simulator' | 'saved' | 'achievements' | 'trading_plan' | 'mentor' | 'quiz' | 'market_pulse' | 'news_feed' | 'market_analyzer' | 'economic_calendar' | 'backtester';
+export type AppView = 'lesson' | 'pattern' | 'timed' | 'canvas' | 'simulator' | 'live_simulator' | 'saved' | 'achievements' | 'trading_plan' | 'mentor' | 'quiz' | 'market_pulse' | 'news_feed' | 'market_analyzer' | 'economic_calendar' | 'backtester' | 'settings';
 
 export interface MultipleChoiceQuestion {
     question: string;

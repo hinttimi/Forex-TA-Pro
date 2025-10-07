@@ -1,10 +1,5 @@
-import { GoogleGenAI, Type, GenerateContentResponse } from "@google/genai";
+import { GoogleGenAI, Type, GenerateContentResponse, GenerateImagesResponse } from "@google/genai";
 import { NewsArticle, MarketUpdate, EconomicEvent, MultipleChoiceQuestion } from '../types';
-
-if (!process.env.API_KEY) {
-    throw new Error("API_KEY environment variable is not set.");
-}
-export const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
 
 // In-memory cache to avoid hitting API rate limits for repeated requests.
 const contentCache = new Map<string, string>();
@@ -12,21 +7,71 @@ const imageCache = new Map<string, string>();
 const quizCache = new Map<string, { question: string; options: string[]; correctAnswer: string; }>();
 const quizSetCache = new Map<string, MultipleChoiceQuestion[]>();
 
+// --- Client Management ---
+const clientCache = new Map<string, GoogleGenAI>();
+
 /**
- * Generates educational content for a given lesson prompt.
- * @param prompt - The detailed prompt for the AI to generate content from.
- * @param cacheKey - An optional unique key to cache the result.
- * @returns The generated text content.
+ * Gets or creates a GoogleGenAI client for a given API key.
+ * @param apiKey The user's Gemini API key.
+ * @returns An instance of the GoogleGenAI client.
  */
-export const generateLessonContent = async (prompt: string, cacheKey?: string): Promise<string> => {
+export const getAiClient = (apiKey: string): GoogleGenAI => {
+    if (!apiKey) {
+        throw new Error("API Key is not provided.");
+    }
+    if (clientCache.has(apiKey)) {
+        return clientCache.get(apiKey)!;
+    }
+    const newClient = new GoogleGenAI({ apiKey });
+    clientCache.set(apiKey, newClient);
+    return newClient;
+};
+
+
+// --- Helper for API call retries with exponential backoff ---
+const delay = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
+
+const withRetry = async <T>(
+  apiCall: () => Promise<T>,
+  maxRetries = 5,
+  initialDelay = 2000
+): Promise<T> => {
+  for (let attempt = 1; attempt <= maxRetries; attempt++) {
+    try {
+      return await apiCall();
+    } catch (error) {
+      const errorMessage = String(error).toLowerCase();
+      if (errorMessage.includes('429') || errorMessage.includes('rate limit') || errorMessage.includes('resource_exhausted')) {
+        if (attempt === maxRetries) {
+          console.error("API call failed after max retries due to rate limiting.", error);
+          throw new Error("The service is currently busy. Please try again later.");
+        }
+        const backoffTime = initialDelay * Math.pow(2, attempt - 1) + Math.random() * 1000;
+        console.warn(`Rate limit hit. Retrying in ${backoffTime.toFixed(0)}ms... (Attempt ${attempt}/${maxRetries})`);
+        await delay(backoffTime);
+      } else {
+        console.error("API call failed with a non-retriable error.", error);
+        if (errorMessage.includes('api key not valid')) {
+            throw new Error('Your API key is not valid. Please check it and try again.');
+        }
+        throw error;
+      }
+    }
+  }
+  throw new Error('Exceeded max retries for API call.');
+};
+
+
+export const generateLessonContent = async (apiKey: string, prompt: string, cacheKey?: string): Promise<string> => {
   if (cacheKey && contentCache.has(cacheKey)) {
     return contentCache.get(cacheKey)!;
   }
   try {
-    const response = await ai.models.generateContent({
+    const ai = getAiClient(apiKey);
+    const response = await withRetry<GenerateContentResponse>(() => ai.models.generateContent({
         model: 'gemini-2.5-flash',
         contents: prompt,
-    });
+    }));
     const textContent = response.text;
     if (cacheKey) {
         contentCache.set(cacheKey, textContent);
@@ -34,22 +79,17 @@ export const generateLessonContent = async (prompt: string, cacheKey?: string): 
     return textContent;
   } catch (error) {
     console.error("Error generating lesson content:", error);
-    throw new Error("Failed to generate content from Gemini API.");
+    throw error;
   }
 };
 
-/**
- * Generates a chart image based on a descriptive prompt.
- * @param prompt - The detailed prompt for the AI to generate an image from.
- * @param cacheKey - An optional unique key to cache the result.
- * @returns A base64 encoded string for the generated image.
- */
-export const generateChartImage = async (prompt: string, cacheKey?: string): Promise<string> => {
+export const generateChartImage = async (apiKey: string, prompt: string, cacheKey?: string): Promise<string> => {
   if (cacheKey && imageCache.has(cacheKey)) {
     return imageCache.get(cacheKey)!;
   }
   try {
-    const response = await ai.models.generateImages({
+    const ai = getAiClient(apiKey);
+    const response = await withRetry<GenerateImagesResponse>(() => ai.models.generateImages({
         model: 'imagen-4.0-generate-001',
         prompt: prompt,
         config: {
@@ -57,7 +97,7 @@ export const generateChartImage = async (prompt: string, cacheKey?: string): Pro
           outputMimeType: 'image/png',
           aspectRatio: '16:9',
         },
-    });
+    }));
     
     const base64ImageBytes = response.generatedImages?.[0]?.image?.imageBytes;
 
@@ -72,29 +112,24 @@ export const generateChartImage = async (prompt: string, cacheKey?: string): Pro
     }
   } catch (error) {
     console.error("Error generating chart image:", error);
-    throw new Error("Failed to generate image from Gemini API.");
+    throw error;
   }
 };
 
-/**
- * Generates feedback for a user's simulated trade.
- * @param chartPrompt - The prompt used to generate the chart scenario.
- * @param tradeDetails - A string describing the user's trade (side, entry, SL, TP).
- * @returns The AI-generated feedback as a string.
- */
-export const generateTradeFeedback = async (chartPrompt: string, tradeDetails: string): Promise<string> => {
+export const generateTradeFeedback = async (apiKey: string, chartPrompt: string, tradeDetails: string): Promise<string> => {
     const prompt = `You are an expert trading mentor specializing in Smart Money Concepts. A student is practicing on a simulated chart that was generated with the prompt: "${chartPrompt}". The student placed the following trade: ${tradeDetails}.
 Based on the visual patterns you were asked to generate, analyze the quality of this trade setup *before it plays out*. Is the entry logical relative to the Point of Interest? Is the stop loss placed in a safe location (e.g., below the swing low for a long)? Is the take profit targeting a realistic liquidity level? Provide clear, concise, and constructive feedback in markdown format. Start with a one-sentence summary (e.g., "This is a well-planned setup.") and then provide bullet points for your reasoning.`;
 
     try {
-        const response = await ai.models.generateContent({
+        const ai = getAiClient(apiKey);
+        const response = await withRetry<GenerateContentResponse>(() => ai.models.generateContent({
             model: 'gemini-2.5-flash',
             contents: prompt,
-        });
+        }));
         return response.text;
     } catch (error) {
         console.error("Error generating trade feedback:", error);
-        throw new Error("Failed to generate trade feedback from Gemini API.");
+        throw error;
     }
 };
 
@@ -111,29 +146,24 @@ const quizQuestionSchema = {
     required: ['question', 'options', 'correctAnswer']
 };
 
-/**
- * Generates a multiple-choice quiz question based on lesson content.
- * @param lessonContentPrompt - The content prompt of the lesson to base the question on.
- * @param cacheKey - An optional unique key to cache the result.
- * @returns A structured quiz question object.
- */
-export const generateQuizQuestion = async (lessonContentPrompt: string, cacheKey?: string): Promise<{ question: string; options: string[]; correctAnswer: string; }> => {
+export const generateQuizQuestion = async (apiKey: string, lessonContentPrompt: string, cacheKey?: string): Promise<{ question: string; options: string[]; correctAnswer: string; }> => {
     if (cacheKey && quizCache.has(cacheKey)) {
         return quizCache.get(cacheKey)!;
     }
     try {
+        const ai = getAiClient(apiKey);
         const prompt = `Based on the following concept, create one multiple-choice question to test a user's understanding. The question should be clear and concise. Provide 4 options in total (one correct, three plausible distractors). Ensure the 'correctAnswer' field exactly matches one of the strings in the 'options' array. The options should be shuffled.
 
 Concept: "${lessonContentPrompt}"`;
 
-        const response = await ai.models.generateContent({
+        const response = await withRetry<GenerateContentResponse>(() => ai.models.generateContent({
             model: 'gemini-2.5-flash',
             contents: prompt,
             config: {
                 responseMimeType: "application/json",
                 responseSchema: quizQuestionSchema,
             },
-        });
+        }));
 
         const jsonText = response.text.trim();
         const parsed = JSON.parse(jsonText);
@@ -149,7 +179,7 @@ Concept: "${lessonContentPrompt}"`;
 
     } catch (error) {
         console.error("Error generating quiz question:", error);
-        throw new Error("Failed to generate quiz question from Gemini API.");
+        throw error;
     }
 };
 
@@ -179,29 +209,23 @@ const quizSetSchema = {
 };
 
 
-/**
- * Generates a set of multiple-choice quiz questions for a lesson in a single API call.
- * @param lessonContentPrompt - The content prompt of the lesson.
- * @param numQuestions - The number of questions to generate.
- * @param cacheKey - A unique key to cache the result.
- * @returns An array of structured quiz question objects.
- */
-export const generateQuizSet = async (lessonContentPrompt: string, numQuestions: number, cacheKey?: string): Promise<MultipleChoiceQuestion[]> => {
+export const generateQuizSet = async (apiKey: string, lessonContentPrompt: string, numQuestions: number, cacheKey?: string): Promise<MultipleChoiceQuestion[]> => {
     if (cacheKey && quizSetCache.has(cacheKey)) {
         return quizSetCache.get(cacheKey)!;
     }
     try {
+        const ai = getAiClient(apiKey);
         const prompt = `Based on the following concept, create a set of ${numQuestions} unique multiple-choice questions to test a user's understanding. Each question should be clear and concise. For each question, provide 4 options in total (one correct, three plausible distractors). Ensure the 'correctAnswer' field for each question exactly matches one of the strings in its 'options' array. The options for each question should be shuffled.
 
 Concept: "${lessonContentPrompt}"`;
-        const response = await ai.models.generateContent({
+        const response = await withRetry<GenerateContentResponse>(() => ai.models.generateContent({
             model: 'gemini-2.5-flash',
             contents: prompt,
             config: {
                 responseMimeType: "application/json",
                 responseSchema: quizSetSchema,
             },
-        });
+        }));
         const jsonText = response.text.trim();
         const parsed = JSON.parse(jsonText);
         if (parsed.questions && Array.isArray(parsed.questions) && parsed.questions.length > 0) {
@@ -214,29 +238,24 @@ Concept: "${lessonContentPrompt}"`;
         }
     } catch (error) {
         console.error("Error generating quiz set:", error);
-        throw new Error("Failed to generate quiz set from Gemini API.");
+        throw error;
     }
 };
 
-/**
- * Generates a set of questions for the timed challenge in a single API call.
- * This is not cached to ensure variety on each attempt.
- * @param numQuestions The number of questions to generate.
- * @returns An array of structured quiz question objects.
- */
-export const generateTimedChallengeQuizSet = async (numQuestions: number): Promise<MultipleChoiceQuestion[]> => {
+export const generateTimedChallengeQuizSet = async (apiKey: string, numQuestions: number): Promise<MultipleChoiceQuestion[]> => {
     try {
+        const ai = getAiClient(apiKey);
         const prompt = `You are a quiz generator for an advanced Forex trading course. Create a set of ${numQuestions} unique, challenging multiple-choice questions that test a user's understanding of a wide range of topics. The questions should cover concepts like Market Structure (BOS, CHoCH), Liquidity (Buy-side, Sell-side, Sweeps), Order Blocks, Fair Value Gaps (FVG), and Premium/Discount arrays.
 
 For each question, provide 4 options in total (one correct, three plausible distractors). Ensure the 'correctAnswer' field for each question exactly matches one of the strings in its 'options' array. The options for each question should be shuffled. Return a JSON object that adheres to the provided schema.`;
-        const response = await ai.models.generateContent({
+        const response = await withRetry<GenerateContentResponse>(() => ai.models.generateContent({
             model: 'gemini-2.5-flash',
             contents: prompt,
             config: {
                 responseMimeType: "application/json",
                 responseSchema: quizSetSchema,
             },
-        });
+        }));
         const jsonText = response.text.trim();
         const parsed = JSON.parse(jsonText);
         if (parsed.questions && Array.isArray(parsed.questions) && parsed.questions.length > 0) {
@@ -246,17 +265,11 @@ For each question, provide 4 options in total (one correct, three plausible dist
         }
     } catch (error) {
         console.error("Error generating timed challenge quiz set:", error);
-        throw new Error("Failed to generate timed challenge quiz set from Gemini API.");
+        throw error;
     }
 };
 
-/**
- * Generates a response for the AI Mentor chat, potentially including image analysis.
- * @param prompt - The user's text prompt.
- * @param base64Image - An optional base64 encoded image string.
- * @returns The AI-generated chat response.
- */
-export const generateMentorResponse = async (prompt: string, base64Image?: string): Promise<string> => {
+export const generateMentorResponse = async (apiKey: string, prompt: string, base64Image?: string): Promise<string> => {
     const systemInstruction = `You are an expert forex trading mentor. Your primary expertise is in Smart Money Concepts (SMC) and Inner Circle Trader (ICT) methodologies, including liquidity, order blocks, fair value gaps (FVG), market structure (BOS, CHoCH), and premium/discount arrays.
 
 In addition to your core SMC expertise, you are also skilled at identifying and explaining common classical technical analysis patterns. When you analyze a chart, look for:
@@ -273,10 +286,10 @@ Provide clear, concise, and actionable feedback. Be encouraging and helpful. Use
 When a visual explanation would be helpful, embed a chart generation request in your response using the format [CHART: a detailed, descriptive prompt for an image generation model]. For example: "A head and shoulders pattern looks like this [CHART: A dark-themed forex chart showing a clear head and shoulders top pattern after an uptrend, with the neckline clearly visible.]".`;
     
     try {
+        const ai = getAiClient(apiKey);
         const parts: any[] = [{ text: prompt }];
 
         if (base64Image) {
-            // Strip the data URL prefix
             const match = base64Image.match(/^data:(image\/\w+);base64,(.*)$/);
             if (match) {
                 const mimeType = match[1];
@@ -292,26 +305,22 @@ When a visual explanation would be helpful, embed a chart generation request in 
             }
         }
         
-        const response = await ai.models.generateContent({
+        const response = await withRetry<GenerateContentResponse>(() => ai.models.generateContent({
             model: 'gemini-2.5-flash',
             contents: { parts },
             config: {
                 systemInstruction: systemInstruction,
             },
-        });
+        }));
         
         return response.text;
     } catch (error) {
         console.error("Error generating mentor response:", error);
-        throw new Error("Failed to get response from AI Mentor.");
+        throw error;
     }
 };
 
-/**
- * Generates a real-time forex market summary.
- * @returns The AI-generated market briefing as a markdown string.
- */
-export const generateMarketPulse = async (): Promise<string> => {
+export const generateMarketPulse = async (apiKey: string): Promise<string> => {
     const prompt = `You are a senior forex market analyst providing a daily briefing. It is currently ${new Date().toUTCString()}. Using real-time information, provide a concise summary of the current forex market state. Structure your response in markdown format with the following four sections exactly as titled:
 
 ### Overall Market Narrative
@@ -328,22 +337,19 @@ export const generateMarketPulse = async (): Promise<string> => {
 `;
 
     try {
-        const response = await ai.models.generateContent({
+        const ai = getAiClient(apiKey);
+        const response = await withRetry<GenerateContentResponse>(() => ai.models.generateContent({
             model: 'gemini-2.5-flash',
             contents: prompt,
-        });
+        }));
         return response.text;
     } catch (error) {
         console.error("Error generating market pulse:", error);
-        throw new Error("Failed to generate market pulse from Gemini API.");
+        throw error;
     }
 };
 
-/**
- * Fetches real-time forex news using Google Search grounding.
- * @returns An object containing a list of news articles and grounding metadata.
- */
-export const getForexNews = async (): Promise<{ articles: NewsArticle[], groundingChunks: any[] }> => {
+export const getForexNews = async (apiKey: string): Promise<{ articles: NewsArticle[], groundingChunks: any[] }> => {
     const prompt = `You are a financial news aggregator. Using your search tool, find the top 5 most recent and impactful news articles related to the Forex market (major currency pairs like EUR/USD, GBP/USD, USD/JPY, etc.).
 Return the result as a single, clean JSON array string. Each object in the array should have the keys: "headline", "summary", "sourceUrl", and "sourceTitle".
 For the "summary", provide a concise 2-3 sentence overview.
@@ -351,13 +357,14 @@ Do not include any other text, explanations, or markdown formatting outside of t
 The entire response should be only the JSON array. Example: [{"headline": "...", "summary": "...", "sourceUrl": "...", "sourceTitle": "..."}]`;
 
     try {
-        const response: GenerateContentResponse = await ai.models.generateContent({
+        const ai = getAiClient(apiKey);
+        const response: GenerateContentResponse = await withRetry(() => ai.models.generateContent({
             model: "gemini-2.5-flash",
             contents: prompt,
             config: {
                 tools: [{googleSearch: {}}],
             },
-        });
+        }));
         
         const groundingChunks = response.candidates?.[0]?.groundingMetadata?.groundingChunks || [];
         
@@ -383,24 +390,21 @@ The entire response should be only the JSON array. Example: [{"headline": "...",
 
     } catch (error) {
         console.error("Error fetching forex news:", error);
-        throw new Error("Failed to fetch news from Gemini API.");
+        throw error;
     }
 };
 
-/**
- * Generates a random, concise market update snippet (either news or pulse).
- * @returns A structured market update object.
- */
-export const generateMarketUpdateSnippet = async (): Promise<MarketUpdate> => {
+export const generateMarketUpdateSnippet = async (apiKey: string): Promise<MarketUpdate> => {
     const choice = Math.random() > 0.5 ? 'pulse' : 'news';
 
     try {
+        const ai = getAiClient(apiKey);
         if (choice === 'pulse') {
             const prompt = `You are a senior forex market analyst. Provide only the "Overall Market Narrative" as a single, concise paragraph (2-3 sentences max). Do not include any titles, markdown, or other sections. The information should be based on the current time: ${new Date().toUTCString()}.`;
-            const response = await ai.models.generateContent({
+            const response = await withRetry<GenerateContentResponse>(() => ai.models.generateContent({
                 model: 'gemini-2.5-flash',
                 contents: prompt,
-            });
+            }));
             return {
                 type: 'pulse',
                 title: 'Market Pulse',
@@ -408,14 +412,13 @@ export const generateMarketUpdateSnippet = async (): Promise<MarketUpdate> => {
             };
         } else { // 'news'
             const prompt = `You are a financial news aggregator. Using your search tool, find the single most recent and impactful news headline related to the Forex market. Return the result as a single, clean JSON object string with keys: "headline" and "summary". The summary should be a single, concise sentence. Do not include any other text or markdown. Example: {"headline": "...", "summary": "..."}`;
-
-            const response = await ai.models.generateContent({
+            const response = await withRetry<GenerateContentResponse>(() => ai.models.generateContent({
                 model: "gemini-2.5-flash",
                 contents: prompt,
                 config: {
                     tools: [{ googleSearch: {} }],
                 },
-            });
+            }));
 
             let parsed: { headline: string; summary: string };
             const text = response.text.trim();
@@ -446,16 +449,11 @@ export const generateMarketUpdateSnippet = async (): Promise<MarketUpdate> => {
         }
     } catch (error) {
         console.error("Error generating market update snippet:", error);
-        throw new Error("Failed to generate market update snippet from Gemini API.");
+        throw error;
     }
 };
 
-/**
- * Analyzes the recent price movement for a given currency pair using Google Search.
- * @param pair The currency pair to analyze (e.g., "EUR/USD").
- * @returns An object containing the AI's analysis and the source URLs.
- */
-export const analyzePriceMovement = async (pair: string): Promise<{ analysis: string, sources: any[] }> => {
+export const analyzePriceMovement = async (apiKey: string, pair: string): Promise<{ analysis: string, sources: any[] }> => {
     const prompt = `You are a senior forex market analyst. It is currently ${new Date().toUTCString()}. Using real-time information from your search tool, provide a concise analysis of the primary catalyst for the price movement of the **${pair}** currency pair within the **last 1-2 hours**.
 
 Structure your response in markdown format as follows:
@@ -465,13 +463,14 @@ Structure your response in markdown format as follows:
 4. **Outlook:** A short, one-sentence outlook on the potential next move or what to watch for.`;
 
     try {
-        const response: GenerateContentResponse = await ai.models.generateContent({
+        const ai = getAiClient(apiKey);
+        const response: GenerateContentResponse = await withRetry(() => ai.models.generateContent({
             model: "gemini-2.5-flash",
             contents: prompt,
             config: {
                 tools: [{googleSearch: {}}],
             },
-        });
+        }));
         
         const sources = response.candidates?.[0]?.groundingMetadata?.groundingChunks || [];
         const analysis = response.text;
@@ -480,35 +479,30 @@ Structure your response in markdown format as follows:
 
     } catch (error) {
         console.error(`Error analyzing price movement for ${pair}:`, error);
-        throw new Error("Failed to analyze price movement from Gemini API.");
+        throw error;
     }
 };
 
-/**
- * Generates a pre-event briefing for an economic event.
- */
-export const generatePreEventBriefing = async (event: EconomicEvent): Promise<string> => {
+export const generatePreEventBriefing = async (apiKey: string, event: EconomicEvent): Promise<string> => {
     const prompt = `You are a senior forex market analyst. The upcoming "${event.name}" for ${event.currency} is scheduled soon. The market forecast is ${event.forecast} and the previous reading was ${event.previous}. Using your search tool for the latest context, provide a pre-event briefing in markdown format. Cover these points:
 - **Market Expectations:** Briefly explain what the consensus forecast implies for the currency.
 - **Potential Scenarios:** Describe the likely market reaction for both a better-than-expected (hawkish) and worse-than-expected (dovish) result.
 - **Key Levels to Watch:** Mention any critical technical support/resistance levels on a major pair (e.g., EUR/USD if currency is USD or EUR) that might be tested on the release.`;
     try {
-        const response = await ai.models.generateContent({
+        const ai = getAiClient(apiKey);
+        const response = await withRetry<GenerateContentResponse>(() => ai.models.generateContent({
             model: "gemini-2.5-flash",
             contents: prompt,
             config: { tools: [{ googleSearch: {} }] },
-        });
+        }));
         return response.text;
     } catch (error) {
         console.error("Error generating pre-event briefing:", error);
-        throw new Error("Failed to generate pre-event briefing from Gemini API.");
+        throw error;
     }
 };
 
-/**
- * Generates an instant analysis of an economic data release.
- */
-export const generateInstantAnalysis = async (event: EconomicEvent): Promise<string> => {
+export const generateInstantAnalysis = async (apiKey: string, event: EconomicEvent): Promise<string> => {
     const prompt = `You are a forex market analyst providing live commentary. The "${event.name}" data for ${event.currency} has just been released.
 - **Actual:** ${event.actual}
 - **Forecast:** ${event.forecast}
@@ -518,46 +512,40 @@ Using your search tool to find the immediate market reaction, provide an instant
 - **Immediate Market Reaction:** Describe the price action on the relevant major pair in the first few minutes post-release (e.g., "USD/JPY spiked 50 pips as the dollar strengthened aggressively.").
 - **Initial Interpretation:** How is the market interpreting this data? (e.g., "This hotter-than-expected inflation print increases the likelihood of the central bank maintaining a hawkish stance.")`;
     try {
-        const response = await ai.models.generateContent({
+        const ai = getAiClient(apiKey);
+        const response = await withRetry<GenerateContentResponse>(() => ai.models.generateContent({
             model: "gemini-2.5-flash",
             contents: prompt,
             config: { tools: [{ googleSearch: {} }] },
-        });
+        }));
         return response.text;
     } catch (error) {
         console.error("Error generating instant analysis:", error);
-        throw new Error("Failed to generate instant analysis from Gemini API.");
+        throw error;
     }
 };
 
-/**
- * Generates a post-event summary of market impact.
- */
-export const generatePostEventSummary = async (event: EconomicEvent): Promise<string> => {
+export const generatePostEventSummary = async (apiKey: string, event: EconomicEvent): Promise<string> => {
     const prompt = `You are a senior forex market analyst summarizing an economic event that occurred roughly an hour ago. The event was the "${event.name}" for ${event.currency}, with an actual reading of ${event.actual} vs a forecast of ${event.forecast}. Using your search tool to analyze the market's behavior since the release, provide a concise post-event summary in markdown format. Address:
 - **Price Action Follow-Through:** Did the initial spike/drop reverse, or did the momentum continue?
 - **Updated Market Sentiment:** Has the narrative or sentiment for the ${event.currency} shifted because of this data?
 - **Broader Impact:** Briefly mention if the event had any notable impact on other assets like indices or commodities.`;
     try {
-        const response = await ai.models.generateContent({
+        const ai = getAiClient(apiKey);
+        const response = await withRetry<GenerateContentResponse>(() => ai.models.generateContent({
             model: "gemini-2.5-flash",
             contents: prompt,
             config: { tools: [{ googleSearch: {} }] },
-        });
+        }));
         return response.text;
     } catch (error) {
         console.error("Error generating post-event summary:", error);
-        throw new Error("Failed to generate post-event summary from Gemini API.");
+        throw error;
     }
 };
 
-/**
- * Analyzes the results of a trading strategy backtest.
- * @param strategyParams - The parameters of the strategy defined by the user.
- * @param results - The quantitative results of the backtest.
- * @returns A qualitative analysis and suggestions from the AI.
- */
 export const analyzeBacktestResults = async (
+    apiKey: string,
     strategyParams: { [key: string]: any },
     results: { [key: string]: any }
 ): Promise<string> => {
@@ -596,14 +584,15 @@ export const analyzeBacktestResults = async (
 `;
 
     try {
-        const response = await ai.models.generateContent({
+        const ai = getAiClient(apiKey);
+        const response = await withRetry<GenerateContentResponse>(() => ai.models.generateContent({
             model: 'gemini-2.5-flash',
             contents: prompt,
-        });
+        }));
         return response.text;
     } catch (error) {
         console.error("Error analyzing backtest results:", error);
-        throw new Error("Failed to get analysis from Gemini API.");
+        throw error;
     }
 };
 
@@ -622,14 +611,8 @@ const tradeEvaluationSchema = {
     required: ['outcome', 'feedback']
 };
 
-/**
- * Evaluates a user's trade on a generated historical chart scenario.
- * @param chartPrompt The prompt used to generate the chart.
- * @param strategy The user's defined strategy parameters.
- * @param tradeDetails A string describing the user's trade placement.
- * @returns An object containing the trade outcome ('Win' or 'Loss') and detailed feedback.
- */
 export const evaluateHistoricalTrade = async (
+    apiKey: string,
     chartPrompt: string,
     strategy: { [key: string]: any },
     tradeDetails: string
@@ -657,14 +640,15 @@ Your task is to:
 Return your response as a single, clean JSON object string that adheres to the provided schema. Do not include any other text, explanations, or markdown formatting outside of the JSON string.
 `;
     try {
-        const response = await ai.models.generateContent({
+        const ai = getAiClient(apiKey);
+        const response = await withRetry<GenerateContentResponse>(() => ai.models.generateContent({
             model: "gemini-2.5-flash",
             contents: prompt,
             config: {
                 responseMimeType: "application/json",
                 responseSchema: tradeEvaluationSchema,
             },
-        });
+        }));
         const jsonText = response.text.trim();
         const parsed = JSON.parse(jsonText);
 
@@ -676,6 +660,6 @@ Return your response as a single, clean JSON object string that adheres to the p
 
     } catch (error) {
         console.error("Error evaluating historical trade:", error);
-        throw new Error("Failed to get trade evaluation from Gemini API.");
+        throw error;
     }
 };

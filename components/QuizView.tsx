@@ -6,6 +6,7 @@ import { LoadingSpinner } from './LoadingSpinner';
 import { ArrowPathIcon } from './icons/ArrowPathIcon';
 import { ExclamationTriangleIcon } from './icons/ExclamationTriangleIcon';
 import { ArrowRightIcon } from './icons/ArrowRightIcon';
+import { useApiKey } from '../hooks/useApiKey';
 
 interface QuizViewProps {
   lesson: Lesson;
@@ -25,12 +26,17 @@ export const QuizView: React.FC<QuizViewProps> = ({ lesson, onComplete }) => {
   const [selectedAnswer, setSelectedAnswer] = useState<string | null>(null);
   const [isCorrect, setIsCorrect] = useState<boolean | null>(null);
 
+  const { apiKey } = useApiKey();
   const { unlockBadge } = useBadges();
 
   const loadQuestions = useCallback(async () => {
     setQuizState('loading');
+    if (!apiKey) {
+        setQuizState('error');
+        return;
+    }
     try {
-      const generatedQuestions = await generateQuizSet(lesson.contentPrompt, QUIZ_LENGTH, `quiz-set-${lesson.key}`);
+      const generatedQuestions = await generateQuizSet(apiKey, lesson.contentPrompt, QUIZ_LENGTH, `quiz-set-${lesson.key}`);
       
       if (generatedQuestions.length < QUIZ_LENGTH) {
         console.warn(`AI generated only ${generatedQuestions.length}/${QUIZ_LENGTH} questions.`);
@@ -42,7 +48,7 @@ export const QuizView: React.FC<QuizViewProps> = ({ lesson, onComplete }) => {
       console.error("Failed to generate quiz questions:", error);
       setQuizState('error');
     }
-  }, [lesson.contentPrompt, lesson.key]);
+  }, [lesson.contentPrompt, lesson.key, apiKey]);
 
   useEffect(() => {
     loadQuestions();
@@ -68,7 +74,7 @@ export const QuizView: React.FC<QuizViewProps> = ({ lesson, onComplete }) => {
       setIsCorrect(null);
     } else {
       setQuizState('finished');
-      if (finalScore / questions.length >= PASS_THRESHOLD) {
+      if (questions.length > 0 && (finalScore / questions.length) >= PASS_THRESHOLD) {
         unlockBadge('quiz-master');
       }
     }
@@ -103,7 +109,9 @@ export const QuizView: React.FC<QuizViewProps> = ({ lesson, onComplete }) => {
         <div className="p-6 bg-red-900/20 border border-red-500/30 rounded-lg">
             <ExclamationTriangleIcon className="w-12 h-12 mx-auto text-red-400" />
             <h2 className="mt-4 text-2xl font-bold text-white">Failed to Create Quiz</h2>
-            <p className="mt-2 text-red-300">There was an issue generating questions from the AI. This can happen during periods of high demand or if there's a connection issue. Please try again later.</p>
+            <p className="mt-2 text-red-300">
+                {!apiKey ? "Please set your Gemini API key to take a quiz." : "There was an issue generating questions from the AI. Please check your API key and try again."}
+            </p>
         </div>
         <button onClick={onComplete} className="mt-6 px-6 py-2 bg-gray-700 text-gray-200 font-semibold rounded-lg hover:bg-gray-600">
             Back to Lesson
@@ -113,7 +121,7 @@ export const QuizView: React.FC<QuizViewProps> = ({ lesson, onComplete }) => {
   }
 
   if (quizState === 'finished') {
-    const isPass = (score / questions.length) >= PASS_THRESHOLD;
+    const isPass = questions.length > 0 && (score / questions.length) >= PASS_THRESHOLD;
     return (
       <div className="max-w-2xl mx-auto text-center animate-[fade-in_0.5s]">
         <h1 className="text-4xl font-extrabold text-white mb-4 tracking-tight">Quiz Complete!</h1>

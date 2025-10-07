@@ -7,6 +7,7 @@ import { PhotoIcon } from './icons/PhotoIcon';
 import { XMarkIcon } from './icons/XMarkIcon';
 import { PaperAirplaneIcon } from './icons/PaperAirplaneIcon';
 import { MagnifyingGlassChartIcon } from './icons/MagnifyingGlassChartIcon';
+import { useApiKey } from '../hooks/useApiKey';
 
 const fileToBase64 = (file: File): Promise<string> =>
   new Promise((resolve, reject) => {
@@ -47,6 +48,7 @@ export const AIBacktesterView: React.FC = () => {
     const [analysis, setAnalysis] = useState<string>('');
     const [isLoading, setIsLoading] = useState<boolean>(false);
     const [error, setError] = useState<string>('');
+    const { apiKey, openKeyModal } = useApiKey();
 
     const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -64,6 +66,11 @@ export const AIBacktesterView: React.FC = () => {
     };
 
     const handleSubmit = async () => {
+        if (!apiKey) {
+            setError("Please set your Gemini API key to use the AI Analyst.");
+            openKeyModal();
+            return;
+        }
         if (!uploadedImage || !prompt.trim()) {
             setError("Please upload a chart image and provide your analysis or question.");
             return;
@@ -73,11 +80,11 @@ export const AIBacktesterView: React.FC = () => {
         setAnalysis('');
 
         try {
-            const response = await generateMentorResponse(prompt, uploadedImage);
+            const response = await generateMentorResponse(apiKey, prompt, uploadedImage);
             setAnalysis(response);
         } catch (e) {
             console.error(e);
-            setError("Failed to get analysis from the AI. Please try again.");
+            setError("Failed to get analysis from the AI. Please check your API key and try again.");
         } finally {
             setIsLoading(false);
         }

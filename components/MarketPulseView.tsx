@@ -3,6 +3,7 @@ import { generateMarketPulse } from '../services/geminiService';
 import { LoadingSpinner } from './LoadingSpinner';
 import { SignalIcon } from './icons/SignalIcon';
 import { ExclamationTriangleIcon } from './icons/ExclamationTriangleIcon';
+import { useApiKey } from '../hooks/useApiKey';
 
 const FormattedContent: React.FC<{ text: string }> = ({ text }) => {
     const renderInlineMarkdown = (lineText: string): React.ReactNode => {
@@ -51,17 +52,23 @@ export const MarketPulseView: React.FC = () => {
     const [pulseData, setPulseData] = useState<string>('');
     const [isLoading, setIsLoading] = useState<boolean>(false);
     const [error, setError] = useState<string | null>(null);
+    const { apiKey, openKeyModal } = useApiKey();
 
     const handleGetPulse = async () => {
+        if (!apiKey) {
+            setError('Please provide an API key to get the market pulse.');
+            openKeyModal();
+            return;
+        }
         setIsLoading(true);
         setError(null);
         setPulseData('');
         try {
-            const data = await generateMarketPulse();
+            const data = await generateMarketPulse(apiKey);
             setPulseData(data);
         } catch (e) {
             console.error(e);
-            setError('Failed to fetch market pulse. The AI may be busy, or there could be an issue with your connection.');
+            setError('Failed to fetch market pulse. Please check your API key and try again.');
         } finally {
             setIsLoading(false);
         }

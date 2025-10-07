@@ -1,4 +1,3 @@
-
 import React, { useState, useRef, useEffect, useCallback } from 'react';
 import { generateChartImage, generateTradeFeedback } from '../../services/geminiService';
 import { LoadingSpinner } from '../LoadingSpinner';
@@ -14,6 +13,7 @@ import { XMarkIcon } from '../icons/XMarkIcon';
 import { BookmarkSquareIcon } from '../icons/BookmarkSquareIcon';
 import { useCompletion } from '../../hooks/useCompletion';
 import { useBadges } from '../../hooks/useBadges';
+import { useApiKey } from '../../hooks/useApiKey';
 
 // --- Constants ---
 const CHART_WIDTH = 1280;
@@ -126,6 +126,7 @@ export const TradeSimulatorView: React.FC = () => {
     const [isLoadingFeedback, setIsLoadingFeedback] = useState(false);
     const [isAnalysisSaved, setIsAnalysisSaved] = useState(false);
     
+    const { apiKey, openKeyModal } = useApiKey();
     const { logSimulatorCompletion, logSavedAnalysis, getCompletionCount } = useCompletion();
     const { unlockBadge } = useBadges();
 
@@ -134,6 +135,10 @@ export const TradeSimulatorView: React.FC = () => {
     const dragStartPointRef = useRef({x: 0, y: 0});
 
     const handleGenerateChart = async () => {
+        if (!apiKey) {
+            openKeyModal();
+            return;
+        }
         setGameState('loading');
         setChartImageUrl('');
         setShapes([]);
@@ -152,7 +157,7 @@ export const TradeSimulatorView: React.FC = () => {
         const prompt = "You are an AI chart generator. Create a dark-themed forex candlestick chart showing a clear, high-probability trade setup based on Smart Money Concepts. The setup could be a bullish or bearish scenario involving a liquidity sweep, a change of character, and a clear point of interest (like an order block or FVG). The chart must show the full price action from setup to resolution. The setup should occur around the horizontal middle of the chart.";
         setChartGenPrompt(prompt);
         try {
-            const url = await generateChartImage(prompt);
+            const url = await generateChartImage(apiKey, prompt);
             setChartImageUrl(url);
             setGameState('analyzing');
         } catch (e) {
@@ -369,14 +374,18 @@ export const TradeSimulatorView: React.FC = () => {
     }, [trade, placementStep]);
 
     const handleGetFeedback = async () => {
+        if (!apiKey) {
+            openKeyModal();
+            return;
+        }
         setGameState('feedback');
         setIsLoadingFeedback(true);
         const tradeDetails = `Side: ${trade.side}, Entry at price ${formatPrice(trade.entry)}, Stop Loss at ${formatPrice(trade.stopLoss)}, Take Profit at ${formatPrice(trade.takeProfit)}.`;
         try {
-            const fb = await generateTradeFeedback(chartGenPrompt, tradeDetails);
+            const fb = await generateTradeFeedback(apiKey, chartGenPrompt, tradeDetails);
             setFeedback(fb);
         } catch(e) {
-            setFeedback('Sorry, the AI mentor could not provide feedback at this time.');
+            setFeedback('Sorry, the AI mentor could not provide feedback at this time. Please check your API key.');
         } finally {
             setIsLoadingFeedback(false);
         }

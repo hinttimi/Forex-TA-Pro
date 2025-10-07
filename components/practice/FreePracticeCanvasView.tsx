@@ -18,6 +18,7 @@ import { ArrowUturnLeftIcon } from '../icons/ArrowUturnLeftIcon';
 import { ArrowUturnRightIcon } from '../icons/ArrowUturnRightIcon';
 import { BoldIcon } from '../icons/BoldIcon';
 import { ItalicIcon } from '../icons/ItalicIcon';
+import { useApiKey } from '../../hooks/useApiKey';
 
 type Tool = 'select' | 'trendline' | 'horizontal' | 'fibonacci' | 'text' | 'angle' | 'rectangle' | 'circle';
 
@@ -208,6 +209,8 @@ export const FreePracticeCanvasView: React.FC = () => {
   
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const imageRef = useRef<HTMLImageElement | null>(null);
+  
+  const { apiKey, openKeyModal } = useApiKey();
 
   const commitHistory = (newShapes: Shape[]) => {
     const newHistory = history.slice(0, historyIndex + 1);
@@ -235,6 +238,11 @@ export const FreePracticeCanvasView: React.FC = () => {
   }, [history, historyIndex]);
 
   const handleGenerateChart = async () => {
+    if (!apiKey) {
+      setError('Please set your Gemini API key to generate charts.');
+      openKeyModal();
+      return;
+    }
     setIsLoading(true);
     setImageUrl('');
     setError(null);
@@ -244,9 +252,9 @@ export const FreePracticeCanvasView: React.FC = () => {
     setHistoryIndex(0);
     try {
       const prompt = "A random, unlabeled forex candlestick chart on a dark theme, in a 16:9 aspect ratio. The chart should display a variety of price action, suitable for technical analysis practice.";
-      const url = await generateChartImage(prompt);
+      const url = await generateChartImage(apiKey, prompt);
       setImageUrl(url);
-    } catch (e) { console.error(e); setError('Failed to generate a practice chart. Please try again.'); } 
+    } catch (e) { console.error(e); setError('Failed to generate a practice chart. Please check your API key and try again.'); } 
     finally { setIsLoading(false); }
   };
 

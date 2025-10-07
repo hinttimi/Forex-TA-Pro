@@ -25,6 +25,12 @@ import { MarketUpdateToast } from './components/MarketUpdateToast';
 import { WhyIsItMovingView } from './components/WhyIsItMovingView';
 import { EconomicCalendarView } from './components/EconomicCalendarView';
 import { AIBacktesterView } from './components/AIBacktesterView';
+import { LiveChartSimulatorView } from './components/practice/LiveChartSimulatorView';
+import { useDebounce } from './hooks/useDebounce';
+import { ApiKeyProvider } from './context/ApiKeyContext';
+import { useApiKey } from './hooks/useApiKey';
+import { ApiKeyModal } from './components/ApiKeyModal';
+import { SettingsView } from './components/SettingsView';
 
 const allLessons = MODULES.flatMap(module => module.lessons);
 
@@ -35,7 +41,7 @@ const findLessonIndex = (lessonKey: string) => {
 const AppContent: React.FC = () => {
   const [isSidebarOpen, setIsSidebarOpen] = useState(true);
   const [currentView, setCurrentView] = useState<AppView>('lesson');
-  const [currentLesson, setCurrentLesson] = useState<Lesson | null>(MODULES[0].lessons[0]);
+  const [currentLesson, setCurrentLesson] = useState<Lesson | null>(null);
   const [lessonContent, setLessonContent] = useState<string>('');
   const [chartImageUrl, setChartImageUrl] = useState<string>('');
   const [isLoadingContent, setIsLoadingContent] = useState<boolean>(false);
@@ -44,6 +50,10 @@ const AppContent: React.FC = () => {
   const [quizLesson, setQuizLesson] = useState<Lesson | null>(null);
   const [marketUpdate, setMarketUpdate] = useState<MarketUpdate | null>(null);
   
+  const [lessonToLoadKey, setLessonToLoadKey] = useState<string | null>(null);
+  const debouncedLessonKey = useDebounce(lessonToLoadKey, 500);
+
+  const { apiKey } = useApiKey();
   const { logLessonCompleted, getCompletedLessons } = useCompletion();
   const { unlockBadge } = useBadges();
   const completedLessons = getCompletedLessons();
@@ -52,31 +62,60 @@ const AppContent: React.FC = () => {
     setIsSidebarOpen(prev => !prev);
   };
 
-  const handleSelectLesson = useCallback(async (lesson: Lesson) => {
+  const handleSelectLesson = useCallback((lesson: Lesson) => {
     setCurrentView('lesson');
     setCurrentLesson(lesson);
     setChartImageUrl('');
     setLessonContent('');
     setError(null);
-    setIsLoadingContent(true);
-    try {
-      const content = await generateLessonContent(lesson.contentPrompt, `lesson-content-${lesson.key}`);
-      setLessonContent(content);
-      logLessonCompleted(lesson.key);
-    } catch (e) {
-      console.error(e);
-      setError('Failed to load lesson content. Please check your API key and try again.');
-    } finally {
-      setIsLoadingContent(false);
+    setIsLoadingContent(true); // Start loading UI immediately
+    setLessonToLoadKey(lesson.key); // Set key to trigger debounced API call
+  }, []);
+
+  // Effect for debounced content loading
+  useEffect(() => {
+    const loadContent = async (key: string) => {
+      if (currentLesson?.key !== key) {
+        return;
+      }
+      if (!apiKey) {
+          setError("Please set your Gemini API key to load lesson content.");
+          setIsLoadingContent(false);
+          return;
+      }
+
+      const lesson = allLessons.find(l => l.key === key);
+      if (!lesson) {
+          setIsLoadingContent(false);
+          return;
+      }
+      
+      try {
+        const content = await generateLessonContent(apiKey, lesson.contentPrompt, `lesson-content-${lesson.key}`);
+        setLessonContent(content);
+        logLessonCompleted(lesson.key);
+      } catch (e) {
+        console.error(e);
+        const errorMessage = e instanceof Error ? e.message : 'Failed to load lesson content. Please check your API key and try again.';
+        setError(errorMessage);
+      } finally {
+        if (currentLesson?.key === key) {
+            setIsLoadingContent(false);
+        }
+      }
+    };
+    
+    if (debouncedLessonKey) {
+      loadContent(debouncedLessonKey);
     }
-  }, [logLessonCompleted]);
+  }, [debouncedLessonKey, currentLesson?.key, logLessonCompleted, apiKey]);
+
 
   // Badge check effect
   useEffect(() => {
     const completed = getCompletedLessons();
     const firstLessonKey = MODULES[0].lessons[0].key;
 
-    // Award "First Step" badge after completing the first lesson and navigating away from it.
     if (currentLesson?.key !== firstLessonKey && completed.has(firstLessonKey)) {
       unlockBadge('first-step');
     }
@@ -95,39 +134,46 @@ const AppContent: React.FC = () => {
     if (level3Keys.every(key => completed.has(key))) {
         unlockBadge('liquidity-hunter');
     }
-  }, [lessonContent, unlockBadge, getCompletedLessons, currentLesson]); // Reruns when new lesson content is loaded
+  }, [lessonContent, unlockBadge, getCompletedLessons, currentLesson]);
 
   // Effect for market update toasts
   useEffect(() => {
-    const UPDATE_INTERVAL = 15 * 60 * 1000; // 15 minutes
+    const UPDATE_INTERVAL = 15 * 60 * 1000;
 
     const intervalId = setInterval(async () => {
-        // Only fetch updates if the user is on the lesson view and the tab is active
-        if (currentView === 'lesson' && document.visibilityState === 'visible') {
+        if (apiKey && currentView === 'lesson' && document.visibilityState === 'visible') {
             try {
-                const update = await generateMarketUpdateSnippet();
+                const update = await generateMarketUpdateSnippet(apiKey);
                 setMarketUpdate(update);
             } catch (e) {
                 console.error("Failed to fetch market update snippet:", e);
-                // We don't show an error to the user for this background task.
             }
         }
     }, UPDATE_INTERVAL);
 
     return () => clearInterval(intervalId);
-  }, [currentView]);
+  }, [currentView, apiKey]);
 
 
   useEffect(() => {
-    handleSelectLesson(MODULES[0].lessons[0]);
-  }, [handleSelectLesson]);
+    // Only trigger the initial lesson load if we have an API key
+    // and if there isn't already a lesson selected. This prevents
+    // re-loading the first lesson if the user changes their API key later.
+    if (apiKey && !currentLesson) {
+      handleSelectLesson(MODULES[0].lessons[0]);
+    }
+  }, [apiKey, currentLesson, handleSelectLesson]);
 
   const handleVisualize = useCallback(async () => {
     if (!currentLesson) return;
+    if (!apiKey) {
+        setError("Please set your Gemini API key to generate charts.");
+        return;
+    }
     setIsLoadingChart(true);
     setChartImageUrl('');
     try {
-      const imageUrl = await generateChartImage(currentLesson.chartPrompt, `lesson-chart-${currentLesson.key}`);
+      const imageUrl = await generateChartImage(apiKey, currentLesson.chartPrompt, `lesson-chart-${currentLesson.key}`);
       setChartImageUrl(imageUrl);
     } catch (e) {
       console.error(e);
@@ -135,7 +181,7 @@ const AppContent: React.FC = () => {
     } finally {
       setIsLoadingChart(false);
     }
-  }, [currentLesson]);
+  }, [currentLesson, apiKey]);
 
   const handleSetView = (view: AppView) => {
     setCurrentView(view);
@@ -190,6 +236,8 @@ const AppContent: React.FC = () => {
         return <FreePracticeCanvasView />;
       case 'simulator':
         return <TradeSimulatorView />;
+      case 'live_simulator':
+        return <LiveChartSimulatorView />;
       case 'saved':
         return <SavedAnalysisView />;
       case 'achievements':
@@ -212,6 +260,8 @@ const AppContent: React.FC = () => {
         return <EconomicCalendarView />;
       case 'backtester':
         return <AIBacktesterView />;
+      case 'settings':
+        return <SettingsView />;
       default:
         return null;
     }
@@ -219,6 +269,7 @@ const AppContent: React.FC = () => {
 
   return (
     <div className="relative h-screen bg-gray-900 text-gray-100 font-sans overflow-hidden">
+      <ApiKeyModal />
       {isSidebarOpen && <div onClick={() => setIsSidebarOpen(false)} className="fixed inset-0 bg-black/60 z-30 md:hidden" aria-hidden="true" />}
       <Sidebar
         modules={MODULES}
@@ -250,9 +301,11 @@ const AppContent: React.FC = () => {
 };
 
 const App: React.FC = () => (
-  <BadgesProvider>
-    <AppContent />
-  </BadgesProvider>
+  <ApiKeyProvider>
+    <BadgesProvider>
+      <AppContent />
+    </BadgesProvider>
+  </ApiKeyProvider>
 );
 
 

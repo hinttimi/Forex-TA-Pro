@@ -4,11 +4,12 @@ import { MultipleChoiceQuestion } from '../../types';
 import { LoadingSpinner } from '../LoadingSpinner';
 import { ArrowPathIcon } from '../icons/ArrowPathIcon';
 import { useBadges } from '../../hooks/useBadges';
+import { useApiKey } from '../../hooks/useApiKey';
 
 const CHALLENGE_LENGTH = 10;
 const TIME_PER_QUESTION = 20; // in seconds
 
-type ChallengeState = 'idle' | 'loading' | 'active' | 'finished';
+type ChallengeState = 'idle' | 'loading' | 'active' | 'finished' | 'error';
 
 export const TimedChallengeView: React.FC = () => {
     const [challengeState, setChallengeState] = useState<ChallengeState>('idle');
@@ -18,7 +19,9 @@ export const TimedChallengeView: React.FC = () => {
     const [score, setScore] = useState(0);
     const [selectedAnswer, setSelectedAnswer] = useState<string | null>(null);
     const [isCorrect, setIsCorrect] = useState<boolean | null>(null);
+    const [error, setError] = useState<string | null>(null);
     
+    const { apiKey, openKeyModal } = useApiKey();
     const { unlockBadge } = useBadges();
     const timerRef = useRef<number | null>(null);
     const answerTimeoutRef = useRef<number | null>(null);
@@ -27,8 +30,14 @@ export const TimedChallengeView: React.FC = () => {
         setChallengeState('loading');
         if (answerTimeoutRef.current) clearTimeout(answerTimeoutRef.current);
         
+        if (!apiKey) {
+            setError('An API key is required to start the timed challenge.');
+            setChallengeState('error');
+            return;
+        }
+
         try {
-            const allQuestions = await generateTimedChallengeQuizSet(CHALLENGE_LENGTH);
+            const allQuestions = await generateTimedChallengeQuizSet(apiKey, CHALLENGE_LENGTH);
             if (allQuestions.length < CHALLENGE_LENGTH) {
                 throw new Error(`AI generated only ${allQuestions.length} questions.`);
             }
@@ -42,9 +51,10 @@ export const TimedChallengeView: React.FC = () => {
             setChallengeState('active');
         } catch (error) {
             console.error("Failed to load timed challenge questions", error);
-            setChallengeState('idle'); 
+            setError('Could not load challenge questions. Please check your API key.');
+            setChallengeState('error'); 
         }
-    }, []);
+    }, [apiKey]);
 
     useEffect(() => {
         if (challengeState === 'active' && questions.length > 0) {
@@ -108,6 +118,7 @@ export const TimedChallengeView: React.FC = () => {
     const restartChallenge = () => {
         setChallengeState('idle');
         setQuestions([]);
+        setError(null);
     };
 
     const getButtonClass = (option: string) => {
@@ -126,16 +137,26 @@ export const TimedChallengeView: React.FC = () => {
         return 'bg-gray-700 opacity-50';
     };
 
-    if (challengeState === 'idle') {
+    if (challengeState === 'idle' || challengeState === 'error') {
         return (
             <div className="max-w-2xl mx-auto text-center">
                 <h1 className="text-4xl font-extrabold text-white mb-4 tracking-tight">Timed Challenge</h1>
                 <p className="prose prose-invert prose-lg max-w-none text-gray-300 mx-auto">
                     Test your knowledge against the clock. You'll have {TIME_PER_QUESTION} seconds to answer each of the {CHALLENGE_LENGTH} questions.
                 </p>
+                {challengeState === 'error' && (
+                    <div className="mt-6 p-4 bg-red-500/10 border border-red-500/30 rounded-lg text-red-300">
+                        <p>{error}</p>
+                    </div>
+                )}
                 <button onClick={startChallenge} className="mt-8 px-8 py-4 bg-cyan-500 text-gray-900 font-bold text-xl rounded-lg shadow-md hover:bg-cyan-400 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-offset-gray-900 focus:ring-cyan-500 transition-all duration-200">
-                    Start Challenge
+                    {challengeState === 'error' ? 'Try Again' : 'Start Challenge'}
                 </button>
+                 {challengeState === 'error' && (
+                    <button onClick={openKeyModal} className="mt-4 text-sm text-cyan-400 underline hover:text-cyan-300">
+                        Check API Key
+                    </button>
+                )}
             </div>
         );
     }

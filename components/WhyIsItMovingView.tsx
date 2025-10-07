@@ -1,9 +1,11 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { analyzePriceMovement } from '../services/geminiService';
 import { LoadingSpinner } from './LoadingSpinner';
 import { MagnifyingGlassChartIcon } from './icons/MagnifyingGlassChartIcon';
 import { ExclamationTriangleIcon } from './icons/ExclamationTriangleIcon';
 import { LinkIcon } from './icons/LinkIcon';
+import { useDebounce } from '../../hooks/useDebounce';
+import { useApiKey } from '../hooks/useApiKey';
 
 const MAJOR_PAIRS = ['EUR/USD', 'GBP/USD', 'USD/JPY', 'USD/CAD', 'AUD/USD', 'NZD/USD', 'USD/CHF'];
 
@@ -49,34 +51,53 @@ const FormattedContent: React.FC<{ text: string }> = ({ text }) => {
 };
 
 export const WhyIsItMovingView: React.FC = () => {
-    const [selectedPair, setSelectedPair] = useState(MAJOR_PAIRS[0]);
+    const [selectedPair, setSelectedPair] = useState<string | null>(null);
     const [analysis, setAnalysis] = useState<string>('');
     const [sources, setSources] = useState<any[]>([]);
     const [isLoading, setIsLoading] = useState<boolean>(false);
     const [error, setError] = useState<string | null>(null);
+    const { apiKey, openKeyModal } = useApiKey();
 
-    const handleAnalyze = async () => {
+    const debouncedSelectedPair = useDebounce(selectedPair, 500);
+
+    const handleAnalyze = useCallback(async (pair: string) => {
+        if (!apiKey) {
+            setError('Please provide an API key to analyze the market.');
+            openKeyModal();
+            return;
+        }
         setIsLoading(true);
         setError(null);
         setAnalysis('');
         setSources([]);
         try {
-            const { analysis: fetchedAnalysis, sources: fetchedSources } = await analyzePriceMovement(selectedPair);
+            const { analysis: fetchedAnalysis, sources: fetchedSources } = await analyzePriceMovement(apiKey, pair);
             setAnalysis(fetchedAnalysis);
             setSources(fetchedSources);
         } catch (e) {
             console.error(e);
-            setError(`Failed to analyze ${selectedPair}. The AI may be busy, or there could be an issue with your connection or API key.`);
+            setError(`Failed to analyze ${pair}. Please check your API key and try again.`);
         } finally {
             setIsLoading(false);
         }
-    };
+    }, [apiKey, openKeyModal]);
+
+    useEffect(() => {
+        if (debouncedSelectedPair) {
+            handleAnalyze(debouncedSelectedPair);
+        } else {
+            setAnalysis('');
+            setSources([]);
+            setError(null);
+            setIsLoading(false);
+        }
+    }, [debouncedSelectedPair, handleAnalyze]);
 
     const WelcomeScreen = () => (
         <div className="text-center py-12 bg-gray-800/30 border border-dashed border-gray-700 rounded-lg">
             <MagnifyingGlassChartIcon className="w-16 h-16 mx-auto text-gray-500 mb-4" />
-            <h2 className="text-2xl font-bold text-white">Market Analyzer</h2>
-            <p className="text-gray-400 mt-2 max-w-md mx-auto">Select a currency pair and get an instant, AI-powered analysis on why it's moving right now.</p>
+            <h2 className="text-2xl font-bold text-white">Live Market Analyzer</h2>
+            <p className="text-gray-400 mt-2 max-w-md mx-auto">Select a currency pair to get an instant, AI-powered analysis on why it's moving right now.</p>
         </div>
     );
 
@@ -85,39 +106,31 @@ export const WhyIsItMovingView: React.FC = () => {
             <h1 className="text-4xl font-extrabold text-white mb-2 tracking-tight">Why Is It Moving?</h1>
             <p className="text-gray-400 mb-8">Get a real-time summary of the catalysts driving market price action.</p>
 
-            <div className="flex flex-col sm:flex-row items-center gap-4 p-4 bg-gray-800/50 border border-gray-700 rounded-lg mb-8">
-                <div className="flex-grow w-full sm:w-auto">
-                    <label htmlFor="currency-pair" className="sr-only">Select Currency Pair</label>
-                    <select
-                        id="currency-pair"
-                        value={selectedPair}
-                        onChange={(e) => setSelectedPair(e.target.value)}
-                        className="w-full bg-gray-700 border border-gray-600 rounded-md px-3 py-2 text-white font-semibold focus:ring-2 focus:ring-cyan-500 focus:border-cyan-500"
-                        disabled={isLoading}
-                    >
-                        {MAJOR_PAIRS.map(pair => (
-                            <option key={pair} value={pair}>{pair}</option>
-                        ))}
-                    </select>
-                </div>
-                <button
-                    onClick={handleAnalyze}
-                    disabled={isLoading}
-                    className="w-full sm:w-auto inline-flex items-center justify-center px-6 py-2 bg-cyan-500 text-gray-900 font-bold rounded-lg shadow-md hover:bg-cyan-400 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-offset-gray-900 focus:ring-cyan-500 transition-all duration-200 disabled:bg-gray-600 disabled:cursor-not-allowed"
+            <div className="p-4 bg-gray-800/50 border border-gray-700 rounded-lg mb-8">
+                <label htmlFor="currency-pair" className="block text-sm font-medium text-gray-300 mb-2">
+                    Select Currency Pair for Live Analysis
+                </label>
+                <select
+                    id="currency-pair"
+                    value={selectedPair ?? ''}
+                    onChange={(e) => setSelectedPair(e.target.value)}
+                    className="w-full bg-gray-700 border border-gray-600 rounded-md px-3 py-2 text-white font-semibold focus:ring-2 focus:ring-cyan-500 focus:border-cyan-500"
                 >
-                    {isLoading ? <LoadingSpinner /> : <MagnifyingGlassChartIcon className="w-5 h-5 mr-2" />}
-                    {isLoading ? 'Analyzing...' : 'Analyze Now'}
-                </button>
+                    <option value="" disabled>-- Select a pair --</option>
+                    {MAJOR_PAIRS.map(pair => (
+                        <option key={pair} value={pair}>{pair}</option>
+                    ))}
+                </select>
             </div>
 
             {isLoading && (
                 <div className="flex flex-col items-center justify-center text-center py-12">
                     <LoadingSpinner />
-                    <p className="mt-4 text-gray-300">AI is analyzing recent market events for {selectedPair}...</p>
+                    <p className="mt-4 text-gray-300">AI is analyzing recent market events for {debouncedSelectedPair}...</p>
                 </div>
             )}
             
-            {error && (
+            {error && !isLoading && (
                 <div className="p-6 bg-red-900/20 border border-red-500/30 rounded-lg animate-[fade-in_0.3s]">
                     <div className="flex">
                         <div className="flex-shrink-0">
@@ -133,9 +146,9 @@ export const WhyIsItMovingView: React.FC = () => {
                 </div>
             )}
 
-            {!analysis && !isLoading && !error && <WelcomeScreen />}
+            {!selectedPair && !isLoading && !error && <WelcomeScreen />}
             
-            {analysis && (
+            {analysis && !isLoading && (
                  <div className="bg-gray-800/50 border border-gray-700 rounded-lg p-6 animate-[fade-in_0.5s]">
                     <div className="prose prose-invert prose-lg max-w-none text-gray-300">
                         <FormattedContent text={analysis} />

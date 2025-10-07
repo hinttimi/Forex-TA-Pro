@@ -9,6 +9,7 @@ import {
 import { LoadingSpinner } from './LoadingSpinner';
 import { ChevronDownIcon } from './icons/ChevronDownIcon';
 import { CalendarDaysIcon } from './icons/CalendarDaysIcon';
+import { useApiKey } from '../hooks/useApiKey';
 
 type AnalysisType = 'pre' | 'instant' | 'post';
 type AnalysisContent = { [key in AnalysisType]?: string };
@@ -63,27 +64,33 @@ export const EconomicCalendarView: React.FC = () => {
     const [analyses, setAnalyses] = useState<Record<string, AnalysisContent>>({});
     const [loadingStates, setLoadingStates] = useState<Record<string, LoadingState>>({});
     const [error, setError] = useState<string | null>(null);
+    const { apiKey, openKeyModal } = useApiKey();
 
     const toggleEvent = (id: string) => {
         setExpandedEventId(prev => (prev === id ? null : id));
     };
     
     const handleGenerateAnalysis = async (event: EconomicEvent, type: AnalysisType) => {
+        if (!apiKey) {
+            setError('Please set your Gemini API key to generate analysis.');
+            openKeyModal();
+            return;
+        }
         setLoadingStates(prev => ({ ...prev, [event.id]: { ...prev[event.id], [type]: true } }));
         setError(null);
         try {
             let result = '';
             if (type === 'pre') {
-                result = await generatePreEventBriefing(event);
+                result = await generatePreEventBriefing(apiKey, event);
             } else if (type === 'instant') {
-                result = await generateInstantAnalysis(event);
+                result = await generateInstantAnalysis(apiKey, event);
             } else if (type === 'post') {
-                result = await generatePostEventSummary(event);
+                result = await generatePostEventSummary(apiKey, event);
             }
             setAnalyses(prev => ({ ...prev, [event.id]: { ...prev[event.id], [type]: result } }));
         } catch (e) {
             console.error(e);
-            setError(`Failed to generate ${type} analysis. The AI may be busy.`);
+            setError(`Failed to generate ${type} analysis. Please check your API key.`);
         } finally {
             setLoadingStates(prev => ({ ...prev, [event.id]: { ...prev[event.id], [type]: false } }));
         }
@@ -159,7 +166,7 @@ export const EconomicCalendarView: React.FC = () => {
                                                     </button>
                                                 )
                                             ) : (
-                                                <p className="text-xs text-gray-500 italic">Summary available approx. 1hr after release.</p>
+                                                <p className="text-xs text-gray-500 italic">Analysis available after data release.</p>
                                             )}
                                         </div>
                                     </div>
@@ -169,7 +176,12 @@ export const EconomicCalendarView: React.FC = () => {
                     );
                 })}
             </div>
-             <style>{`@keyframes fade-in { from { opacity: 0; } to { opacity: 1; } }`}</style>
+            <style>{`
+                @keyframes fade-in {
+                    from { opacity: 0; transform: translateY(-10px); }
+                    to { opacity: 1; transform: translateY(0); }
+                }
+            `}</style>
         </div>
     );
 };

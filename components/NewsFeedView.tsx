@@ -6,6 +6,7 @@ import { NewspaperIcon } from './icons/NewspaperIcon';
 import { ExclamationTriangleIcon } from './icons/ExclamationTriangleIcon';
 import { ArrowPathIcon } from './icons/ArrowPathIcon';
 import { LinkIcon } from './icons/LinkIcon';
+import { useApiKey } from '../hooks/useApiKey';
 
 export const NewsFeedView: React.FC = () => {
     const [articles, setArticles] = useState<NewsArticle[]>([]);
@@ -13,12 +14,18 @@ export const NewsFeedView: React.FC = () => {
     const [isLoading, setIsLoading] = useState<boolean>(true);
     const [error, setError] = useState<string | null>(null);
     const [lastUpdated, setLastUpdated] = useState<Date | null>(null);
+    const { apiKey, openKeyModal } = useApiKey();
 
     const fetchNews = useCallback(async () => {
         setIsLoading(true);
         setError(null);
+        if (!apiKey) {
+            setError('Please provide an API key to fetch the news feed.');
+            setIsLoading(false);
+            return;
+        }
         try {
-            const { articles: fetchedArticles, groundingChunks: fetchedChunks } = await getForexNews();
+            const { articles: fetchedArticles, groundingChunks: fetchedChunks } = await getForexNews(apiKey);
             setArticles(fetchedArticles);
             setGroundingChunks(fetchedChunks);
             setLastUpdated(new Date());
@@ -29,7 +36,7 @@ export const NewsFeedView: React.FC = () => {
         } finally {
             setIsLoading(false);
         }
-    }, []);
+    }, [apiKey]);
 
     useEffect(() => {
         fetchNews();
@@ -53,10 +60,15 @@ export const NewsFeedView: React.FC = () => {
                         <h2 className="mt-4 text-2xl font-bold text-white">Could Not Load News</h2>
                         <p className="mt-2 text-red-300">{error}</p>
                     </div>
-                    <button onClick={fetchNews} className="mt-6 inline-flex items-center px-6 py-2 bg-gray-700 text-gray-200 font-semibold rounded-lg hover:bg-gray-600">
+                     <button onClick={fetchNews} className="mt-6 inline-flex items-center px-6 py-2 bg-gray-700 text-gray-200 font-semibold rounded-lg hover:bg-gray-600">
                         <ArrowPathIcon className="w-5 h-5 mr-2" />
                         Try Again
                     </button>
+                    {!apiKey && (
+                         <button onClick={openKeyModal} className="mt-4 text-sm text-cyan-400 underline hover:text-cyan-300">
+                            Set API Key
+                        </button>
+                    )}
                 </div>
             );
         }

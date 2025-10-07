@@ -7,6 +7,7 @@ import { ArrowRightIcon } from '../icons/ArrowRightIcon';
 import { ChartDisplay } from '../ChartDisplay';
 import { useCompletion } from '../../hooks/useCompletion';
 import { useBadges } from '../../hooks/useBadges';
+import { useApiKey } from '../../hooks/useApiKey';
 
 const getRandomElement = <T,>(arr: T[]): T => arr[Math.floor(Math.random() * arr.length)];
 
@@ -36,7 +37,9 @@ export const PatternRecognitionView: React.FC = () => {
     const [selectedAnswer, setSelectedAnswer] = useState<string | null>(null);
     const [isCorrect, setIsCorrect] = useState<boolean | null>(null);
     const [score, setScore] = useState({ correct: 0, total: 0 });
+    const [error, setError] = useState<string | null>(null);
 
+    const { apiKey, openKeyModal } = useApiKey();
     const { logCorrectPattern, getCompletionCount } = useCompletion();
     const { unlockBadge } = useBadges();
 
@@ -45,6 +48,13 @@ export const PatternRecognitionView: React.FC = () => {
         setChartImageUrl('');
         setSelectedAnswer(null);
         setIsCorrect(null);
+        setError(null);
+
+        if (!apiKey) {
+            setError('Please provide your API key to start the practice session.');
+            setIsLoading(false);
+            return;
+        }
 
         try {
             const answerLesson = getRandomElement(allVisualLessons);
@@ -57,15 +67,16 @@ export const PatternRecognitionView: React.FC = () => {
 
             setOptions(shuffleArray([...distractors, answerLesson]));
 
-            const imageUrl = await generateChartImage(answerLesson.chartPrompt, `pattern-recog-${answerLesson.key}`);
+            const imageUrl = await generateChartImage(apiKey, answerLesson.chartPrompt, `pattern-recog-${answerLesson.key}`);
             setChartImageUrl(imageUrl);
 
         } catch (error) {
             console.error("Failed to load new pattern:", error);
+            setError('Could not load a new pattern. Please check your API key and try again.');
         } finally {
             setIsLoading(false);
         }
-    }, []);
+    }, [apiKey]);
 
     useEffect(() => {
         loadNewPattern();
@@ -104,6 +115,18 @@ export const PatternRecognitionView: React.FC = () => {
     };
     
     const correctPatternsCount = getCompletionCount('correctPatterns');
+    
+    if (error) {
+        return (
+            <div className="text-center p-8 bg-gray-800/50 rounded-lg">
+                <h2 className="text-2xl font-bold text-red-400">Error</h2>
+                <p className="text-gray-300 mt-2">{error}</p>
+                 <button onClick={openKeyModal} className="mt-4 px-5 py-2.5 bg-cyan-500 text-gray-900 font-semibold rounded-lg shadow-md hover:bg-cyan-400">
+                    Set API Key
+                </button>
+            </div>
+        );
+    }
 
     return (
         <div className="max-w-4xl mx-auto text-center">
