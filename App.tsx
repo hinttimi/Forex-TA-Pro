@@ -1,3 +1,4 @@
+
 import React, { useState, useCallback, useEffect } from 'react';
 import { Sidebar } from './components/Sidebar';
 import { LessonView } from './components/LessonView';
@@ -53,6 +54,9 @@ const AppContent: React.FC = () => {
   const [lessonToLoadKey, setLessonToLoadKey] = useState<string | null>(null);
   const debouncedLessonKey = useDebounce(lessonToLoadKey, 500);
 
+  // Component-level cache for lesson data to prevent re-loading UI
+  const [lessonDataCache, setLessonDataCache] = useState<Map<string, { content: string; chartUrl?: string }>>(new Map());
+
   const { apiKey } = useApiKey();
   const { logLessonCompleted, getCompletedLessons } = useCompletion();
   const { unlockBadge } = useBadges();
@@ -65,12 +69,23 @@ const AppContent: React.FC = () => {
   const handleSelectLesson = useCallback((lesson: Lesson) => {
     setCurrentView('lesson');
     setCurrentLesson(lesson);
-    setChartImageUrl('');
-    setLessonContent('');
     setError(null);
-    setIsLoadingContent(true); // Start loading UI immediately
-    setLessonToLoadKey(lesson.key); // Set key to trigger debounced API call
-  }, []);
+
+    // Check component cache first for an instant load
+    if (lessonDataCache.has(lesson.key)) {
+        const cachedData = lessonDataCache.get(lesson.key)!;
+        setLessonContent(cachedData.content);
+        setChartImageUrl(cachedData.chartUrl || '');
+        setIsLoadingContent(false);
+        setLessonToLoadKey(null); // Prevent re-triggering API call
+    } else {
+        // Otherwise, clear state and trigger a new load
+        setChartImageUrl('');
+        setLessonContent('');
+        setIsLoadingContent(true);
+        setLessonToLoadKey(lesson.key);
+    }
+  }, [lessonDataCache]);
 
   // Effect for debounced content loading
   useEffect(() => {
@@ -93,6 +108,18 @@ const AppContent: React.FC = () => {
       try {
         const content = await generateLessonContent(apiKey, lesson.contentPrompt, `lesson-content-${lesson.key}`);
         setLessonContent(content);
+        // Add the new content to our component-level cache
+        setLessonDataCache(prevCache => {
+            const newCache = new Map(prevCache);
+            const existingData = newCache.get(lesson.key);
+            // FIX: Replaced object spread with explicit property assignment to address type error.
+            const updatedData = {
+              content: content,
+              chartUrl: existingData?.chartUrl,
+            };
+            newCache.set(lesson.key, updatedData);
+            return newCache;
+        });
         logLessonCompleted(lesson.key);
       } catch (e) {
         console.error(e);
@@ -175,6 +202,20 @@ const AppContent: React.FC = () => {
     try {
       const imageUrl = await generateChartImage(apiKey, currentLesson.chartPrompt, `lesson-chart-${currentLesson.key}`);
       setChartImageUrl(imageUrl);
+      // Add the generated chart URL to our component-level cache
+      setLessonDataCache(prevCache => {
+          const newCache = new Map(prevCache);
+          const existingData = newCache.get(currentLesson.key);
+          if (existingData) { // This should always exist if content has been loaded
+              // FIX: Replaced object spread with explicit property assignment to address type error.
+              const updatedData = {
+                content: existingData.content,
+                chartUrl: imageUrl,
+              };
+              newCache.set(currentLesson.key, updatedData);
+          }
+          return newCache;
+      });
     } catch (e) {
       console.error(e);
       setError('Failed to generate chart. Please try again.');
