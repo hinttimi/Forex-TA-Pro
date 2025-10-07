@@ -1,7 +1,3 @@
-
-
-
-
 import React, { useState, useCallback, useEffect } from 'react';
 import { Sidebar } from './components/Sidebar';
 import { LessonView } from './components/LessonView';
@@ -27,6 +23,8 @@ import { MarketPulseView } from './components/MarketPulseView';
 import { NewsFeedView } from './components/NewsFeedView';
 import { MarketUpdateToast } from './components/MarketUpdateToast';
 import { WhyIsItMovingView } from './components/WhyIsItMovingView';
+import { EconomicCalendarView } from './components/EconomicCalendarView';
+import { AIBacktesterView } from './components/AIBacktesterView';
 
 const allLessons = MODULES.flatMap(module => module.lessons);
 
@@ -210,6 +208,10 @@ const AppContent: React.FC = () => {
         return <NewsFeedView />;
       case 'market_analyzer':
         return <WhyIsItMovingView />;
+      case 'economic_calendar':
+        return <EconomicCalendarView />;
+      case 'backtester':
+        return <AIBacktesterView />;
       default:
         return null;
     }

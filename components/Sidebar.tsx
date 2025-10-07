@@ -1,5 +1,3 @@
-
-
 import React, { useState } from 'react';
 import { Module, Lesson, AppView } from '../types';
 import { BookOpenIcon } from './icons/BookOpenIcon';
@@ -19,6 +17,8 @@ import { XMarkIcon } from './icons/XMarkIcon';
 import { SignalIcon } from './icons/SignalIcon';
 import { NewspaperIcon } from './icons/NewspaperIcon';
 import { MagnifyingGlassChartIcon } from './icons/MagnifyingGlassChartIcon';
+import { CalendarDaysIcon } from './icons/CalendarDaysIcon';
+import { BeakerIcon } from './icons/BeakerIcon';
 
 interface SidebarProps {
   modules: Module[];
@@ -138,6 +138,21 @@ export const Sidebar: React.FC<SidebarProps> = ({ modules, onSelectLesson, selec
             </li>
             <li>
                 <button
+                    onClick={() => onSetPracticeView('economic_calendar')}
+                    className={`w-full text-left flex items-center px-3 py-2 text-sm rounded-md transition-colors duration-150 ${
+                      currentView === 'economic_calendar'
+                        ? 'bg-cyan-500/10 text-cyan-300 font-semibold'
+                        : 'text-gray-300 hover:bg-gray-700 hover:text-white'
+                    }`}
+                  >
+                    <CalendarDaysIcon className={`w-4 h-4 mr-3 flex-shrink-0 ${
+                       currentView === 'economic_calendar' ? 'text-cyan-400' : 'text-gray-500'
+                    }`} />
+                    <span>AI Calendar</span>
+                </button>
+            </li>
+            <li>
+                <button
                     onClick={() => onSetPracticeView('market_pulse')}
                     className={`w-full text-left flex items-center px-3 py-2 text-sm rounded-md transition-colors duration-150 ${
                       currentView === 'market_pulse'
@@ -233,6 +248,21 @@ export const Sidebar: React.FC<SidebarProps> = ({ modules, onSelectLesson, selec
                        currentView === 'simulator' ? 'text-cyan-400' : 'text-gray-500'
                     }`} />
                     <span>Trade Simulator</span>
+                </button>
+            </li>
+             <li>
+                <button
+                    onClick={() => onSetPracticeView('backtester')}
+                    className={`w-full text-left flex items-center px-3 py-2 text-sm rounded-md transition-colors duration-150 ${
+                      currentView === 'backtester'
+                        ? 'bg-cyan-500/10 text-cyan-300 font-semibold'
+                        : 'text-gray-300 hover:bg-gray-700 hover:text-white'
+                    }`}
+                  >
+                    <BeakerIcon className={`w-4 h-4 mr-3 flex-shrink-0 ${
+                       currentView === 'backtester' ? 'text-cyan-400' : 'text-gray-500'
+                    }`} />
+                    <span>AI Strategy Backtester</span>
                 </button>
             </li>
              <li>

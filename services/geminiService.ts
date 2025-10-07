@@ -1,9 +1,5 @@
-
-
-
-
 import { GoogleGenAI, Type, GenerateContentResponse } from "@google/genai";
-import { NewsArticle, MarketUpdate } from '../types';
+import { NewsArticle, MarketUpdate, EconomicEvent } from '../types';
 
 if (!process.env.API_KEY) {
     throw new Error("API_KEY environment variable is not set.");
@@ -361,5 +357,116 @@ Structure your response in markdown format as follows:
     } catch (error) {
         console.error(`Error analyzing price movement for ${pair}:`, error);
         throw new Error("Failed to analyze price movement from Gemini API.");
+    }
+};
+
+/**
+ * Generates a pre-event briefing for an economic event.
+ */
+export const generatePreEventBriefing = async (event: EconomicEvent): Promise<string> => {
+    const prompt = `You are a senior forex market analyst. The upcoming "${event.name}" for ${event.currency} is scheduled soon. The market forecast is ${event.forecast} and the previous reading was ${event.previous}. Using your search tool for the latest context, provide a pre-event briefing in markdown format. Cover these points:
+- **Market Expectations:** Briefly explain what the consensus forecast implies for the currency.
+- **Potential Scenarios:** Describe the likely market reaction for both a better-than-expected (hawkish) and worse-than-expected (dovish) result.
+- **Key Levels to Watch:** Mention any critical technical support/resistance levels on a major pair (e.g., EUR/USD if currency is USD or EUR) that might be tested on the release.`;
+    try {
+        const response = await ai.models.generateContent({
+            model: "gemini-2.5-flash",
+            contents: prompt,
+            config: { tools: [{ googleSearch: {} }] },
+        });
+        return response.text;
+    } catch (error) {
+        console.error("Error generating pre-event briefing:", error);
+        throw new Error("Failed to generate pre-event briefing from Gemini API.");
+    }
+};
+
+/**
+ * Generates an instant analysis of an economic data release.
+ */
+export const generateInstantAnalysis = async (event: EconomicEvent): Promise<string> => {
+    const prompt = `You are a forex market analyst providing live commentary. The "${event.name}" data for ${event.currency} has just been released.
+- **Actual:** ${event.actual}
+- **Forecast:** ${event.forecast}
+- **Previous:** ${event.previous}
+Using your search tool to find the immediate market reaction, provide an instant analysis in markdown format. Cover:
+- **The Deviation:** Was the actual number a significant beat or miss compared to the forecast?
+- **Immediate Market Reaction:** Describe the price action on the relevant major pair in the first few minutes post-release (e.g., "USD/JPY spiked 50 pips as the dollar strengthened aggressively.").
+- **Initial Interpretation:** How is the market interpreting this data? (e.g., "This hotter-than-expected inflation print increases the likelihood of the central bank maintaining a hawkish stance.")`;
+    try {
+        const response = await ai.models.generateContent({
+            model: "gemini-2.5-flash",
+            contents: prompt,
+            config: { tools: [{ googleSearch: {} }] },
+        });
+        return response.text;
+    } catch (error) {
+        console.error("Error generating instant analysis:", error);
+        throw new Error("Failed to generate instant analysis from Gemini API.");
+    }
+};
+
+/**
+ * Generates a post-event summary of market impact.
+ */
+export const generatePostEventSummary = async (event: EconomicEvent): Promise<string> => {
+    const prompt = `You are a senior forex market analyst summarizing an economic event that occurred roughly an hour ago. The event was the "${event.name}" for ${event.currency}, with an actual reading of ${event.actual} vs a forecast of ${event.forecast}. Using your search tool to analyze the market's behavior since the release, provide a concise post-event summary in markdown format. Address:
+- **Price Action Follow-Through:** Did the initial spike/drop reverse, or did the momentum continue?
+- **Updated Market Sentiment:** Has the narrative or sentiment for the ${event.currency} shifted because of this data?
+- **Broader Impact:** Briefly mention if the event had any notable impact on other assets like indices or commodities.`;
+    try {
+        const response = await ai.models.generateContent({
+            model: "gemini-2.5-flash",
+            contents: prompt,
+            config: { tools: [{ googleSearch: {} }] },
+        });
+        return response.text;
+    } catch (error) {
+        console.error("Error generating post-event summary:", error);
+        throw new Error("Failed to generate post-event summary from Gemini API.");
+    }
+};
+
+/**
+ * Analyzes the results of a trading strategy backtest.
+ * @param strategyParams - The parameters of the strategy defined by the user.
+ * @param results - The quantitative results of the backtest.
+ * @returns A qualitative analysis and suggestions from the AI.
+ */
+export const analyzeBacktestResults = async (
+    strategyParams: { [key: string]: any },
+    results: { [key: string]: any }
+): Promise<string> => {
+    const prompt = `You are an expert trading coach and data analyst specializing in systematic strategies. A student has just run a backtest with the following parameters and results. Your task is to provide a concise, insightful analysis.
+
+**Strategy Parameters:**
+- Pair: ${strategyParams.pair}
+- Timeframe: ${strategyParams.timeframe}
+- Entry Criteria: ${strategyParams.entryCriteria.join(', ')}
+- Stop Loss: ${strategyParams.stopLoss}
+- Take Profit: ${strategyParams.takeProfit}
+
+**Backtest Results:**
+- Total Trades: ${results.totalTrades}
+- Win Rate: ${results.winRate}%
+- Profit Factor: ${results.profitFactor}
+- Average R:R: 1:${results.avgRR.toFixed(2)}
+
+**Your Analysis (in markdown format):**
+1.  **Overall Assessment:** Start with a single, bolded sentence summarizing the strategy's performance (e.g., **"This strategy shows promising profitability but may benefit from improved entry precision."**).
+2.  **Strengths:** In a bulleted list, identify 1-2 key strengths based on the data (e.g., "* The profit factor of ${results.profitFactor} is excellent, indicating strong profitability.").
+3.  **Areas for Improvement:** In a bulleted list, identify 1-2 potential weaknesses or areas to investigate (e.g., "* A win rate of ${results.winRate}% with a 1:${results.avgRR.toFixed(2)} R:R is decent, but could suggest that some entries are premature. You might be getting stopped out before the real move begins.").
+4.  **Actionable Suggestion:** Provide one specific, actionable suggestion for the student to test next. Be creative and base it on the provided data and SMC principles (e.g., "Consider adding a filter to only take trades where the entry order block is located within a higher timeframe fair value gap. This might reduce the number of trades but could significantly improve your win rate.").
+`;
+
+    try {
+        const response = await ai.models.generateContent({
+            model: 'gemini-2.5-flash',
+            contents: prompt,
+        });
+        return response.text;
+    } catch (error) {
+        console.error("Error analyzing backtest results:", error);
+        throw new Error("Failed to get analysis from Gemini API.");
     }
 };

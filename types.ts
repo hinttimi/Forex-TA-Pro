@@ -12,7 +12,7 @@ export interface Module {
   lessons: Lesson[];
 }
 
-export type AppView = 'lesson' | 'pattern' | 'timed' | 'canvas' | 'simulator' | 'saved' | 'achievements' | 'trading_plan' | 'mentor' | 'quiz' | 'market_pulse' | 'news_feed' | 'market_analyzer';
+export type AppView = 'lesson' | 'pattern' | 'timed' | 'canvas' | 'simulator' | 'saved' | 'achievements' | 'trading_plan' | 'mentor' | 'quiz' | 'market_pulse' | 'news_feed' | 'market_analyzer' | 'economic_calendar' | 'backtester';
 
 export interface MultipleChoiceQuestion {
     question: string;
@@ -39,4 +39,15 @@ export interface MarketUpdate {
   type: 'pulse' | 'news';
   title: string;
   content: string;
+}
+
+export interface EconomicEvent {
+  id: string;
+  name: string;
+  currency: string;
+  impact: 'High' | 'Medium' | 'Low';
+  time: Date;
+  forecast: string | null;
+  previous: string | null;
+  actual: string | null; // Will be populated for instant analysis
 }
