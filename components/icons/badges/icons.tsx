@@ -35,6 +35,13 @@ export const LiquidityHunterIcon: React.FC<{ className?: string }> = ({ classNam
     </IconWrapper>
 );
 
+export const QuizMasterIcon: React.FC<{ className?: string }> = ({ className }) => (
+    <IconWrapper className={className}>
+        <path d="M50 20 A 25 25, 0, 1, 0, 50 20 M30 40 A 20 15, 0, 0, 1, 70 40 M35 55 A 15 10, 0, 0, 1, 65 55" />
+        <path d="M50 70 V 90 M 40 90 H 60" />
+    </IconWrapper>
+);
+
 export const SharpEyeIcon: React.FC<{ className?: string }> = ({ className }) => (
     <IconWrapper className={className}>
         <path d="M10,50 Q50,20 90,50 M10,50 Q50,80 90,50" />

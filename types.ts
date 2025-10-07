@@ -12,7 +12,7 @@ export interface Module {
   lessons: Lesson[];
 }
 
-export type AppView = 'lesson' | 'pattern' | 'timed' | 'canvas' | 'simulator' | 'saved' | 'achievements' | 'trading_plan' | 'mentor';
+export type AppView = 'lesson' | 'pattern' | 'timed' | 'canvas' | 'simulator' | 'saved' | 'achievements' | 'trading_plan' | 'mentor' | 'quiz' | 'market_pulse' | 'news_feed' | 'market_analyzer';
 
 export interface MultipleChoiceQuestion {
     question: string;
@@ -26,4 +26,17 @@ export interface Badge {
   description: string;
   // FIX: React was not imported, causing an error on the line below.
   icon: React.FC<{ className?: string }>;
+}
+
+export interface NewsArticle {
+  headline: string;
+  summary: string;
+  sourceUrl: string;
+  sourceTitle: string;
+}
+
+export interface MarketUpdate {
+  type: 'pulse' | 'news';
+  title: string;
+  content: string;
 }

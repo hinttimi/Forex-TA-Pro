@@ -1,3 +1,4 @@
+
 import React, { useState } from 'react';
 import { Lesson } from '../types';
 import { ChartDisplay } from './ChartDisplay';
@@ -6,6 +7,7 @@ import { LightBulbIcon } from './icons/LightBulbIcon';
 import { ExclamationTriangleIcon } from './icons/ExclamationTriangleIcon';
 import { generateChartImage, generateLessonContent } from '../services/geminiService';
 import { SparklesIcon } from './icons/SparklesIcon';
+import { QuestionMarkCircleIcon } from './icons/QuestionMarkCircleIcon';
 
 interface LessonViewProps {
   lesson: Lesson;
@@ -14,11 +16,8 @@ interface LessonViewProps {
   onVisualize: () => void;
   isLoadingContent: boolean;
   isLoadingChart: boolean;
+  onStartQuiz: (lesson: Lesson) => void;
   error: string | null;
-  onNextLesson: () => void;
-  onPreviousLesson: () => void;
-  hasNextLesson: boolean;
-  hasPreviousLesson: boolean;
 }
 
 // Helper function to render inline markdown like **bold**
@@ -176,11 +175,8 @@ export const LessonView: React.FC<LessonViewProps> = ({
   onVisualize,
   isLoadingContent,
   isLoadingChart,
+  onStartQuiz,
   error,
-  onNextLesson,
-  onPreviousLesson,
-  hasNextLesson,
-  hasPreviousLesson,
 }) => {
   return (
     <div className="max-w-4xl mx-auto">
@@ -199,6 +195,25 @@ export const LessonView: React.FC<LessonViewProps> = ({
         <div className="mt-6 bg-red-500/10 border border-red-500/30 text-red-300 px-4 py-3 rounded-lg flex items-center">
             <ExclamationTriangleIcon className="w-5 h-5 mr-3" />
             <span>{error}</span>
+        </div>
+      )}
+
+      {!isLoadingContent && (
+        <div className="mt-10 border-t border-gray-700 pt-8">
+            <div className="flex items-start">
+                <QuestionMarkCircleIcon className="w-8 h-8 text-cyan-400 mr-3 mt-1 flex-shrink-0" />
+                <div>
+                    <h3 className="text-lg font-bold text-white">Test Your Knowledge</h3>
+                    <p className="text-gray-400 text-sm mb-4">Take a quick, AI-generated quiz to see how well you understood this lesson.</p>
+                     <button
+                        onClick={() => onStartQuiz(lesson)}
+                        disabled={isLoadingContent}
+                        className="px-5 py-2.5 bg-cyan-500/10 border border-cyan-500/30 text-cyan-300 font-semibold rounded-lg shadow-md hover:bg-cyan-500/20 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-offset-gray-900 focus:ring-cyan-500 disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-200"
+                        >
+                        Take a Quiz
+                    </button>
+                </div>
+            </div>
         </div>
       )}
 
@@ -224,28 +239,6 @@ export const LessonView: React.FC<LessonViewProps> = ({
 
       {lesson.key === 'l1-candlestick-anatomy' && !isLoadingContent && <CandlestickPatternExplorer />}
 
-      <div className="mt-12 pt-6 border-t border-gray-700 flex justify-between items-center">
-        <button
-            onClick={onPreviousLesson}
-            disabled={!hasPreviousLesson || isLoadingContent}
-            className="inline-flex items-center px-5 py-2.5 bg-gray-700 text-gray-200 font-semibold rounded-lg shadow-md hover:bg-gray-600 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-offset-gray-900 focus:ring-cyan-500 disabled:bg-gray-800 disabled:text-gray-500 disabled:cursor-not-allowed transition-all duration-200"
-        >
-            <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 19l-7-7m0 0l7-7m-7 7h18" />
-            </svg>
-            Previous Lesson
-        </button>
-        <button
-            onClick={onNextLesson}
-            disabled={!hasNextLesson || isLoadingContent}
-            className="inline-flex items-center px-5 py-2.5 bg-cyan-500 text-gray-900 font-semibold rounded-lg shadow-md hover:bg-cyan-400 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-offset-gray-900 focus:ring-cyan-500 disabled:bg-gray-600 disabled:cursor-not-allowed transition-all duration-200"
-        >
-            Next Lesson
-            <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 ml-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M14 5l7 7m0 0l-7 7m7-7H3" />
-            </svg>
-        </button>
-      </div>
     </div>
   );
 };

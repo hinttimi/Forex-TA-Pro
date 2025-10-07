@@ -8,7 +8,8 @@ import {
     SharpEyeIcon,
     BeatTheClockIcon,
     SimulatorApprenticeIcon,
-    ArchivistIcon
+    ArchivistIcon,
+    QuizMasterIcon
 } from '../components/icons/badges/icons';
 
 export const ALL_BADGES: Badge[] = [
@@ -35,6 +36,12 @@ export const ALL_BADGES: Badge[] = [
     title: 'Liquidity Hunter',
     description: 'Complete all lessons in Level 3.',
     icon: LiquidityHunterIcon,
+  },
+  {
+    id: 'quiz-master',
+    title: 'Quiz Master',
+    description: 'Score 80% or higher on a lesson quiz.',
+    icon: QuizMasterIcon,
   },
   {
     id: 'sharp-eye',

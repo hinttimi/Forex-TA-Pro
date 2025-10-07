@@ -1,5 +1,9 @@
 
-import { GoogleGenAI, Type } from "@google/genai";
+
+
+
+import { GoogleGenAI, Type, GenerateContentResponse } from "@google/genai";
+import { NewsArticle, MarketUpdate } from '../types';
 
 if (!process.env.API_KEY) {
     throw new Error("API_KEY environment variable is not set.");
@@ -15,7 +19,7 @@ export const generateLessonContent = async (prompt: string): Promise<string> => 
   try {
     const response = await ai.models.generateContent({
         model: 'gemini-2.5-flash',
-        contents: { parts: [{ text: prompt }] },
+        contents: prompt,
     });
     return response.text;
   } catch (error) {
@@ -69,7 +73,7 @@ Based on the visual patterns you were asked to generate, analyze the quality of 
     try {
         const response = await ai.models.generateContent({
             model: 'gemini-2.5-flash',
-            contents: { parts: [{ text: prompt }] },
+            contents: prompt,
         });
         return response.text;
     } catch (error) {
@@ -104,7 +108,7 @@ Concept: "${lessonContentPrompt}"`;
 
         const response = await ai.models.generateContent({
             model: 'gemini-2.5-flash',
-            contents: { parts: [{ text: prompt }] },
+            contents: prompt,
             config: {
                 responseMimeType: "application/json",
                 responseSchema: quizQuestionSchema,
@@ -180,5 +184,182 @@ When a visual explanation would be helpful, embed a chart generation request in 
     } catch (error) {
         console.error("Error generating mentor response:", error);
         throw new Error("Failed to get response from AI Mentor.");
+    }
+};
+
+/**
+ * Generates a real-time forex market summary.
+ * @returns The AI-generated market briefing as a markdown string.
+ */
+export const generateMarketPulse = async (): Promise<string> => {
+    const prompt = `You are a senior forex market analyst providing a daily briefing. It is currently ${new Date().toUTCString()}. Using real-time information, provide a concise summary of the current forex market state. Structure your response in markdown format with the following four sections exactly as titled:
+
+### Overall Market Narrative
+(A brief paragraph on the dominant theme of the day, e.g., risk-on/risk-off, inflation fears, central bank speculation.)
+
+### Currency Strength
+(A bulleted list of the strongest and weakest major currencies (e.g., USD, EUR, JPY, GBP, AUD, CAD) and the immediate reasons why. Format as "* **Strong: [Currency]** - [Reason]" and "* **Weak: [Currency]** - [Reason]".)
+
+### Key Pairs to Watch
+(A bulleted list highlighting 2-3 currency pairs showing significant volatility or approaching critical technical levels. Briefly explain what to look for.)
+
+### Upcoming Catalysts
+(A bulleted list of any high-impact news events scheduled for the remainder of the current or upcoming trading session.)
+`;
+
+    try {
+        const response = await ai.models.generateContent({
+            model: 'gemini-2.5-flash',
+            contents: prompt,
+        });
+        return response.text;
+    } catch (error) {
+        console.error("Error generating market pulse:", error);
+        throw new Error("Failed to generate market pulse from Gemini API.");
+    }
+};
+
+/**
+ * Fetches real-time forex news using Google Search grounding.
+ * @returns An object containing a list of news articles and grounding metadata.
+ */
+export const getForexNews = async (): Promise<{ articles: NewsArticle[], groundingChunks: any[] }> => {
+    const prompt = `You are a financial news aggregator. Using your search tool, find the top 5 most recent and impactful news articles related to the Forex market (major currency pairs like EUR/USD, GBP/USD, USD/JPY, etc.).
+Return the result as a single, clean JSON array string. Each object in the array should have the keys: "headline", "summary", "sourceUrl", and "sourceTitle".
+For the "summary", provide a concise 2-3 sentence overview.
+Do not include any other text, explanations, or markdown formatting outside of the JSON string.
+The entire response should be only the JSON array. Example: [{"headline": "...", "summary": "...", "sourceUrl": "...", "sourceTitle": "..."}]`;
+
+    try {
+        const response: GenerateContentResponse = await ai.models.generateContent({
+            model: "gemini-2.5-flash",
+            contents: prompt,
+            config: {
+                tools: [{googleSearch: {}}],
+            },
+        });
+        
+        const groundingChunks = response.candidates?.[0]?.groundingMetadata?.groundingChunks || [];
+        
+        let articles: NewsArticle[] = [];
+        const text = response.text.trim();
+        
+        const startIndex = text.indexOf('[');
+        const endIndex = text.lastIndexOf(']');
+        
+        if (startIndex !== -1 && endIndex !== -1) {
+            const jsonString = text.substring(startIndex, endIndex + 1);
+            try {
+                articles = JSON.parse(jsonString);
+            } catch (jsonError) {
+                console.error("Failed to parse JSON from Gemini response:", jsonError, "Raw text:", text);
+                throw new Error("The AI returned a malformed news feed. Please try again.");
+            }
+        } else {
+             throw new Error("The AI did not return a valid news feed format. Please try again.");
+        }
+
+        return { articles, groundingChunks };
+
+    } catch (error) {
+        console.error("Error fetching forex news:", error);
+        throw new Error("Failed to fetch news from Gemini API.");
+    }
+};
+
+/**
+ * Generates a random, concise market update snippet (either news or pulse).
+ * @returns A structured market update object.
+ */
+export const generateMarketUpdateSnippet = async (): Promise<MarketUpdate> => {
+    const choice = Math.random() > 0.5 ? 'pulse' : 'news';
+
+    try {
+        if (choice === 'pulse') {
+            const prompt = `You are a senior forex market analyst. Provide only the "Overall Market Narrative" as a single, concise paragraph (2-3 sentences max). Do not include any titles, markdown, or other sections. The information should be based on the current time: ${new Date().toUTCString()}.`;
+            const response = await ai.models.generateContent({
+                model: 'gemini-2.5-flash',
+                contents: prompt,
+            });
+            return {
+                type: 'pulse',
+                title: 'Market Pulse',
+                content: response.text,
+            };
+        } else { // 'news'
+            const prompt = `You are a financial news aggregator. Using your search tool, find the single most recent and impactful news headline related to the Forex market. Return the result as a single, clean JSON object string with keys: "headline" and "summary". The summary should be a single, concise sentence. Do not include any other text or markdown. Example: {"headline": "...", "summary": "..."}`;
+
+            const response = await ai.models.generateContent({
+                model: "gemini-2.5-flash",
+                contents: prompt,
+                config: {
+                    tools: [{ googleSearch: {} }],
+                },
+            });
+
+            let parsed: { headline: string; summary: string };
+            const text = response.text.trim();
+            const startIndex = text.indexOf('{');
+            const endIndex = text.lastIndexOf('}');
+
+            if (startIndex !== -1 && endIndex !== -1) {
+                const jsonString = text.substring(startIndex, endIndex + 1);
+                try {
+                    parsed = JSON.parse(jsonString);
+                } catch (jsonError) {
+                    console.error("Failed to parse JSON for news snippet:", jsonError, "Raw text:", text);
+                    throw new Error("AI returned malformed JSON for news snippet.");
+                }
+            } else {
+                throw new Error("AI did not return valid JSON for news snippet.");
+            }
+
+            if (parsed.headline && parsed.summary) {
+                return {
+                    type: 'news',
+                    title: parsed.headline,
+                    content: parsed.summary,
+                };
+            } else {
+                throw new Error("Generated JSON for news snippet is missing required fields.");
+            }
+        }
+    } catch (error) {
+        console.error("Error generating market update snippet:", error);
+        throw new Error("Failed to generate market update snippet from Gemini API.");
+    }
+};
+
+/**
+ * Analyzes the recent price movement for a given currency pair using Google Search.
+ * @param pair The currency pair to analyze (e.g., "EUR/USD").
+ * @returns An object containing the AI's analysis and the source URLs.
+ */
+export const analyzePriceMovement = async (pair: string): Promise<{ analysis: string, sources: any[] }> => {
+    const prompt = `You are a senior forex market analyst. It is currently ${new Date().toUTCString()}. Using real-time information from your search tool, provide a concise analysis of the primary catalyst for the price movement of the **${pair}** currency pair within the **last 1-2 hours**.
+
+Structure your response in markdown format as follows:
+1. **Primary Driver:** A single, bolded sentence identifying the main reason for the move (e.g., **"A higher-than-expected US CPI print is causing significant USD strength."**).
+2. **Key Details:** A bulleted list providing specific details, such as the data released, key figures, or quotes from officials.
+3. **Market Reaction:** A brief paragraph describing how the market is interpreting this information and the resulting price action.
+4. **Outlook:** A short, one-sentence outlook on the potential next move or what to watch for.`;
+
+    try {
+        const response: GenerateContentResponse = await ai.models.generateContent({
+            model: "gemini-2.5-flash",
+            contents: prompt,
+            config: {
+                tools: [{googleSearch: {}}],
+            },
+        });
+        
+        const sources = response.candidates?.[0]?.groundingMetadata?.groundingChunks || [];
+        const analysis = response.text;
+
+        return { analysis, sources };
+
+    } catch (error) {
+        console.error(`Error analyzing price movement for ${pair}:`, error);
+        throw new Error("Failed to analyze price movement from Gemini API.");
     }
 };

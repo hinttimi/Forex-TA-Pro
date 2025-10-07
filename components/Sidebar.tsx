@@ -1,5 +1,6 @@
 
-import React from 'react';
+
+import React, { useState } from 'react';
 import { Module, Lesson, AppView } from '../types';
 import { BookOpenIcon } from './icons/BookOpenIcon';
 import { CheckCircleIcon } from './icons/CheckCircleIcon';
@@ -13,6 +14,11 @@ import { MedalIcon } from './icons/MedalIcon';
 import { DocumentTextIcon } from './icons/DocumentTextIcon';
 import { SparklesIcon } from './icons/SparklesIcon';
 import { ChatBubbleLeftRightIcon } from './icons/ChatBubbleLeftRightIcon';
+import { ChevronDownIcon } from './icons/ChevronDownIcon';
+import { XMarkIcon } from './icons/XMarkIcon';
+import { SignalIcon } from './icons/SignalIcon';
+import { NewspaperIcon } from './icons/NewspaperIcon';
+import { MagnifyingGlassChartIcon } from './icons/MagnifyingGlassChartIcon';
 
 interface SidebarProps {
   modules: Module[];
@@ -20,39 +26,78 @@ interface SidebarProps {
   selectedLessonKey?: string;
   currentView: AppView;
   onSetPracticeView: (view: AppView) => void;
+  completedLessons: Set<string>;
+  isOpen: boolean;
+  onClose: () => void;
 }
 
-export const Sidebar: React.FC<SidebarProps> = ({ modules, onSelectLesson, selectedLessonKey, currentView, onSetPracticeView }) => {
+export const Sidebar: React.FC<SidebarProps> = ({ modules, onSelectLesson, selectedLessonKey, currentView, onSetPracticeView, completedLessons, isOpen, onClose }) => {
+  const [expandedModules, setExpandedModules] = useState<Set<string>>(new Set(modules.length > 0 ? [modules[0].title] : []));
+
+  const toggleModule = (title: string) => {
+    setExpandedModules(prev => {
+      const newSet = new Set(prev);
+      if (newSet.has(title)) {
+        newSet.delete(title);
+      } else {
+        newSet.add(title);
+      }
+      return newSet;
+    });
+  };
+
   return (
-    <aside className="w-72 flex-shrink-0 bg-gray-800 p-6 overflow-y-auto border-r border-gray-700 hidden md:block">
-      <nav className="space-y-6">
-        {modules.map((module, index) => (
-          <div key={index}>
-            <h2 className="text-sm font-semibold text-gray-400 uppercase tracking-wider mb-3 flex items-center">
-              <BookOpenIcon className="w-5 h-5 mr-2" />
-              {module.title}
-            </h2>
-            <ul className="space-y-2">
-              {module.lessons.map((lesson) => (
-                <li key={lesson.key}>
-                  <button
-                    onClick={() => onSelectLesson(lesson)}
-                    className={`w-full text-left flex items-center px-3 py-2 text-sm rounded-md transition-colors duration-150 ${
-                      selectedLessonKey === lesson.key && currentView === 'lesson'
-                        ? 'bg-cyan-500/10 text-cyan-300 font-semibold'
-                        : 'text-gray-300 hover:bg-gray-700 hover:text-white'
-                    }`}
-                  >
-                    <CheckCircleIcon className={`w-4 h-4 mr-3 flex-shrink-0 ${
-                       selectedLessonKey === lesson.key && currentView === 'lesson' ? 'text-cyan-400' : 'text-gray-500'
-                    }`} />
-                    <span>{lesson.title}</span>
-                  </button>
-                </li>
-              ))}
-            </ul>
-          </div>
-        ))}
+    <aside className={`fixed inset-y-0 left-0 z-40 w-72 bg-gray-800 p-6 overflow-y-auto border-r border-gray-700 transition-transform duration-300 ease-in-out ${isOpen ? 'translate-x-0' : '-translate-x-full'}`}>
+      <div className="flex items-center justify-between mb-6">
+        <h2 className="text-lg font-bold text-white">Learning Path</h2>
+        <button onClick={onClose} className="p-1 text-gray-400 rounded-full hover:bg-gray-700 hover:text-white md:hidden" aria-label="Close sidebar">
+          <XMarkIcon className="w-6 h-6" />
+        </button>
+      </div>
+      <nav className="space-y-1">
+        {modules.map((module, index) => {
+          const isExpanded = expandedModules.has(module.title);
+          return (
+            <div key={index}>
+               <button
+                onClick={() => toggleModule(module.title)}
+                className="w-full flex items-center justify-between px-3 py-2 text-sm font-semibold text-gray-400 uppercase tracking-wider hover:bg-gray-700/50 rounded-md transition-colors"
+                aria-expanded={isExpanded}
+              >
+                <span className="flex items-center">
+                  <BookOpenIcon className="w-5 h-5 mr-2" />
+                  {module.title}
+                </span>
+                <ChevronDownIcon className={`w-5 h-5 transition-transform duration-200 ${isExpanded ? 'rotate-180' : ''}`} />
+              </button>
+              <div className={`transition-all duration-300 ease-in-out overflow-hidden ${isExpanded ? 'max-h-96' : 'max-h-0'}`}>
+                <ul className="space-y-1 pt-2 pl-4">
+                  {module.lessons.map((lesson) => {
+                    const isSelected = selectedLessonKey === lesson.key && currentView === 'lesson';
+                    const isCompleted = completedLessons.has(lesson.key);
+                    return (
+                      <li key={lesson.key}>
+                        <button
+                          onClick={() => onSelectLesson(lesson)}
+                          className={`w-full text-left flex items-center px-3 py-2 text-sm rounded-md transition-colors duration-150 ${
+                            isSelected
+                              ? 'bg-cyan-500/10 text-cyan-300 font-semibold'
+                              : 'text-gray-300 hover:bg-gray-700 hover:text-white'
+                          }`}
+                        >
+                          <CheckCircleIcon className={`w-4 h-4 mr-3 flex-shrink-0 ${
+                            isSelected || isCompleted ? 'text-cyan-400' : 'text-gray-500'
+                          }`} />
+                          <span>{lesson.title}</span>
+                        </button>
+                      </li>
+                    )
+                  })}
+                </ul>
+              </div>
+            </div>
+          )
+        })}
       </nav>
 
       <div className="mt-8 pt-6 border-t border-gray-700">
@@ -74,6 +119,51 @@ export const Sidebar: React.FC<SidebarProps> = ({ modules, onSelectLesson, selec
                        currentView === 'mentor' ? 'text-cyan-400' : 'text-gray-500'
                     }`} />
                     <span>AI Mentor</span>
+                </button>
+            </li>
+            <li>
+                <button
+                    onClick={() => onSetPracticeView('market_analyzer')}
+                    className={`w-full text-left flex items-center px-3 py-2 text-sm rounded-md transition-colors duration-150 ${
+                      currentView === 'market_analyzer'
+                        ? 'bg-cyan-500/10 text-cyan-300 font-semibold'
+                        : 'text-gray-300 hover:bg-gray-700 hover:text-white'
+                    }`}
+                  >
+                    <MagnifyingGlassChartIcon className={`w-4 h-4 mr-3 flex-shrink-0 ${
+                       currentView === 'market_analyzer' ? 'text-cyan-400' : 'text-gray-500'
+                    }`} />
+                    <span>Market Analyzer</span>
+                </button>
+            </li>
+            <li>
+                <button
+                    onClick={() => onSetPracticeView('market_pulse')}
+                    className={`w-full text-left flex items-center px-3 py-2 text-sm rounded-md transition-colors duration-150 ${
+                      currentView === 'market_pulse'
+                        ? 'bg-cyan-500/10 text-cyan-300 font-semibold'
+                        : 'text-gray-300 hover:bg-gray-700 hover:text-white'
+                    }`}
+                  >
+                    <SignalIcon className={`w-4 h-4 mr-3 flex-shrink-0 ${
+                       currentView === 'market_pulse' ? 'text-cyan-400' : 'text-gray-500'
+                    }`} />
+                    <span>Market Pulse</span>
+                </button>
+            </li>
+            <li>
+                <button
+                    onClick={() => onSetPracticeView('news_feed')}
+                    className={`w-full text-left flex items-center px-3 py-2 text-sm rounded-md transition-colors duration-150 ${
+                      currentView === 'news_feed'
+                        ? 'bg-cyan-500/10 text-cyan-300 font-semibold'
+                        : 'text-gray-300 hover:bg-gray-700 hover:text-white'
+                    }`}
+                  >
+                    <NewspaperIcon className={`w-4 h-4 mr-3 flex-shrink-0 ${
+                       currentView === 'news_feed' ? 'text-cyan-400' : 'text-gray-500'
+                    }`} />
+                    <span>News Feed</span>
                 </button>
             </li>
         </ul>

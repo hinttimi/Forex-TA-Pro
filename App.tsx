@@ -1,10 +1,13 @@
 
+
+
+
 import React, { useState, useCallback, useEffect } from 'react';
 import { Sidebar } from './components/Sidebar';
 import { LessonView } from './components/LessonView';
 import { Header } from './components/Header';
-import { Lesson, AppView } from './types';
-import { generateLessonContent, generateChartImage } from './services/geminiService';
+import { Lesson, AppView, MarketUpdate } from './types';
+import { generateLessonContent, generateChartImage, generateMarketUpdateSnippet } from './services/geminiService';
 import { MODULES } from './constants';
 import { PatternRecognitionView } from './components/practice/PatternRecognitionView';
 import { TimedChallengeView } from './components/practice/TimedChallengeView';
@@ -19,6 +22,11 @@ import { useCompletion } from './hooks/useCompletion';
 import { useBadges } from './hooks/useBadges';
 import { TradingPlanView } from './components/TradingPlanView';
 import { AIMentorView } from './components/AIMentorView';
+import { QuizView } from './components/QuizView';
+import { MarketPulseView } from './components/MarketPulseView';
+import { NewsFeedView } from './components/NewsFeedView';
+import { MarketUpdateToast } from './components/MarketUpdateToast';
+import { WhyIsItMovingView } from './components/WhyIsItMovingView';
 
 const allLessons = MODULES.flatMap(module => module.lessons);
 
@@ -27,6 +35,7 @@ const findLessonIndex = (lessonKey: string) => {
 };
 
 const AppContent: React.FC = () => {
+  const [isSidebarOpen, setIsSidebarOpen] = useState(true);
   const [currentView, setCurrentView] = useState<AppView>('lesson');
   const [currentLesson, setCurrentLesson] = useState<Lesson | null>(MODULES[0].lessons[0]);
   const [lessonContent, setLessonContent] = useState<string>('');
@@ -34,9 +43,16 @@ const AppContent: React.FC = () => {
   const [isLoadingContent, setIsLoadingContent] = useState<boolean>(false);
   const [isLoadingChart, setIsLoadingChart] = useState<boolean>(false);
   const [error, setError] = useState<string | null>(null);
+  const [quizLesson, setQuizLesson] = useState<Lesson | null>(null);
+  const [marketUpdate, setMarketUpdate] = useState<MarketUpdate | null>(null);
   
   const { logLessonCompleted, getCompletedLessons } = useCompletion();
   const { unlockBadge } = useBadges();
+  const completedLessons = getCompletedLessons();
+
+  const toggleSidebar = () => {
+    setIsSidebarOpen(prev => !prev);
+  };
 
   const handleSelectLesson = useCallback(async (lesson: Lesson) => {
     setCurrentView('lesson');
@@ -60,7 +76,10 @@ const AppContent: React.FC = () => {
   // Badge check effect
   useEffect(() => {
     const completed = getCompletedLessons();
-    if (completed.size > 0) {
+    const firstLessonKey = MODULES[0].lessons[0].key;
+
+    // Award "First Step" badge after completing the first lesson and navigating away from it.
+    if (currentLesson?.key !== firstLessonKey && completed.has(firstLessonKey)) {
       unlockBadge('first-step');
     }
     
@@ -78,7 +97,28 @@ const AppContent: React.FC = () => {
     if (level3Keys.every(key => completed.has(key))) {
         unlockBadge('liquidity-hunter');
     }
-  }, [lessonContent, unlockBadge, getCompletedLessons]); // Reruns when new lesson content is loaded
+  }, [lessonContent, unlockBadge, getCompletedLessons, currentLesson]); // Reruns when new lesson content is loaded
+
+  // Effect for market update toasts
+  useEffect(() => {
+    const UPDATE_INTERVAL = 15 * 60 * 1000; // 15 minutes
+
+    const intervalId = setInterval(async () => {
+        // Only fetch updates if the user is on the lesson view and the tab is active
+        if (currentView === 'lesson' && document.visibilityState === 'visible') {
+            try {
+                const update = await generateMarketUpdateSnippet();
+                setMarketUpdate(update);
+            } catch (e) {
+                console.error("Failed to fetch market update snippet:", e);
+                // We don't show an error to the user for this background task.
+            }
+        }
+    }, UPDATE_INTERVAL);
+
+    return () => clearInterval(intervalId);
+  }, [currentView]);
+
 
   useEffect(() => {
     handleSelectLesson(MODULES[0].lessons[0]);
@@ -103,6 +143,11 @@ const AppContent: React.FC = () => {
     setCurrentView(view);
     setError(null);
   }
+
+  const handleStartQuiz = (lesson: Lesson) => {
+    setQuizLesson(lesson);
+    setCurrentView('quiz');
+  };
 
   const handleNextLesson = useCallback(() => {
     if (!currentLesson) return;
@@ -135,11 +180,8 @@ const AppContent: React.FC = () => {
             onVisualize={handleVisualize}
             isLoadingContent={isLoadingContent}
             isLoadingChart={isLoadingChart}
+            onStartQuiz={handleStartQuiz}
             error={error}
-            onNextLesson={handleNextLesson}
-            onPreviousLesson={handlePreviousLesson}
-            hasNextLesson={hasNextLesson}
-            hasPreviousLesson={hasPreviousLesson}
           />
         ) : null;
       case 'pattern':
@@ -158,27 +200,49 @@ const AppContent: React.FC = () => {
         return <TradingPlanView />;
       case 'mentor':
         return <AIMentorView />;
+      case 'quiz':
+        return quizLesson ? (
+            <QuizView lesson={quizLesson} onComplete={() => setCurrentView('lesson')} />
+        ) : null;
+      case 'market_pulse':
+        return <MarketPulseView />;
+      case 'news_feed':
+        return <NewsFeedView />;
+      case 'market_analyzer':
+        return <WhyIsItMovingView />;
       default:
         return null;
     }
   };
 
   return (
-    <div className="flex h-screen bg-gray-900 text-gray-100 font-sans">
+    <div className="relative h-screen bg-gray-900 text-gray-100 font-sans overflow-hidden">
+      {isSidebarOpen && <div onClick={() => setIsSidebarOpen(false)} className="fixed inset-0 bg-black/60 z-30 md:hidden" aria-hidden="true" />}
       <Sidebar
         modules={MODULES}
         onSelectLesson={handleSelectLesson}
         selectedLessonKey={currentLesson?.key}
         currentView={currentView}
         onSetPracticeView={handleSetView}
+        completedLessons={completedLessons}
+        isOpen={isSidebarOpen}
+        onClose={() => setIsSidebarOpen(false)}
       />
-      <div className="flex-1 flex flex-col overflow-hidden">
-        <Header />
+      <div className={`flex-1 flex flex-col h-full overflow-hidden transition-all duration-300 ease-in-out ${isSidebarOpen ? 'md:pl-72' : ''}`}>
+        <Header 
+          onToggleSidebar={toggleSidebar}
+          onNextLesson={handleNextLesson}
+          onPreviousLesson={handlePreviousLesson}
+          hasNextLesson={hasNextLesson}
+          hasPreviousLesson={hasPreviousLesson}
+          currentLessonTitle={currentLesson?.title}
+        />
         <main className="flex-1 overflow-y-auto p-6 lg:p-10">
           {renderView()}
         </main>
       </div>
        <BadgeNotification />
+       <MarketUpdateToast update={marketUpdate} onClose={() => setMarketUpdate(null)} />
     </div>
   );
 };
