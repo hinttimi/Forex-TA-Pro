@@ -22,6 +22,10 @@ import { AIMentorView } from './components/AIMentorView';
 
 const allLessons = MODULES.flatMap(module => module.lessons);
 
+const findLessonIndex = (lessonKey: string) => {
+    return allLessons.findIndex(l => l.key === lessonKey);
+};
+
 const AppContent: React.FC = () => {
   const [currentView, setCurrentView] = useState<AppView>('lesson');
   const [currentLesson, setCurrentLesson] = useState<Lesson | null>(MODULES[0].lessons[0]);
@@ -100,28 +104,24 @@ const AppContent: React.FC = () => {
     setError(null);
   }
 
-  const findLessonIndex = (lessonKey: string) => {
-    return allLessons.findIndex(l => l.key === lessonKey);
-  }
-
-  const handleNextLesson = () => {
+  const handleNextLesson = useCallback(() => {
     if (!currentLesson) return;
     const currentIndex = findLessonIndex(currentLesson.key);
-    if (currentIndex < allLessons.length - 1) {
+    if (currentIndex !== -1 && currentIndex < allLessons.length - 1) {
       handleSelectLesson(allLessons[currentIndex + 1]);
     }
-  };
+  }, [currentLesson, handleSelectLesson]);
 
-  const handlePreviousLesson = () => {
+  const handlePreviousLesson = useCallback(() => {
     if (!currentLesson) return;
     const currentIndex = findLessonIndex(currentLesson.key);
     if (currentIndex > 0) {
       handleSelectLesson(allLessons[currentIndex - 1]);
     }
-  };
+  }, [currentLesson, handleSelectLesson]);
   
   const currentIndex = currentLesson ? findLessonIndex(currentLesson.key) : -1;
-  const hasNextLesson = currentIndex < allLessons.length - 1;
+  const hasNextLesson = currentIndex !== -1 && currentIndex < allLessons.length - 1;
   const hasPreviousLesson = currentIndex > 0;
 
   const renderView = () => {

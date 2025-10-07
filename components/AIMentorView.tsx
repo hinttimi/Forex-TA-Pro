@@ -1,5 +1,4 @@
-
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState, useRef, useEffect, useCallback } from 'react';
 import { generateMentorResponse, ai, generateChartImage } from '../services/geminiService';
 import { SparklesIcon } from './icons/SparklesIcon';
 import { PaperAirplaneIcon } from './icons/PaperAirplaneIcon';
@@ -10,6 +9,8 @@ import { MicrophoneIcon } from './icons/MicrophoneIcon';
 import { StopIcon } from './icons/StopIcon';
 import { LiveSession, Modality, LiveServerMessage, Blob } from '@google/genai';
 import { ChartDisplay } from './ChartDisplay';
+import { SpeakerWaveIcon } from './icons/SpeakerWaveIcon';
+import { SpeakerXMarkIcon } from './icons/SpeakerXMarkIcon';
 
 // --- Types ---
 interface Message {
@@ -131,8 +132,44 @@ export const AIMentorView: React.FC = () => {
         nextStartTime: number;
     }>({ stream: null, inputAudioContext: null, outputAudioContext: null, inputNode: null, outputNode: null, scriptProcessor: null, sources: new Set(), nextStartTime: 0 });
 
+    // Text-to-Speech state
+    const [isTtsEnabled, setIsTtsEnabled] = useState(false);
+    const [isSpeaking, setIsSpeaking] = useState(false);
+
     const fileInputRef = useRef<HTMLInputElement>(null);
     const chatContainerRef = useRef<HTMLDivElement>(null);
+
+    // --- Text-to-Speech Handlers ---
+    const stopSpeaking = useCallback(() => {
+        if (window.speechSynthesis) {
+            window.speechSynthesis.cancel();
+            setIsSpeaking(false);
+        }
+    }, []);
+
+    const speak = useCallback((text: string) => {
+        if (!window.speechSynthesis || !text) return;
+        
+        stopSpeaking();
+        
+        // Clean up any potential markdown for better speech flow
+        const cleanedText = text.replace(/\*\*/g, '').replace(/\[CHART:.*?\]/s, '');
+
+        const utterance = new SpeechSynthesisUtterance(cleanedText);
+        utterance.onstart = () => setIsSpeaking(true);
+        utterance.onend = () => setIsSpeaking(false);
+        utterance.onerror = () => setIsSpeaking(false);
+        
+        window.speechSynthesis.speak(utterance);
+    }, [stopSpeaking]);
+
+    const handleToggleTts = () => {
+        const newIsEnabled = !isTtsEnabled;
+        setIsTtsEnabled(newIsEnabled);
+        if (!newIsEnabled) {
+            stopSpeaking();
+        }
+    };
 
     // Load chat history from localStorage on component mount
     useEffect(() => {
@@ -165,6 +202,7 @@ export const AIMentorView: React.FC = () => {
     const handleSendMessage = async () => {
         if ((!userInput.trim() && !uploadedImage) || isLoading) return;
 
+        stopSpeaking();
         setError(null);
         const userMessage: Message = { id: Date.now(), role: 'user', text: userInput.trim(), ...(uploadedImage && { image: uploadedImage }) };
         setMessages(prev => [...prev, userMessage]);
@@ -184,6 +222,10 @@ export const AIMentorView: React.FC = () => {
             
             const modelMessage: Message = { id: modelMessageId, role: 'model', text: cleanText, isImageLoading: !!chartMatch };
             setMessages(prev => [...prev, modelMessage]);
+
+            if (isTtsEnabled) {
+                speak(cleanText);
+            }
             
             if (chartMatch && chartMatch[1]) {
                 const chartPrompt = chartMatch[1];
@@ -229,21 +271,41 @@ export const AIMentorView: React.FC = () => {
         }
     };
     
-    const stopVoiceChat = async () => {
+    const stopVoiceChat = useCallback(async () => {
         if (sessionPromiseRef.current) {
-            const session = await sessionPromiseRef.current;
-            session.close();
-            sessionPromiseRef.current = null;
+            try {
+                const session = await sessionPromiseRef.current;
+                session.close();
+            } catch (e) {
+                console.error("Error closing live session:", e);
+            } finally {
+                sessionPromiseRef.current = null;
+            }
         }
         audioResourcesRef.current.stream?.getTracks().forEach(track => track.stop());
         audioResourcesRef.current.scriptProcessor?.disconnect();
-        audioResourcesRef.current.inputAudioContext?.close();
-        audioResourcesRef.current.outputAudioContext?.close();
+        
+        if (audioResourcesRef.current.inputAudioContext?.state !== 'closed') {
+            audioResourcesRef.current.inputAudioContext?.close();
+        }
+        if (audioResourcesRef.current.outputAudioContext?.state !== 'closed') {
+            audioResourcesRef.current.outputAudioContext?.close();
+        }
+        
         audioResourcesRef.current.sources.forEach(s => s.stop());
 
         audioResourcesRef.current = { stream: null, inputAudioContext: null, outputAudioContext: null, inputNode: null, outputNode: null, scriptProcessor: null, sources: new Set(), nextStartTime: 0 };
         setVoiceState('idle');
-    };
+    }, []);
+
+    // Effect for cleaning up resources when the component unmounts.
+    useEffect(() => {
+        return () => {
+            stopVoiceChat();
+            stopSpeaking();
+        };
+    }, [stopVoiceChat, stopSpeaking]);
+
 
     const handleToggleVoiceChat = async () => {
         if (voiceState === 'active' || voiceState === 'connecting') {
@@ -258,9 +320,7 @@ export const AIMentorView: React.FC = () => {
             const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
             audioResourcesRef.current.stream = stream;
             
-            // FIX: Cast window to `any` to allow TypeScript to compile with the non-standard `webkitAudioContext` for broader browser compatibility.
             const inputAudioContext = new (window.AudioContext || (window as any).webkitAudioContext)({ sampleRate: 16000 });
-            // FIX: Cast window to `any` to allow TypeScript to compile with the non-standard `webkitAudioContext` for broader browser compatibility.
             const outputAudioContext = new (window.AudioContext || (window as any).webkitAudioContext)({ sampleRate: 24000 });
             audioResourcesRef.current.inputAudioContext = inputAudioContext;
             audioResourcesRef.current.outputAudioContext = outputAudioContext;
@@ -311,7 +371,7 @@ export const AIMentorView: React.FC = () => {
                             setCurrentOutputTranscription('');
                         }
 
-                        const base64EncodedAudioString = message.serverContent?.modelTurn?.parts[0]?.inlineData.data;
+                        const base64EncodedAudioString = message.serverContent?.modelTurn?.parts[0]?.inlineData?.data;
                         if (base64EncodedAudioString) {
                             let { nextStartTime, sources, outputNode: outNode, outputAudioContext: outCtx } = audioResourcesRef.current;
                             if (!outNode || !outCtx) return;
@@ -426,6 +486,15 @@ export const AIMentorView: React.FC = () => {
                         <textarea value={userInput} onChange={(e) => setUserInput(e.target.value)} onKeyDown={handleKeyDown} placeholder="Ask the AI Mentor..." className="flex-1 bg-transparent p-2 text-gray-200 resize-none focus:outline-none placeholder-gray-500" rows={1} disabled={voiceState !== 'idle'}/>
                         <input type="file" accept="image/*" ref={fileInputRef} onChange={handleImageUpload} className="hidden" />
                         <button onClick={() => fileInputRef.current?.click()} className="p-2 text-gray-400 hover:text-cyan-400 rounded-full hover:bg-gray-700 transition-colors" aria-label="Upload chart" title="Upload chart" disabled={voiceState !== 'idle'}><PhotoIcon className="w-6 h-6" /></button>
+                        <button
+                            onClick={handleToggleTts}
+                            className={`p-2.5 rounded-full transition-colors ${isTtsEnabled ? 'bg-cyan-500/20 text-cyan-400' : 'text-gray-400 hover:text-cyan-400'}`}
+                            aria-label={isTtsEnabled ? "Disable voice output" : "Enable voice output"}
+                            title={isTtsEnabled ? "Disable voice output" : "Enable voice output"}
+                            disabled={voiceState !== 'idle'}
+                        >
+                            {isTtsEnabled ? <SpeakerWaveIcon className={`w-6 h-6 ${isSpeaking ? 'animate-pulse' : ''}`} /> : <SpeakerXMarkIcon className="w-6 h-6" />}
+                        </button>
                         {getVoiceButton()}
                         <button onClick={handleSendMessage} disabled={(!userInput.trim() && !uploadedImage) || isLoading || voiceState !== 'idle'} className="p-2.5 rounded-full bg-cyan-500 text-gray-900 disabled:bg-gray-600 disabled:cursor-not-allowed hover:bg-cyan-400 transition-colors" aria-label="Send message"><PaperAirplaneIcon className="w-6 h-6" /></button>
                     </div>

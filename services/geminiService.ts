@@ -15,7 +15,7 @@ export const generateLessonContent = async (prompt: string): Promise<string> => 
   try {
     const response = await ai.models.generateContent({
         model: 'gemini-2.5-flash',
-        contents: prompt,
+        contents: { parts: [{ text: prompt }] },
     });
     return response.text;
   } catch (error) {
@@ -41,8 +41,9 @@ export const generateChartImage = async (prompt: string): Promise<string> => {
         },
     });
     
-    if (response.generatedImages && response.generatedImages.length > 0) {
-        const base64ImageBytes: string = response.generatedImages[0].image.imageBytes;
+    const base64ImageBytes = response.generatedImages?.[0]?.image?.imageBytes;
+
+    if (base64ImageBytes) {
         return `data:image/png;base64,${base64ImageBytes}`;
     } else {
         throw new Error("No image was generated.");
@@ -68,7 +69,7 @@ Based on the visual patterns you were asked to generate, analyze the quality of 
     try {
         const response = await ai.models.generateContent({
             model: 'gemini-2.5-flash',
-            contents: prompt,
+            contents: { parts: [{ text: prompt }] },
         });
         return response.text;
     } catch (error) {
@@ -103,7 +104,7 @@ Concept: "${lessonContentPrompt}"`;
 
         const response = await ai.models.generateContent({
             model: 'gemini-2.5-flash',
-            contents: prompt,
+            contents: { parts: [{ text: prompt }] },
             config: {
                 responseMimeType: "application/json",
                 responseSchema: quizQuestionSchema,

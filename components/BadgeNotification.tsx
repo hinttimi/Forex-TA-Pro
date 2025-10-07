@@ -11,20 +11,34 @@ export const BadgeNotification: React.FC = () => {
   const [currentBadge, setCurrentBadge] = useState<Badge | null>(null);
 
   useEffect(() => {
+    let visibilityTimer: number;
+    let cleanupTimer: number;
+
     if (lastUnlocked) {
       setCurrentBadge(lastUnlocked);
       setVisible(true);
 
-      const timer = setTimeout(() => {
+      visibilityTimer = window.setTimeout(() => {
         setVisible(false);
+        // After the fade-out transition, clear the badge so the component unmounts from the DOM.
+        cleanupTimer = window.setTimeout(() => {
+          setCurrentBadge(null);
+        }, 500); // This duration must match the transition duration in the className
       }, 5000);
-
-      return () => clearTimeout(timer);
     }
+
+    return () => {
+      clearTimeout(visibilityTimer);
+      clearTimeout(cleanupTimer);
+    };
   }, [lastUnlocked]);
 
   const handleClose = () => {
     setVisible(false);
+    // Set a timeout to clear the badge after the animation, ensuring the component unmounts.
+    setTimeout(() => {
+        setCurrentBadge(null);
+    }, 500);
   };
 
   if (!currentBadge) {

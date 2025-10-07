@@ -12,8 +12,14 @@ import { FibonacciSettings } from './FibonacciSettings';
 import { AngleIcon } from '../icons/AngleIcon';
 import { ArrowsPointingOutIcon } from '../icons/ArrowsPointingOutIcon';
 import { XMarkIcon } from '../icons/XMarkIcon';
+import { RectangleIcon } from '../icons/RectangleIcon';
+import { CircleIcon } from '../icons/CircleIcon';
+import { ArrowUturnLeftIcon } from '../icons/ArrowUturnLeftIcon';
+import { ArrowUturnRightIcon } from '../icons/ArrowUturnRightIcon';
+import { BoldIcon } from '../icons/BoldIcon';
+import { ItalicIcon } from '../icons/ItalicIcon';
 
-type Tool = 'select' | 'trendline' | 'horizontal' | 'fibonacci' | 'text' | 'angle';
+type Tool = 'select' | 'trendline' | 'horizontal' | 'fibonacci' | 'text' | 'angle' | 'rectangle' | 'circle';
 
 export interface FibLevel {
   level: number;
@@ -29,13 +35,18 @@ type Shape = {
   lineWidth: number;
   fontSize: number;
   levels?: FibLevel[];
+  // Text styling
+  fontWeight?: 'normal' | 'bold';
+  fontStyle?: 'italic' | 'normal';
+  rotation?: number; // in degrees
 };
 
 type Interaction =
   | { type: 'none' }
   | { type: 'drawing' }
   | { type: 'moving'; id: number }
-  | { type: 'resizing'; id: number; handle: 'start' | 'end' };
+  | { type: 'resizing'; id: number; handle: 'start' | 'end' }
+  | { type: 'rotating'; id: number; center: { x: number; y: number } };
 
 const COLORS = ['#34d399', '#f87171', '#60a5fa', '#facc15', '#a78bfa'];
 const RESIZE_HANDLE_SIZE = 8;
@@ -54,44 +65,121 @@ const DEFAULT_FIB_LEVELS: FibLevel[] = [
 
 const distance = (p1: {x:number, y:number}, p2: {x:number, y:number}) => Math.sqrt((p1.x - p2.x) ** 2 + (p1.y - p2.y) ** 2);
 
-const isPointOnLine = (p: {x:number, y:number}, start: {x:number, y:number}, end: {x:number, y:number}) => {
-    const d1 = distance(p, start);
-    const d2 = distance(p, end);
+const isPointOnLine = (p: {x:number, y:number}, start: {x:number, y:number}, end: {x:number, y:number}, tolerance: number = HIT_TOLERANCE) => {
     const lineLen = distance(start, end);
-    return Math.abs(d1 + d2 - lineLen) < HIT_TOLERANCE / 2;
+    if (lineLen === 0) return distance(p, start) < tolerance;
+
+    const dot = (((p.x - start.x) * (end.x - start.x)) + ((p.y - start.y) * (end.y - start.y))) / (lineLen ** 2);
+    const closestX = start.x + (dot * (end.x - start.x));
+    const closestY = start.y + (dot * (end.y - start.y));
+    
+    const onSegment = dot >= 0 && dot <= 1;
+    if (!onSegment) {
+        const distToStart = distance(p, start);
+        const distToEnd = distance(p, end);
+        return Math.min(distToStart, distToEnd) < tolerance;
+    }
+    
+    const dist = distance(p, {x: closestX, y: closestY});
+    return dist < tolerance;
 };
 
+const getNormalizedRect = (p1: {x:number, y:number}, p2: {x:number, y:number}) => {
+    const x = Math.min(p1.x, p2.x);
+    const y = Math.min(p1.y, p2.y);
+    const width = Math.abs(p1.x - p2.x);
+    const height = Math.abs(p1.y - p2.y);
+    return { x, y, width, height };
+}
+
 const getShapeAtPosition = (coords: {x: number, y: number}, shapes: Shape[], ctx: CanvasRenderingContext2D): Shape | null => {
-    // Iterate backwards to select top-most shape first
     for (let i = shapes.length - 1; i >= 0; i--) {
         const shape = shapes[i];
+        if (!shape.points || shape.points.length < 1) continue;
         const [start, end] = shape.points;
         switch(shape.type) {
             case 'trendline':
             case 'fibonacci':
             case 'angle':
-                if (isPointOnLine(coords, start, end!)) return shape;
+                if (end && isPointOnLine(coords, start, end)) return shape;
                 break;
             case 'horizontal':
-                if (Math.abs(coords.y - start.y) < HIT_TOLERANCE) return shape;
+                if (isPointOnLine(coords, {x:0, y:start.y}, {x:ctx.canvas.width, y:start.y})) return shape;
                 break;
-            case 'text':
+            case 'text': {
                 if (!shape.text) continue;
-                ctx.font = `${shape.fontSize}px sans-serif`;
+                const [center] = shape.points;
+                ctx.font = `${shape.fontStyle || 'normal'} ${shape.fontWeight || 'normal'} ${shape.fontSize}px sans-serif`;
                 const textWidth = ctx.measureText(shape.text).width;
-                if (coords.x >= start.x && coords.x <= start.x + textWidth && coords.y >= start.y - shape.fontSize && coords.y <= start.y) {
+                const textHeight = shape.fontSize;
+
+                // Create a virtual unrotated point to test against the rotated box
+                const angleRad = -(shape.rotation || 0) * Math.PI / 180;
+                const s = Math.sin(angleRad);
+                const c = Math.cos(angleRad);
+                const translatedX = coords.x - center.x;
+                const translatedY = coords.y - center.y;
+
+                const rotatedX = translatedX * c - translatedY * s;
+                const rotatedY = translatedX * s + translatedY * c;
+
+                if (Math.abs(rotatedX) <= textWidth / 2 && Math.abs(rotatedY) <= textHeight / 2) {
                     return shape;
                 }
                 break;
+            }
+            case 'rectangle': {
+                if (!end) continue;
+                const { x, y, width, height } = getNormalizedRect(start, end);
+                const topLeft = { x, y };
+                const topRight = { x: x + width, y };
+                const bottomLeft = { x, y: y + height };
+                const bottomRight = { x: x + width, y: y + height };
+                if (isPointOnLine(coords, topLeft, topRight) ||
+                    isPointOnLine(coords, topRight, bottomRight) ||
+                    isPointOnLine(coords, bottomRight, bottomLeft) ||
+                    isPointOnLine(coords, bottomLeft, topLeft)) {
+                    return shape;
+                }
+                break;
+            }
+            case 'circle': {
+                if (!end) continue;
+                const [center] = shape.points;
+                const radius = distance(start, end);
+                const distFromCenter = distance(coords, center);
+                if (Math.abs(distFromCenter - radius) < HIT_TOLERANCE) {
+                    return shape;
+                }
+                break;
+            }
         }
     }
     return null;
 }
 
-const getHandleAtPosition = (coords: {x: number, y: number}, shape: Shape): 'start' | 'end' | null => {
-    const [start, end] = shape.points;
-    if (distance(coords, start) < RESIZE_HANDLE_SIZE) return 'start';
-    if (end && distance(coords, end) < RESIZE_HANDLE_SIZE) return 'end';
+const getHandleAtPosition = (coords: {x: number, y: number}, shape: Shape): 'start' | 'end' | 'rotate' | null => {
+    if (shape.type === 'text') {
+        const [center] = shape.points;
+        
+        // Rotation handle check
+        const rotationHandleOffset = shape.fontSize + 10;
+        const angleRad = ((shape.rotation || 0) - 90) * Math.PI / 180;
+        const handleX = center.x + Math.cos(angleRad) * rotationHandleOffset;
+        const handleY = center.y + Math.sin(angleRad) * rotationHandleOffset;
+        if (distance(coords, {x: handleX, y: handleY}) < RESIZE_HANDLE_SIZE) {
+            return 'rotate';
+        }
+
+        // Move handle check (center)
+        if (distance(coords, center) < RESIZE_HANDLE_SIZE) {
+            return 'start'; // Using 'start' to mean the primary point/move handle
+        }
+    } else {
+        const [start, end] = shape.points;
+        if (distance(coords, start) < RESIZE_HANDLE_SIZE) return 'start';
+        if (end && distance(coords, end) < RESIZE_HANDLE_SIZE) return 'end';
+    }
     return null;
 }
 
@@ -103,9 +191,13 @@ export const FreePracticeCanvasView: React.FC = () => {
   const [activeColor, setActiveColor] = useState<string>(COLORS[0]);
   const [lineWidth, setLineWidth] = useState(2);
   const [fontSize, setFontSize] = useState(16);
+  const [textStyle, setTextStyle] = useState({ bold: false, italic: false });
   const [isModalOpen, setIsModalOpen] = useState(false);
 
   const [shapes, setShapes] = useState<Shape[]>([]);
+  const [history, setHistory] = useState<Shape[][]>([[]]);
+  const [historyIndex, setHistoryIndex] = useState(0);
+
   const [drawingPoints, setDrawingPoints] = useState<{x: number, y: number}[]>([]);
   const [selectedShapeId, setSelectedShapeId] = useState<number | null>(null);
 
@@ -117,12 +209,39 @@ export const FreePracticeCanvasView: React.FC = () => {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const imageRef = useRef<HTMLImageElement | null>(null);
 
+  const commitHistory = (newShapes: Shape[]) => {
+    const newHistory = history.slice(0, historyIndex + 1);
+    newHistory.push(newShapes);
+    setHistory(newHistory);
+    setHistoryIndex(newHistory.length - 1);
+  };
+
+  const handleUndo = useCallback(() => {
+    if (historyIndex > 0) {
+      const newIndex = historyIndex - 1;
+      setHistoryIndex(newIndex);
+      setShapes(history[newIndex]);
+      setSelectedShapeId(null);
+    }
+  }, [history, historyIndex]);
+
+  const handleRedo = useCallback(() => {
+    if (historyIndex < history.length - 1) {
+      const newIndex = historyIndex + 1;
+      setHistoryIndex(newIndex);
+      setShapes(history[newIndex]);
+      setSelectedShapeId(null);
+    }
+  }, [history, historyIndex]);
+
   const handleGenerateChart = async () => {
     setIsLoading(true);
     setImageUrl('');
     setError(null);
     setShapes([]);
     setSelectedShapeId(null);
+    setHistory([[]]);
+    setHistoryIndex(0);
     try {
       const prompt = "A random, unlabeled forex candlestick chart on a dark theme, in a 16:9 aspect ratio. The chart should display a variety of price action, suitable for technical analysis practice.";
       const url = await generateChartImage(prompt);
@@ -153,8 +272,17 @@ export const FreePracticeCanvasView: React.FC = () => {
         const selectedShape = shapes.find(s => s.id === selectedShapeId);
         if (selectedShape) {
             const handle = getHandleAtPosition(coords, selectedShape);
-            if (handle) {
-                setInteraction({ type: 'resizing', id: selectedShape.id, handle });
+            if (handle === 'rotate') {
+                setInteraction({ type: 'rotating', id: selectedShape.id, center: selectedShape.points[0] });
+                return;
+            }
+            if (handle === 'start' || handle === 'end') {
+                // For text, 'start' handle is move
+                if (selectedShape.type === 'text' && handle === 'start') {
+                    setInteraction({ type: 'moving', id: selectedShape.id });
+                } else {
+                    setInteraction({ type: 'resizing', id: selectedShape.id, handle });
+                }
                 return;
             }
         }
@@ -162,9 +290,14 @@ export const FreePracticeCanvasView: React.FC = () => {
         const shapeToSelect = getShapeAtPosition(coords, shapes, canvasRef.current!.getContext('2d')!);
         if (shapeToSelect) {
             setSelectedShapeId(shapeToSelect.id);
-            setInteraction({ type: 'moving', id: shapeToSelect.id });
+            if (shapeToSelect.type === 'text') {
+                 setInteraction({ type: 'moving', id: shapeToSelect.id });
+            } else {
+                 setInteraction({ type: 'moving', id: shapeToSelect.id });
+            }
         } else {
             setSelectedShapeId(null);
+            setInteraction({ type: 'none' });
         }
     } else { // Drawing tools
         setInteraction({ type: 'drawing' });
@@ -174,8 +307,21 @@ export const FreePracticeCanvasView: React.FC = () => {
         if (activeTool === 'text') {
             const text = prompt('Enter text annotation:');
             if (text) {
-                const newShape: Shape = { id: Date.now(), type: 'text', color: activeColor, points: [coords], text, lineWidth, fontSize };
-                setShapes(prev => [...prev, newShape]);
+                const newShape: Shape = { 
+                    id: Date.now(), 
+                    type: 'text', 
+                    color: activeColor, 
+                    points: [coords], 
+                    text, 
+                    lineWidth, 
+                    fontSize,
+                    fontWeight: textStyle.bold ? 'bold' : 'normal',
+                    fontStyle: textStyle.italic ? 'italic' : 'normal',
+                    rotation: 0,
+                };
+                const newShapes = [...shapes, newShape];
+                setShapes(newShapes);
+                commitHistory(newShapes);
             }
             setInteraction({type: 'none'});
             setDrawingPoints([]);
@@ -206,11 +352,33 @@ export const FreePracticeCanvasView: React.FC = () => {
         case 'resizing':
              setShapes(prevShapes => prevShapes.map(s => {
                 if (s.id !== interaction.id) return s;
+
+                // Special case: moving a circle by its center handle moves the whole shape
+                if (s.type === 'circle' && interaction.handle === 'start') {
+                    const originalCenter = s.points[0];
+                    const originalEdge = s.points[1];
+                    const moveDx = coords.x - originalCenter.x;
+                    const moveDy = coords.y - originalCenter.y;
+                    const newPoints = [
+                        coords, // new center
+                        { x: originalEdge.x + moveDx, y: originalEdge.y + moveDy } // new edge, preserving radius
+                    ];
+                    return { ...s, points: newPoints };
+                }
+
+                // Default behavior for all other handles/shapes
                 const newPoints = [...s.points];
                 if (interaction.handle === 'start') newPoints[0] = coords;
                 else newPoints[1] = coords;
                 return { ...s, points: newPoints };
             }));
+            break;
+        case 'rotating':
+            const angle = Math.atan2(coords.y - interaction.center.y, coords.x - interaction.center.x) * (180 / Math.PI);
+            setShapes(prevShapes => prevShapes.map(s => s.id === interaction.id
+                ? { ...s, rotation: angle + 90 } // +90 to offset the 'above' position
+                : s
+            ));
             break;
     }
   };
@@ -226,7 +394,11 @@ export const FreePracticeCanvasView: React.FC = () => {
         fontSize,
         ...(activeTool === 'fibonacci' && { levels: fibLevels }),
       };
-      setShapes(prev => [...prev, newShape]);
+      const newShapes = [...shapes, newShape];
+      setShapes(newShapes);
+      commitHistory(newShapes);
+    } else if (interaction.type === 'moving' || interaction.type === 'resizing' || interaction.type === 'rotating') {
+      commitHistory(shapes);
     }
     setInteraction({ type: 'none' });
     setDrawingPoints([]);
@@ -236,14 +408,14 @@ export const FreePracticeCanvasView: React.FC = () => {
     ctx.strokeStyle = shape.color;
     ctx.fillStyle = shape.color;
     ctx.lineWidth = shape.lineWidth;
-    ctx.font = `${shape.fontSize}px sans-serif`;
     ctx.setLineDash([]);
     ctx.globalAlpha = 1.0;
     const [start, end] = shape.points;
-    if (!end) return;
+    if (!start) return;
 
     switch (shape.type) {
       case 'trendline':
+        if (!end) return;
         ctx.beginPath();
         ctx.moveTo(start.x, start.y);
         ctx.lineTo(end.x, end.y);
@@ -256,9 +428,19 @@ export const FreePracticeCanvasView: React.FC = () => {
         ctx.stroke();
         break;
       case 'text':
-        ctx.fillText(shape.text || '', start.x, start.y);
+        const [center] = shape.points;
+        if (!center) return;
+        ctx.save();
+        ctx.translate(center.x, center.y);
+        ctx.rotate((shape.rotation || 0) * Math.PI / 180);
+        ctx.font = `${shape.fontStyle || 'normal'} ${shape.fontWeight || 'normal'} ${shape.fontSize}px sans-serif`;
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.fillText(shape.text || '', 0, 0);
+        ctx.restore();
         break;
       case 'angle':
+        if (!end) return;
         // Draw the main line
         ctx.beginPath();
         ctx.moveTo(start.x, start.y);
@@ -284,6 +466,7 @@ export const FreePracticeCanvasView: React.FC = () => {
         ctx.fillText(text, textX, textY);
         break;
       case 'fibonacci':
+        if (!end) return;
         const y1 = start.y;
         const y2 = end.y;
         const range = y2 - y1;
@@ -314,6 +497,22 @@ export const FreePracticeCanvasView: React.FC = () => {
         
         ctx.globalAlpha = 1.0;
         break;
+      case 'rectangle': {
+        if (!end) return;
+        const { x, y, width, height } = getNormalizedRect(start, end);
+        ctx.beginPath();
+        ctx.rect(x, y, width, height);
+        ctx.stroke();
+        break;
+      }
+      case 'circle': {
+        if (!end) return;
+        const radius = distance(start, end);
+        ctx.beginPath();
+        ctx.arc(start.x, start.y, radius, 0, 2 * Math.PI);
+        ctx.stroke();
+        break;
+      }
     }
   };
 
@@ -344,12 +543,36 @@ export const FreePracticeCanvasView: React.FC = () => {
         ctx.strokeStyle = '#FFFFFF';
         ctx.fillStyle = '#FFFFFF';
         ctx.lineWidth = 1;
-        selectedShape.points.forEach(p => {
-            if(!p) return;
+
+        if (selectedShape.type === 'text') {
+            const [center] = selectedShape.points;
+            
+            const rotationHandleOffset = selectedShape.fontSize + 10;
+            const angleRad = ((selectedShape.rotation || 0) - 90) * Math.PI / 180;
+            const handleX = center.x + Math.cos(angleRad) * rotationHandleOffset;
+            const handleY = center.y + Math.sin(angleRad) * rotationHandleOffset;
+
             ctx.beginPath();
-            ctx.rect(p.x - RESIZE_HANDLE_SIZE / 2, p.y - RESIZE_HANDLE_SIZE / 2, RESIZE_HANDLE_SIZE, RESIZE_HANDLE_SIZE);
+            ctx.moveTo(center.x, center.y);
+            ctx.lineTo(handleX, handleY);
+            ctx.stroke();
+
+            ctx.beginPath();
+            ctx.arc(handleX, handleY, RESIZE_HANDLE_SIZE / 2, 0, 2 * Math.PI);
             ctx.fill();
-        })
+
+            ctx.beginPath();
+            ctx.rect(center.x - RESIZE_HANDLE_SIZE / 2, center.y - RESIZE_HANDLE_SIZE / 2, RESIZE_HANDLE_SIZE, RESIZE_HANDLE_SIZE);
+            ctx.fill();
+
+        } else {
+             selectedShape.points.forEach(p => {
+                if(!p) return;
+                ctx.beginPath();
+                ctx.rect(p.x - RESIZE_HANDLE_SIZE / 2, p.y - RESIZE_HANDLE_SIZE / 2, RESIZE_HANDLE_SIZE, RESIZE_HANDLE_SIZE);
+                ctx.fill();
+            });
+        }
     }
   }, [shapes, interaction.type, drawingPoints, activeTool, activeColor, lineWidth, fontSize, selectedShapeId, fibLevels]);
 
@@ -364,9 +587,22 @@ export const FreePracticeCanvasView: React.FC = () => {
 
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
+        if (e.ctrlKey || e.metaKey) {
+            if (e.key === 'z') {
+                e.preventDefault();
+                handleUndo();
+            } else if (e.key === 'y' || (e.key === 'Z' && e.shiftKey)) {
+                e.preventDefault();
+                handleRedo();
+            }
+            return;
+        }
+
         if((e.key === 'Delete' || e.key === 'Backspace') && selectedShapeId !== null) {
-            setShapes(prev => prev.filter(s => s.id !== selectedShapeId));
+            const newShapes = shapes.filter(s => s.id !== selectedShapeId);
+            setShapes(newShapes);
             setSelectedShapeId(null);
+            commitHistory(newShapes);
         }
         if (e.key === 'Escape' && isModalOpen) {
             setIsModalOpen(false);
@@ -374,9 +610,13 @@ export const FreePracticeCanvasView: React.FC = () => {
     };
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [selectedShapeId, isModalOpen]);
+  }, [selectedShapeId, isModalOpen, handleUndo, handleRedo, shapes]);
 
-  const clearDrawings = () => { setShapes([]); setSelectedShapeId(null); };
+  const clearDrawings = () => { 
+    setShapes([]); 
+    setSelectedShapeId(null); 
+    commitHistory([]);
+  };
 
   const ToolButton: React.FC<{ tool: Tool; label: string; children: React.ReactNode }> = ({ tool, label, children }) => (
      <button onClick={() => setActiveTool(tool)} title={label} aria-label={label}
@@ -392,18 +632,41 @@ export const FreePracticeCanvasView: React.FC = () => {
   );
 
   const selectedShape = shapes.find(s => s.id === selectedShapeId);
+  const isTextSelected = selectedShape?.type === 'text';
   const isFibSelected = selectedShape?.type === 'fibonacci';
   const isFibToolActive = activeTool === 'fibonacci';
   
   const handleUpdateSelectedFibLevels = (newLevels: FibLevel[]) => {
       if (!selectedShapeId) return;
-      setShapes(prevShapes => prevShapes.map(s => {
-          if (s.id === selectedShapeId && s.type === 'fibonacci') {
-              return { ...s, levels: newLevels };
-          }
-          return s;
-      }));
+      setShapes(prevShapes => {
+        const newShapes = prevShapes.map(s => {
+            if (s.id === selectedShapeId && s.type === 'fibonacci') {
+                return { ...s, levels: newLevels };
+            }
+            return s;
+        });
+        commitHistory(newShapes);
+        return newShapes;
+      });
   };
+
+  const handleToggleTextStyle = (style: 'bold' | 'italic') => {
+      if (isTextSelected) {
+          const property = style === 'bold' ? 'fontWeight' : 'fontStyle';
+          const onValue = style;
+          const offValue = 'normal';
+          const newShapes = shapes.map(s => 
+              s.id === selectedShapeId ? { ...s, [property]: s[property] === onValue ? offValue : onValue } : s
+          );
+          setShapes(newShapes);
+          commitHistory(newShapes);
+      } else {
+          setTextStyle(prev => ({ ...prev, [style]: !prev[style] }));
+      }
+  };
+
+  const isBoldActive = (isTextSelected && selectedShape.fontWeight === 'bold') || (!isTextSelected && activeTool === 'text' && textStyle.bold);
+  const isItalicActive = (isTextSelected && selectedShape.fontStyle === 'italic') || (!isTextSelected && activeTool === 'text' && textStyle.italic);
   
   const levelsForSettings = isFibSelected ? (selectedShape.levels || DEFAULT_FIB_LEVELS) : fibLevels;
   const setLevelsForSettings = isFibSelected ? handleUpdateSelectedFibLevels : setFibLevels;
@@ -456,6 +719,8 @@ export const FreePracticeCanvasView: React.FC = () => {
                 <div className="mt-4 p-2 bg-gray-800 rounded-lg border border-gray-700 flex items-center space-x-2 flex-wrap justify-center">
                     <ToolButton tool="select" label="Select & Move"><CursorArrowRaysIcon className="w-5 h-5" /></ToolButton>
                     <ToolButton tool="trendline" label="Trendline"><PencilIcon className="w-5 h-5" /></ToolButton>
+                    <ToolButton tool="rectangle" label="Rectangle"><RectangleIcon className="w-5 h-5" /></ToolButton>
+                    <ToolButton tool="circle" label="Circle"><CircleIcon className="w-5 h-5" /></ToolButton>
                     <ToolButton tool="horizontal" label="Horizontal Ray"><MinusIcon className="w-5 h-5" /></ToolButton>
                     <ToolButton tool="fibonacci" label="Fibonacci Retracement"><FibonacciIcon className="w-5 h-5" /></ToolButton>
                     <ToolButton tool="angle" label="Angle Measurement"><AngleIcon className="w-5 h-5" /></ToolButton>
@@ -472,6 +737,19 @@ export const FreePracticeCanvasView: React.FC = () => {
                     <SizeButton size={14} setSize={setFontSize} currentSize={fontSize} label="S" />
                     <SizeButton size={18} setSize={setFontSize} currentSize={fontSize} label="M" />
                     <SizeButton size={24} setSize={setFontSize} currentSize={fontSize} label="L" />
+                     <button onClick={() => handleToggleTextStyle('bold')} title="Bold" disabled={activeTool !== 'text' && !isTextSelected} className={`p-2 rounded-md transition-colors disabled:text-gray-600 disabled:cursor-not-allowed ${isBoldActive ? 'bg-cyan-500/20 text-cyan-300' : 'hover:bg-gray-700 text-gray-400'}`}>
+                        <BoldIcon className="w-5 h-5" />
+                    </button>
+                    <button onClick={() => handleToggleTextStyle('italic')} title="Italic" disabled={activeTool !== 'text' && !isTextSelected} className={`p-2 rounded-md transition-colors disabled:text-gray-600 disabled:cursor-not-allowed ${isItalicActive ? 'bg-cyan-500/20 text-cyan-300' : 'hover:bg-gray-700 text-gray-400'}`}>
+                        <ItalicIcon className="w-5 h-5" />
+                    </button>
+                    <div className="w-px h-6 bg-gray-600 mx-2"></div>
+                    <button onClick={handleUndo} disabled={historyIndex <= 0} title="Undo (Ctrl+Z)" className="p-2 rounded-md disabled:text-gray-600 disabled:cursor-not-allowed hover:bg-gray-700 text-gray-400 transition-colors">
+                        <ArrowUturnLeftIcon className="w-5 h-5" />
+                    </button>
+                    <button onClick={handleRedo} disabled={historyIndex >= history.length - 1} title="Redo (Ctrl+Y)" className="p-2 rounded-md disabled:text-gray-600 disabled:cursor-not-allowed hover:bg-gray-700 text-gray-400 transition-colors">
+                        <ArrowUturnRightIcon className="w-5 h-5" />
+                    </button>
                     <div className="w-px h-6 bg-gray-600 mx-2"></div>
                     <button onClick={clearDrawings} title="Clear Drawings" className="p-2 rounded-md hover:bg-red-500/20 text-red-400 transition-colors"><TrashIcon className="w-5 h-5" /></button>
                 </div>
@@ -479,7 +757,7 @@ export const FreePracticeCanvasView: React.FC = () => {
                 {(isFibSelected || isFibToolActive) && (
                     <FibonacciSettings
                         levels={levelsForSettings}
-                        setLevels={setLevelsForSettings}
+                        setLevels={isFibToolActive ? setFibLevels : handleUpdateSelectedFibLevels}
                     />
                 )}
                 
