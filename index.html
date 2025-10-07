@@ -1,4 +1,3 @@
-
 <!DOCTYPE html>
 <html lang="en">
   <head>
@@ -9,6 +8,9 @@
     <script src="https://cdn.tailwindcss.com"></script>
     <!-- ES Module Shims: Required for import maps to work in all modern browsers -->
     <script async src="https://ga.jspm.io/npm:es-module-shims@1.10.0/dist/es-module-shims.js"></script>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
     <script type="importmap">
       {
         "imports": {
@@ -19,9 +21,52 @@
         }
       }
     </script>
+    <style>
+      body {
+        font-family: 'Inter', sans-serif;
+        background-color: #020617; /* bg-slate-950 as a fallback */
+        /* Subtle Aurora background */
+        background-image: radial-gradient(ellipse 50% 40% at 20% 15%, rgba(14, 165, 233, 0.1), transparent),
+                          radial-gradient(ellipse 50% 40% at 80% 20%, rgba(139, 92, 246, 0.1), transparent),
+                          radial-gradient(ellipse 40% 30% at 20% 85%, rgba(16, 185, 129, 0.1), transparent),
+                          radial-gradient(ellipse 40% 50% at 80% 90%, rgba(234, 179, 8, 0.1), transparent);
+      }
+
+      @keyframes fade-in-up {
+          from {
+              opacity: 0;
+              transform: translateY(15px);
+          }
+          to {
+              opacity: 1;
+              transform: translateY(0);
+          }
+      }
+
+      .animate-fade-in-up {
+          animation: fade-in-up 0.5s ease-out forwards;
+      }
+
+      /* Custom scrollbar for a more polished look */
+      ::-webkit-scrollbar {
+        width: 8px;
+        height: 8px;
+      }
+      ::-webkit-scrollbar-track {
+        background: rgba(30, 41, 59, 0.5); /* slate-800 with opacity */
+      }
+      ::-webkit-scrollbar-thumb {
+        background: #475569; /* slate-600 */
+        border-radius: 4px;
+      }
+      ::-webkit-scrollbar-thumb:hover {
+        background: #64748b; /* slate-500 */
+      }
+    </style>
   </head>
-  <body class="bg-gray-900 text-gray-100">
+  <body class="text-slate-200">
     <div id="root"></div>
+    <script type="text/javascript" src="https://cdn.jsdelivr.net/npm/@emailjs/browser@4/dist/email.min.js"></script>
     <script type="module" src="/index.tsx"></script>
   </body>
 </html>

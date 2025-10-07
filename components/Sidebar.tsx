@@ -1,419 +1,235 @@
+
 import React, { useState, useMemo } from 'react';
 import { Module, Lesson, AppView } from '../types';
 import { BookOpenIcon } from './icons/BookOpenIcon';
 import { CheckCircleIcon } from './icons/CheckCircleIcon';
 import { TrophyIcon } from './icons/TrophyIcon';
+import { SparklesIcon } from './icons/SparklesIcon';
+import { ChevronDownIcon } from './icons/ChevronDownIcon';
+import { XMarkIcon } from './icons/XMarkIcon';
+import { MagnifyingGlassIcon } from './icons/MagnifyingGlassIcon';
+import { Cog6ToothIcon } from './icons/Cog6ToothIcon';
+import { ChatBubbleBottomCenterTextIcon } from './icons/ChatBubbleBottomCenterTextIcon';
+import { HomeIcon } from './icons/HomeIcon';
+import { ChartBarIcon } from './icons/ChartBarIcon';
+// FIX: Import missing icons.
+import { RocketLaunchIcon } from './icons/RocketLaunchIcon';
+import { PlayIcon } from './icons/PlayIcon';
+import { MagnifyingGlassChartIcon } from './icons/MagnifyingGlassChartIcon';
 import { EyeIcon } from './icons/EyeIcon';
 import { ClockIcon } from './icons/ClockIcon';
 import { PencilSquareIcon } from './icons/PencilSquareIcon';
-import { RocketLaunchIcon } from './icons/RocketLaunchIcon';
-import { BookmarkSquareIcon } from './icons/BookmarkSquareIcon';
-import { MedalIcon } from './icons/MedalIcon';
-import { DocumentTextIcon } from './icons/DocumentTextIcon';
-import { SparklesIcon } from './icons/SparklesIcon';
-import { ChatBubbleLeftRightIcon } from './icons/ChatBubbleLeftRightIcon';
-import { ChevronDownIcon } from './icons/ChevronDownIcon';
-import { XMarkIcon } from './icons/XMarkIcon';
 import { SignalIcon } from './icons/SignalIcon';
 import { NewspaperIcon } from './icons/NewspaperIcon';
-import { MagnifyingGlassChartIcon } from './icons/MagnifyingGlassChartIcon';
 import { CalendarDaysIcon } from './icons/CalendarDaysIcon';
+import { DocumentTextIcon } from './icons/DocumentTextIcon';
+import { BookmarkSquareIcon } from './icons/BookmarkSquareIcon';
 import { BeakerIcon } from './icons/BeakerIcon';
-import { MagnifyingGlassIcon } from './icons/MagnifyingGlassIcon';
-import { PlayIcon } from './icons/PlayIcon';
-import { useApiKey } from '../hooks/useApiKey';
-import { KeyIcon } from './icons/KeyIcon';
-import { Cog6ToothIcon } from './icons/Cog6ToothIcon';
 
 interface SidebarProps {
   modules: Module[];
   onSelectLesson: (lesson: Lesson) => void;
   selectedLessonKey?: string;
   currentView: AppView;
-  onSetPracticeView: (view: AppView) => void;
+  onSetView: (view: AppView) => void;
   completedLessons: Set<string>;
   isOpen: boolean;
   onClose: () => void;
+  onOpenFeedbackModal: () => void;
 }
 
-export const Sidebar: React.FC<SidebarProps> = ({ modules, onSelectLesson, selectedLessonKey, currentView, onSetPracticeView, completedLessons, isOpen, onClose }) => {
-  const [expandedModules, setExpandedModules] = useState<Set<string>>(new Set(modules.length > 0 ? [modules[0].title] : []));
+interface NavLinkProps {
+  label: string;
+  view: AppView;
+  icon: React.FC<{className?: string}>;
+  currentView: AppView;
+  onClick: (view: AppView) => void;
+}
+
+const NavLink: React.FC<NavLinkProps> = ({ label, view, icon: Icon, currentView, onClick }) => {
+    const isSelected = currentView === view;
+    return (
+        <li>
+            <button
+                onClick={() => onClick(view)}
+                className={`w-full text-left flex items-center px-3 py-2.5 text-sm rounded-lg transition-colors duration-150 font-medium ${
+                isSelected
+                    ? 'bg-cyan-500/10 text-cyan-300'
+                    : 'text-slate-300 hover:bg-slate-700/70 hover:text-white'
+                }`}
+            >
+                <Icon className={`w-5 h-5 mr-3 flex-shrink-0 ${isSelected ? 'text-cyan-400' : 'text-slate-400'}`} />
+                <span>{label}</span>
+            </button>
+        </li>
+    );
+};
+
+export const Sidebar: React.FC<SidebarProps> = ({ modules, onSelectLesson, selectedLessonKey, currentView, onSetView, completedLessons, isOpen, onClose, onOpenFeedbackModal }) => {
+  const [expandedModules, setExpandedModules] = useState<Set<string>>(() => {
+    const currentModule = modules.find(m => m.lessons.some(l => l.key === selectedLessonKey));
+    return new Set(currentModule ? [currentModule.title] : [modules[0].title]);
+  });
+
   const [searchQuery, setSearchQuery] = useState('');
-  const { openKeyModal } = useApiKey();
 
   const allLessons = useMemo(() => modules.flatMap(module => module.lessons.map(lesson => ({ ...lesson, moduleTitle: module.title }))), [modules]);
 
   const filteredLessons = useMemo(() => {
-    if (!searchQuery.trim()) {
-      return [];
-    }
-    return allLessons.filter(lesson =>
-      lesson.title.toLowerCase().includes(searchQuery.toLowerCase())
-    );
+    if (!searchQuery.trim()) return [];
+    return allLessons.filter(lesson => lesson.title.toLowerCase().includes(searchQuery.toLowerCase()));
   }, [searchQuery, allLessons]);
   
   const handleSearchResultClick = (lesson: Lesson) => {
     onSelectLesson(lesson);
-    setSearchQuery(''); // Clear search after selection
+    setSearchQuery('');
   };
 
   const toggleModule = (title: string) => {
     setExpandedModules(prev => {
       const newSet = new Set(prev);
-      if (newSet.has(title)) {
-        newSet.delete(title);
-      } else {
-        newSet.add(title);
-      }
+      newSet.has(title) ? newSet.delete(title) : newSet.add(title);
       return newSet;
     });
   };
 
+  const practiceTools = [
+      { label: 'AI Mentor', view: 'mentor', icon: SparklesIcon },
+      { label: 'Trade Simulator', view: 'simulator', icon: RocketLaunchIcon },
+      { label: 'Live Chart Simulator', view: 'live_simulator', icon: PlayIcon },
+      { label: 'AI Strategy Lab', view: 'backtester', icon: BeakerIcon },
+      { label: 'Pattern Recognition', view: 'pattern', icon: EyeIcon },
+      { label: 'Timed Challenges', view: 'timed', icon: ClockIcon },
+      { label: 'Free Practice Canvas', view: 'canvas', icon: PencilSquareIcon },
+  ];
+
+  const marketTools = [
+      { label: 'Market Pulse', view: 'market_pulse', icon: SignalIcon },
+      { label: 'News Feed', view: 'news_feed', icon: NewspaperIcon },
+      { label: 'Market Analyzer', view: 'market_analyzer', icon: MagnifyingGlassChartIcon },
+      { label: 'AI Calendar', view: 'economic_calendar', icon: CalendarDaysIcon },
+  ];
+
   return (
-    <aside className={`fixed inset-y-0 left-0 z-40 w-72 bg-gray-800 p-6 flex flex-col overflow-y-auto border-r border-gray-700 transition-transform duration-300 ease-in-out ${isOpen ? 'translate-x-0' : '-translate-x-full'}`}>
+    <aside className={`fixed inset-y-0 left-0 z-40 w-80 bg-slate-800/80 backdrop-blur-lg p-6 flex flex-col overflow-y-auto border-r border-slate-700/60 transition-transform duration-300 ease-in-out ${isOpen ? 'translate-x-0' : '-translate-x-full'}`}>
       <div className="flex items-center justify-between mb-6 flex-shrink-0">
-        <h2 className="text-lg font-bold text-white">Learning Path</h2>
-        <button onClick={onClose} className="p-1 text-gray-400 rounded-full hover:bg-gray-700 hover:text-white md:hidden" aria-label="Close sidebar">
+        <div className="flex items-center space-x-3">
+            <ChartBarIcon className="w-8 h-8 text-cyan-400" />
+            <h1 className="text-2xl font-bold tracking-tight text-white">Forex TA Pro</h1>
+        </div>
+        <button onClick={onClose} className="p-1 text-slate-400 rounded-full hover:bg-slate-700 hover:text-white md:hidden" aria-label="Close sidebar">
           <XMarkIcon className="w-6 h-6" />
         </button>
       </div>
 
       <div className="relative mb-4 flex-shrink-0">
         <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-          <MagnifyingGlassIcon className="w-5 h-5 text-gray-400" />
+          <MagnifyingGlassIcon className="w-5 h-5 text-slate-400" />
         </div>
         <input
           type="text"
           placeholder="Search lessons..."
           value={searchQuery}
           onChange={(e) => setSearchQuery(e.target.value)}
-          className="w-full bg-gray-900/70 border border-gray-600 rounded-md py-2 pl-10 pr-4 text-white placeholder-gray-500 focus:ring-2 focus:ring-cyan-500 focus:border-cyan-500"
+          className="w-full bg-slate-900/70 border border-slate-600 rounded-lg py-2 pl-10 pr-4 text-white placeholder-slate-500 focus:ring-2 focus:ring-cyan-500 focus:border-cyan-500"
         />
       </div>
 
-      <div className="flex-grow overflow-y-auto -mr-3 pr-3">
+      <div className="flex-grow overflow-y-auto -mr-3 pr-3 space-y-6">
         {searchQuery.trim() ? (
-          <div className="space-y-1">
-            <h3 className="px-3 py-2 text-xs font-semibold text-gray-400 uppercase">Search Results</h3>
-            {filteredLessons.length > 0 ? (
-                <ul>
-                    {filteredLessons.map(lesson => (
-                        <li key={lesson.key}>
-                            <button
-                                onClick={() => handleSearchResultClick(lesson)}
-                                className={`w-full text-left flex flex-col px-3 py-2 rounded-md transition-colors duration-150 text-gray-300 hover:bg-gray-700 hover:text-white`}
-                            >
-                                <span className="text-sm">{lesson.title}</span>
-                                <span className="text-xs text-gray-500">{ (lesson as any).moduleTitle }</span>
-                            </button>
-                        </li>
-                    ))}
-                </ul>
-            ) : (
-                <p className="text-center text-gray-500 text-sm p-4">No lessons found.</p>
-            )}
-        </div>
+            <div className="space-y-1">
+                <h3 className="px-3 py-2 text-xs font-semibold text-slate-400 uppercase">Search Results</h3>
+                {filteredLessons.length > 0 ? (
+                    <ul>
+                        {filteredLessons.map(lesson => (
+                            <li key={lesson.key}>
+                                <button onClick={() => handleSearchResultClick(lesson)} className="w-full text-left flex flex-col px-3 py-2 rounded-lg transition-colors duration-150 text-slate-300 hover:bg-slate-700/70 hover:text-white">
+                                    <span className="text-sm">{lesson.title}</span>
+                                    <span className="text-xs text-slate-500">{ (lesson as any).moduleTitle }</span>
+                                </button>
+                            </li>
+                        ))}
+                    </ul>
+                ) : <p className="text-center text-slate-500 text-sm p-4">No lessons found.</p>}
+            </div>
         ) : (
           <>
-            <nav className="space-y-1">
-              {modules.map((module, index) => {
-                const isExpanded = expandedModules.has(module.title);
-                return (
-                  <div key={index}>
-                    <button
-                      onClick={() => toggleModule(module.title)}
-                      className="w-full flex items-center justify-between px-3 py-2 text-sm font-semibold text-gray-400 uppercase tracking-wider hover:bg-gray-700/50 rounded-md transition-colors"
-                      aria-expanded={isExpanded}
-                    >
-                      <span className="flex items-center">
-                        <BookOpenIcon className="w-5 h-5 mr-2" />
-                        {module.title}
-                      </span>
-                      <ChevronDownIcon className={`w-5 h-5 transition-transform duration-200 ${isExpanded ? 'rotate-180' : ''}`} />
-                    </button>
-                    <div className={`transition-all duration-300 ease-in-out overflow-hidden ${isExpanded ? 'max-h-96' : 'max-h-0'}`}>
-                      <ul className="space-y-1 pt-2 pl-4">
-                        {module.lessons.map((lesson) => {
-                          const isSelected = selectedLessonKey === lesson.key && currentView === 'lesson';
-                          const isCompleted = completedLessons.has(lesson.key);
-                          return (
-                            <li key={lesson.key}>
-                              <button
-                                onClick={() => onSelectLesson(lesson)}
-                                className={`w-full text-left flex items-center px-3 py-2 text-sm rounded-md transition-colors duration-150 ${
-                                  isSelected
-                                    ? 'bg-cyan-500/10 text-cyan-300 font-semibold'
-                                    : 'text-gray-300 hover:bg-gray-700 hover:text-white'
-                                }`}
-                              >
-                                <CheckCircleIcon className={`w-4 h-4 mr-3 flex-shrink-0 ${
-                                  isSelected || isCompleted ? 'text-cyan-400' : 'text-gray-500'
-                                }`} />
-                                <span>{lesson.title}</span>
-                              </button>
-                            </li>
-                          )
-                        })}
-                      </ul>
-                    </div>
-                  </div>
-                )
-              })}
+            <nav>
+                <ul className="space-y-1">
+                    <NavLink label="Dashboard" view="dashboard" icon={HomeIcon} currentView={currentView} onClick={onSetView} />
+                </ul>
             </nav>
-
-            <div className="mt-8 pt-6 border-t border-gray-700">
-              <h2 className="text-sm font-semibold text-gray-400 uppercase tracking-wider mb-3 flex items-center">
-                  <SparklesIcon className="w-5 h-5 mr-2" />
-                  AI Tools
-              </h2>
-              <ul className="space-y-2">
-                  <li>
-                      <button
-                          onClick={() => onSetPracticeView('mentor')}
-                          className={`w-full text-left flex items-center px-3 py-2 text-sm rounded-md transition-colors duration-150 ${
-                            currentView === 'mentor'
-                              ? 'bg-cyan-500/10 text-cyan-300 font-semibold'
-                              : 'text-gray-300 hover:bg-gray-700 hover:text-white'
-                          }`}
-                        >
-                          <ChatBubbleLeftRightIcon className={`w-4 h-4 mr-3 flex-shrink-0 ${
-                            currentView === 'mentor' ? 'text-cyan-400' : 'text-gray-500'
-                          }`} />
-                          <span>AI Mentor</span>
-                      </button>
-                  </li>
-                  <li>
-                      <button
-                          onClick={() => onSetPracticeView('market_analyzer')}
-                          className={`w-full text-left flex items-center px-3 py-2 text-sm rounded-md transition-colors duration-150 ${
-                            currentView === 'market_analyzer'
-                              ? 'bg-cyan-500/10 text-cyan-300 font-semibold'
-                              : 'text-gray-300 hover:bg-gray-700 hover:text-white'
-                          }`}
-                        >
-                          <MagnifyingGlassChartIcon className={`w-4 h-4 mr-3 flex-shrink-0 ${
-                            currentView === 'market_analyzer' ? 'text-cyan-400' : 'text-gray-500'
-                          }`} />
-                          <span>Market Analyzer</span>
-                      </button>
-                  </li>
-                  <li>
-                      <button
-                          onClick={() => onSetPracticeView('economic_calendar')}
-                          className={`w-full text-left flex items-center px-3 py-2 text-sm rounded-md transition-colors duration-150 ${
-                            currentView === 'economic_calendar'
-                              ? 'bg-cyan-500/10 text-cyan-300 font-semibold'
-                              : 'text-gray-300 hover:bg-gray-700 hover:text-white'
-                          }`}
-                        >
-                          <CalendarDaysIcon className={`w-4 h-4 mr-3 flex-shrink-0 ${
-                            currentView === 'economic_calendar' ? 'text-cyan-400' : 'text-gray-500'
-                          }`} />
-                          <span>AI Calendar</span>
-                      </button>
-                  </li>
-                  <li>
-                      <button
-                          onClick={() => onSetPracticeView('market_pulse')}
-                          className={`w-full text-left flex items-center px-3 py-2 text-sm rounded-md transition-colors duration-150 ${
-                            currentView === 'market_pulse'
-                              ? 'bg-cyan-500/10 text-cyan-300 font-semibold'
-                              : 'text-gray-300 hover:bg-gray-700 hover:text-white'
-                          }`}
-                        >
-                          <SignalIcon className={`w-4 h-4 mr-3 flex-shrink-0 ${
-                            currentView === 'market_pulse' ? 'text-cyan-400' : 'text-gray-500'
-                          }`} />
-                          <span>Market Pulse</span>
-                      </button>
-                  </li>
-                  <li>
-                      <button
-                          onClick={() => onSetPracticeView('news_feed')}
-                          className={`w-full text-left flex items-center px-3 py-2 text-sm rounded-md transition-colors duration-150 ${
-                            currentView === 'news_feed'
-                              ? 'bg-cyan-500/10 text-cyan-300 font-semibold'
-                              : 'text-gray-300 hover:bg-gray-700 hover:text-white'
-                          }`}
-                        >
-                          <NewspaperIcon className={`w-4 h-4 mr-3 flex-shrink-0 ${
-                            currentView === 'news_feed' ? 'text-cyan-400' : 'text-gray-500'
-                          }`} />
-                          <span>News Feed</span>
-                      </button>
-                  </li>
-              </ul>
+            <div>
+              <h3 className="px-3 py-2 text-xs font-semibold text-slate-400 uppercase">Course Curriculum</h3>
+              <nav className="space-y-1 mt-1">
+                {modules.map((module) => {
+                    const isExpanded = expandedModules.has(module.title);
+                    // FIX: Moved `totalInModule` declaration before it is used.
+                    const totalInModule = module.lessons.length;
+                    const completedInModule = module.lessons.filter(l => completedLessons.has(l.key)).length;
+                    const progress = totalInModule > 0 ? (completedInModule / totalInModule) * 100 : 0;
+                    
+                    return (
+                    <div key={module.title}>
+                        <button onClick={() => toggleModule(module.title)} className="w-full flex items-center justify-between px-3 py-3 text-sm font-medium text-slate-300 hover:bg-slate-700/50 rounded-lg transition-colors" aria-expanded={isExpanded}>
+                            <span className="flex items-center"><BookOpenIcon className="w-5 h-5 mr-3 text-slate-400" />{module.title}</span>
+                            <ChevronDownIcon className={`w-5 h-5 transition-transform duration-200 ${isExpanded ? 'rotate-180' : ''}`} />
+                        </button>
+                        <div className={`transition-all duration-300 ease-in-out overflow-hidden ${isExpanded ? 'max-h-[500px]' : 'max-h-0'}`}>
+                          <div className="pl-6 pr-1 py-2">
+                                <div className="flex justify-between text-xs text-slate-500 mb-1">
+                                    <span>Progress</span>
+                                    <span>{completedInModule}/{totalInModule}</span>
+                                </div>
+                                <div className="w-full bg-slate-700 rounded-full h-1">
+                                    <div className="bg-cyan-500 h-1 rounded-full" style={{ width: `${progress}%` }}></div>
+                                </div>
+                                <ul className="space-y-1 pt-2">
+                                    {module.lessons.map((lesson) => (
+                                    <li key={lesson.key}>
+                                        <button onClick={() => onSelectLesson(lesson)} className={`w-full text-left flex items-start p-2 text-sm rounded-md transition-colors duration-150 ${selectedLessonKey === lesson.key && currentView === 'lesson' ? 'bg-cyan-500/10 text-cyan-300' : 'text-slate-300 hover:bg-slate-700/70'}`}>
+                                            <CheckCircleIcon className={`w-4 h-4 mr-3 mt-0.5 flex-shrink-0 ${completedLessons.has(lesson.key) ? 'text-cyan-400' : 'text-slate-600'}`} />
+                                            <span>{lesson.title}</span>
+                                        </button>
+                                    </li>
+                                    ))}
+                                </ul>
+                          </div>
+                        </div>
+                    </div>
+                    )
+                })}
+              </nav>
             </div>
-
-            <div className="mt-8 pt-6 border-t border-gray-700">
-              <h2 className="text-sm font-semibold text-gray-400 uppercase tracking-wider mb-3 flex items-center">
-                  <TrophyIcon className="w-5 h-5 mr-2" />
-                  Practice Modes
-              </h2>
-              <ul className="space-y-2">
-                  <li>
-                      <button
-                          onClick={() => onSetPracticeView('pattern')}
-                          className={`w-full text-left flex items-center px-3 py-2 text-sm rounded-md transition-colors duration-150 ${
-                            currentView === 'pattern'
-                              ? 'bg-cyan-500/10 text-cyan-300 font-semibold'
-                              : 'text-gray-300 hover:bg-gray-700 hover:text-white'
-                          }`}
-                        >
-                          <EyeIcon className={`w-4 h-4 mr-3 flex-shrink-0 ${
-                            currentView === 'pattern' ? 'text-cyan-400' : 'text-gray-500'
-                          }`} />
-                          <span>Pattern Recognition</span>
-                      </button>
-                  </li>
-                  <li>
-                      <button
-                          onClick={() => onSetPracticeView('timed')}
-                          className={`w-full text-left flex items-center px-3 py-2 text-sm rounded-md transition-colors duration-150 ${
-                            currentView === 'timed'
-                              ? 'bg-cyan-500/10 text-cyan-300 font-semibold'
-                              : 'text-gray-300 hover:bg-gray-700 hover:text-white'
-                          }`}
-                        >
-                          <ClockIcon className={`w-4 h-4 mr-3 flex-shrink-0 ${
-                            currentView === 'timed' ? 'text-cyan-400' : 'text-gray-500'
-                          }`} />
-                          <span>Timed Challenges</span>
-                      </button>
-                  </li>
-                  <li>
-                      <button
-                          onClick={() => onSetPracticeView('canvas')}
-                          className={`w-full text-left flex items-center px-3 py-2 text-sm rounded-md transition-colors duration-150 ${
-                            currentView === 'canvas'
-                              ? 'bg-cyan-500/10 text-cyan-300 font-semibold'
-                              : 'text-gray-300 hover:bg-gray-700 hover:text-white'
-                          }`}
-                        >
-                          <PencilSquareIcon className={`w-4 h-4 mr-3 flex-shrink-0 ${
-                            currentView === 'canvas' ? 'text-cyan-400' : 'text-gray-500'
-                          }`} />
-                          <span>Free Practice Canvas</span>
-                      </button>
-                  </li>
-                  <li>
-                      <button
-                          onClick={() => onSetPracticeView('simulator')}
-                          className={`w-full text-left flex items-center px-3 py-2 text-sm rounded-md transition-colors duration-150 ${
-                            currentView === 'simulator'
-                              ? 'bg-cyan-500/10 text-cyan-300 font-semibold'
-                              : 'text-gray-300 hover:bg-gray-700 hover:text-white'
-                          }`}
-                        >
-                          <RocketLaunchIcon className={`w-4 h-4 mr-3 flex-shrink-0 ${
-                            currentView === 'simulator' ? 'text-cyan-400' : 'text-gray-500'
-                          }`} />
-                          <span>Trade Simulator</span>
-                      </button>
-                  </li>
-                  <li>
-                      <button
-                          onClick={() => onSetPracticeView('live_simulator')}
-                          className={`w-full text-left flex items-center px-3 py-2 text-sm rounded-md transition-colors duration-150 ${
-                            currentView === 'live_simulator'
-                              ? 'bg-cyan-500/10 text-cyan-300 font-semibold'
-                              : 'text-gray-300 hover:bg-gray-700 hover:text-white'
-                          }`}
-                        >
-                          <PlayIcon className={`w-4 h-4 mr-3 flex-shrink-0 ${
-                            currentView === 'live_simulator' ? 'text-cyan-400' : 'text-gray-500'
-                          }`} />
-                          <span>Live Chart Simulation</span>
-                      </button>
-                  </li>
-                  <li>
-                      <button
-                          onClick={() => onSetPracticeView('backtester')}
-                          className={`w-full text-left flex items-center px-3 py-2 text-sm rounded-md transition-colors duration-150 ${
-                            currentView === 'backtester'
-                              ? 'bg-cyan-500/10 text-cyan-300 font-semibold'
-                              : 'text-gray-300 hover:bg-gray-700 hover:text-white'
-                          }`}
-                        >
-                          <MagnifyingGlassChartIcon className={`w-4 h-4 mr-3 flex-shrink-0 ${
-                            currentView === 'backtester' ? 'text-cyan-400' : 'text-gray-500'
-                          }`} />
-                          <span>AI Chart Analyst</span>
-                      </button>
-                  </li>
-                  <li>
-                      <button
-                          onClick={() => onSetPracticeView('saved')}
-                          className={`w-full text-left flex items-center px-3 py-2 text-sm rounded-md transition-colors duration-150 ${
-                            currentView === 'saved'
-                              ? 'bg-cyan-500/10 text-cyan-300 font-semibold'
-                              : 'text-gray-300 hover:bg-gray-700 hover:text-white'
-                          }`}
-                        >
-                          <BookmarkSquareIcon className={`w-4 h-4 mr-3 flex-shrink-0 ${
-                            currentView === 'saved' ? 'text-cyan-400' : 'text-gray-500'
-                          }`} />
-                          <span>Saved Analysis</span>
-                      </button>
-                  </li>
-              </ul>
+             <div>
+                <h3 className="px-3 py-2 text-xs font-semibold text-slate-400 uppercase">Tools & Practice</h3>
+                <ul className="space-y-1 mt-1">
+                    {practiceTools.map(tool => <NavLink key={tool.view} {...tool} currentView={currentView} onClick={onSetView} />)}
+                    {marketTools.map(tool => <NavLink key={tool.view} {...tool} currentView={currentView} onClick={onSetView} />)}
+                </ul>
             </div>
-
-            <div className="mt-8 pt-6 border-t border-gray-700">
-              <h2 className="text-sm font-semibold text-gray-400 uppercase tracking-wider mb-3 flex items-center">
-                  <MedalIcon className="w-5 h-5 mr-2" />
-                  Progress & Settings
-              </h2>
-              <ul className="space-y-2">
-                  <li>
-                      <button
-                          onClick={() => onSetPracticeView('achievements')}
-                          className={`w-full text-left flex items-center px-3 py-2 text-sm rounded-md transition-colors duration-150 ${
-                            currentView === 'achievements'
-                              ? 'bg-cyan-500/10 text-cyan-300 font-semibold'
-                              : 'text-gray-300 hover:bg-gray-700 hover:text-white'
-                          }`}
-                        >
-                          <TrophyIcon className={`w-4 h-4 mr-3 flex-shrink-0 ${
-                            currentView === 'achievements' ? 'text-cyan-400' : 'text-gray-500'
-                          }`} />
-                          <span>Achievements</span>
-                      </button>
-                  </li>
-                  <li>
-                      <button
-                          onClick={() => onSetPracticeView('trading_plan')}
-                          className={`w-full text-left flex items-center px-3 py-2 text-sm rounded-md transition-colors duration-150 ${
-                            currentView === 'trading_plan'
-                              ? 'bg-cyan-500/10 text-cyan-300 font-semibold'
-                              : 'text-gray-300 hover:bg-gray-700 hover:text-white'
-                          }`}
-                        >
-                          <DocumentTextIcon className={`w-4 h-4 mr-3 flex-shrink-0 ${
-                            currentView === 'trading_plan' ? 'text-cyan-400' : 'text-gray-500'
-                          }`} />
-                          <span>My Trading Plan</span>
-                      </button>
-                  </li>
-                  <li>
-                      <button
-                          onClick={() => onSetPracticeView('settings')}
-                          className={`w-full text-left flex items-center px-3 py-2 text-sm rounded-md transition-colors duration-150 ${
-                            currentView === 'settings'
-                              ? 'bg-cyan-500/10 text-cyan-300 font-semibold'
-                              : 'text-gray-300 hover:bg-gray-700 hover:text-white'
-                          }`}
-                        >
-                          <Cog6ToothIcon className={`w-4 h-4 mr-3 flex-shrink-0 ${
-                            currentView === 'settings' ? 'text-cyan-400' : 'text-gray-500'
-                          }`} />
-                          <span>Settings</span>
-                      </button>
-                  </li>
-              </ul>
+             <div>
+                <h3 className="px-3 py-2 text-xs font-semibold text-slate-400 uppercase">Profile</h3>
+                <ul className="space-y-1 mt-1">
+                    <NavLink label="Achievements" view="achievements" icon={TrophyIcon} currentView={currentView} onClick={onSetView} />
+                    <NavLink label="My Trading Plan" view="trading_plan" icon={DocumentTextIcon} currentView={currentView} onClick={onSetView} />
+                    <NavLink label="Saved Analysis" view="saved" icon={BookmarkSquareIcon} currentView={currentView} onClick={onSetView} />
+                </ul>
             </div>
           </>
         )}
+      </div>
+
+      <div className="flex-shrink-0 pt-6 mt-auto border-t border-slate-700/50 space-y-1">
+        <ul className="space-y-1">
+            <li>
+                <button onClick={onOpenFeedbackModal} className="w-full text-left flex items-center px-3 py-2.5 text-sm rounded-lg transition-colors duration-150 font-medium text-slate-300 hover:bg-slate-700/70 hover:text-white">
+                    <ChatBubbleBottomCenterTextIcon className="w-5 h-5 mr-3 flex-shrink-0 text-slate-400" />
+                    <span>Provide Feedback</span>
+                </button>
+            </li>
+            <NavLink label="Settings" view="settings" icon={Cog6ToothIcon} currentView={currentView} onClick={onSetView} />
+        </ul>
       </div>
     </aside>
   );

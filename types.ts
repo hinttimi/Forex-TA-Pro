@@ -1,3 +1,4 @@
+
 import React from 'react';
 
 export interface Lesson {
@@ -12,7 +13,7 @@ export interface Module {
   lessons: Lesson[];
 }
 
-export type AppView = 'lesson' | 'pattern' | 'timed' | 'canvas' | 'simulator' | 'live_simulator' | 'saved' | 'achievements' | 'trading_plan' | 'mentor' | 'quiz' | 'market_pulse' | 'news_feed' | 'market_analyzer' | 'economic_calendar' | 'backtester' | 'settings';
+export type AppView = 'dashboard' | 'lesson' | 'pattern' | 'timed' | 'canvas' | 'simulator' | 'live_simulator' | 'saved' | 'achievements' | 'trading_plan' | 'mentor' | 'quiz' | 'market_pulse' | 'news_feed' | 'market_analyzer' | 'economic_calendar' | 'backtester' | 'settings';
 
 export interface MultipleChoiceQuestion {
     question: string;
@@ -50,4 +51,20 @@ export interface EconomicEvent {
   forecast: string | null;
   previous: string | null;
   actual: string | null; // Will be populated for instant analysis
+}
+
+export interface StrategyParams {
+  pair: string;
+  timeframe: string;
+  entryCriteria: string[];
+  stopLoss: string;
+  takeProfit: string;
+}
+
+export interface BacktestResults {
+  totalTrades: number;
+  winRate: number;
+  profitFactor: number;
+  avgRR: number;
+  maxDrawdown: number;
 }

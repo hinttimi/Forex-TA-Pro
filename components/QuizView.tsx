@@ -7,10 +7,14 @@ import { ArrowPathIcon } from './icons/ArrowPathIcon';
 import { ExclamationTriangleIcon } from './icons/ExclamationTriangleIcon';
 import { ArrowRightIcon } from './icons/ArrowRightIcon';
 import { useApiKey } from '../hooks/useApiKey';
+import { TrophyIcon } from './icons/TrophyIcon';
+import { BookOpenIcon } from './icons/BookOpenIcon';
 
 interface QuizViewProps {
   lesson: Lesson;
   onComplete: () => void;
+  onNextLesson: () => void;
+  hasNextLesson: boolean;
 }
 
 const QUIZ_LENGTH = 5;
@@ -18,7 +22,7 @@ const PASS_THRESHOLD = 0.8; // 80%
 
 type QuizState = 'loading' | 'active' | 'finished' | 'error';
 
-export const QuizView: React.FC<QuizViewProps> = ({ lesson, onComplete }) => {
+export const QuizView: React.FC<QuizViewProps> = ({ lesson, onComplete, onNextLesson, hasNextLesson }) => {
   const [quizState, setQuizState] = useState<QuizState>('loading');
   const [questions, setQuestions] = useState<MultipleChoiceQuestion[]>([]);
   const [currentQuestionIndex, setCurrentQuestionIndex] = useState(0);
@@ -53,6 +57,14 @@ export const QuizView: React.FC<QuizViewProps> = ({ lesson, onComplete }) => {
   useEffect(() => {
     loadQuestions();
   }, [loadQuestions]);
+  
+  const handleRetry = () => {
+    setScore(0);
+    setCurrentQuestionIndex(0);
+    setSelectedAnswer(null);
+    setIsCorrect(null);
+    loadQuestions();
+  }
 
   const handleAnswer = (answer: string) => {
     if (selectedAnswer !== null) return;
@@ -124,15 +136,42 @@ export const QuizView: React.FC<QuizViewProps> = ({ lesson, onComplete }) => {
     const isPass = questions.length > 0 && (score / questions.length) >= PASS_THRESHOLD;
     return (
       <div className="max-w-2xl mx-auto text-center animate-[fade-in_0.5s]">
-        <h1 className="text-4xl font-extrabold text-white mb-4 tracking-tight">Quiz Complete!</h1>
-        <div className={`mt-8 p-8 bg-gray-800/50 border ${isPass ? 'border-cyan-500/30' : 'border-gray-700'} rounded-lg`}>
-          <p className="text-2xl text-gray-300">Your final score is:</p>
-          <p className={`text-6xl font-bold my-4 ${isPass ? 'text-cyan-400' : 'text-gray-400'}`}>{score} / {questions.length}</p>
-          {isPass && <p className="text-green-400 font-semibold">Great job! You've mastered this topic.</p>}
+        {isPass ? (
+            <TrophyIcon className="w-20 h-20 mx-auto text-yellow-400" />
+        ) : (
+            <BookOpenIcon className="w-20 h-20 mx-auto text-cyan-400" />
+        )}
+        <h1 className="text-4xl font-extrabold text-white mt-4 mb-2 tracking-tight">
+            {isPass ? 'Quiz Passed!' : 'Keep Practicing!'}
+        </h1>
+        <p className="text-gray-400">
+            {isPass ? "Great job! You've mastered this topic." : "A good effort! Review the lesson to solidify your knowledge."}
+        </p>
+        <div className={`mt-6 p-6 bg-gray-800/50 border ${isPass ? 'border-cyan-500/30' : 'border-gray-700'} rounded-lg`}>
+          <p className="text-xl text-gray-300">Your final score is:</p>
+          <p className={`text-5xl font-bold my-2 ${isPass ? 'text-cyan-400' : 'text-gray-400'}`}>{score} / {questions.length}</p>
         </div>
-        <button onClick={onComplete} className="mt-8 inline-flex items-center px-6 py-3 bg-cyan-500 text-gray-900 font-semibold rounded-lg shadow-md hover:bg-cyan-400">
-            Return to Lesson
-        </button>
+
+        <div className="mt-8 space-y-3 sm:space-y-0 sm:flex sm:flex-row-reverse sm:justify-center sm:space-x-4 sm:space-x-reverse">
+             {isPass && hasNextLesson && (
+                 <button onClick={onNextLesson} className="w-full sm:w-auto inline-flex items-center justify-center px-6 py-3 bg-cyan-500 text-gray-900 font-semibold rounded-lg shadow-md hover:bg-cyan-400">
+                    Next Lesson <ArrowRightIcon className="w-5 h-5 ml-2" />
+                </button>
+             )}
+             {!isPass && (
+                  <button onClick={onComplete} className="w-full sm:w-auto inline-flex items-center justify-center px-6 py-3 bg-cyan-500 text-gray-900 font-semibold rounded-lg shadow-md hover:bg-cyan-400">
+                    Review Lesson <BookOpenIcon className="w-5 h-5 ml-2" />
+                 </button>
+             )}
+            <button onClick={handleRetry} className="w-full sm:w-auto inline-flex items-center justify-center px-6 py-3 bg-gray-700 text-gray-200 font-semibold rounded-lg hover:bg-gray-600">
+                Retry Quiz <ArrowPathIcon className="w-5 h-5 ml-2" />
+            </button>
+            {isPass && (
+                 <button onClick={onComplete} className="w-full sm:w-auto inline-flex items-center justify-center px-6 py-3 bg-gray-700 text-gray-200 font-semibold rounded-lg hover:bg-gray-600">
+                    Review Lesson
+                 </button>
+            )}
+        </div>
       </div>
     );
   }

@@ -2,7 +2,7 @@ import React, { useState, useRef, useEffect, useCallback } from 'react';
 import { generateMentorResponse, getAiClient, generateChartImage } from '../services/geminiService';
 import { SparklesIcon } from './icons/SparklesIcon';
 import { PaperAirplaneIcon } from './icons/PaperAirplaneIcon';
-import { PhotoIcon } from './icons/PhotoIcon';
+import { PaperClipIcon } from './icons/PaperClipIcon';
 import { XMarkIcon } from './icons/XMarkIcon';
 import { LoadingSpinner } from './LoadingSpinner';
 import { MicrophoneIcon } from './icons/MicrophoneIcon';
@@ -12,14 +12,23 @@ import { ChartDisplay } from './ChartDisplay';
 import { SpeakerWaveIcon } from './icons/SpeakerWaveIcon';
 import { SpeakerXMarkIcon } from './icons/SpeakerXMarkIcon';
 import { useApiKey } from '../hooks/useApiKey';
+import { DocumentTextIcon } from './icons/DocumentTextIcon';
+import { LinkIcon } from './icons/LinkIcon';
 
 // --- Types ---
+interface UploadedFile {
+    data: string; // base64 data without the prefix
+    mimeType: string;
+    name: string;
+}
 interface Message {
     id: number;
     role: 'user' | 'model';
     text: string;
-    image?: string; // base64 data URL
+    file?: UploadedFile;
+    image?: string; // base64 data URL for display
     isImageLoading?: boolean;
+    groundingChunks?: any[];
 }
 type VoiceState = 'idle' | 'connecting' | 'active' | 'error';
 
@@ -27,11 +36,15 @@ type VoiceState = 'idle' | 'connecting' | 'active' | 'error';
 const CHAT_HISTORY_KEY = 'aiMentorChatHistory';
 
 // --- Helper Functions ---
-const fileToBase64 = (file: File): Promise<string> =>
+const readFileAndConvertToBase64 = (file: File): Promise<UploadedFile> =>
   new Promise((resolve, reject) => {
     const reader = new FileReader();
     reader.readAsDataURL(file);
-    reader.onload = () => resolve(reader.result as string);
+    reader.onload = () => {
+        const result = reader.result as string;
+        const base64Data = result.split(',')[1];
+        resolve({ data: base64Data, mimeType: file.type, name: file.name });
+    };
     reader.onerror = error => reject(error);
   });
 
@@ -113,7 +126,7 @@ const FormattedContent: React.FC<{ text: string }> = ({ text }) => {
 export const AIMentorView: React.FC = () => {
     const [messages, setMessages] = useState<Message[]>([]);
     const [userInput, setUserInput] = useState('');
-    const [uploadedImage, setUploadedImage] = useState<string | null>(null);
+    const [uploadedFile, setUploadedFile] = useState<UploadedFile | null>(null);
     const [isLoading, setIsLoading] = useState(false);
     const [error, setError] = useState<string | null>(null);
     const { apiKey, openKeyModal } = useApiKey();
@@ -190,7 +203,9 @@ export const AIMentorView: React.FC = () => {
     useEffect(() => {
         if (messages.length > 0) {
             try {
-                localStorage.setItem(CHAT_HISTORY_KEY, JSON.stringify(messages));
+                // Omit file data from being saved to avoid large localStorage usage
+                const historyToSave = messages.map(({ file, ...rest }) => rest);
+                localStorage.setItem(CHAT_HISTORY_KEY, JSON.stringify(historyToSave));
             } catch (error) {
                 console.error("Failed to save chat history to localStorage", error);
             }
@@ -202,7 +217,7 @@ export const AIMentorView: React.FC = () => {
     }, [messages, currentInputTranscription, currentOutputTranscription]);
 
     const handleSendMessage = async () => {
-        if ((!userInput.trim() && !uploadedImage) || isLoading) return;
+        if ((!userInput.trim() && !uploadedFile) || isLoading) return;
         if (!apiKey) {
             openKeyModal();
             return;
@@ -210,15 +225,23 @@ export const AIMentorView: React.FC = () => {
 
         stopSpeaking();
         setError(null);
-        const userMessage: Message = { id: Date.now(), role: 'user', text: userInput.trim(), ...(uploadedImage && { image: uploadedImage }) };
+
+        const isImage = uploadedFile?.mimeType.startsWith('image/');
+        const userMessage: Message = { 
+            id: Date.now(), 
+            role: 'user', 
+            text: userInput.trim(), 
+            ...(uploadedFile && { file: uploadedFile }),
+            ...(isImage && uploadedFile && { image: `data:${uploadedFile.mimeType};base64,${uploadedFile.data}` })
+        };
         setMessages(prev => [...prev, userMessage]);
         
         setIsLoading(true);
         setUserInput('');
-        setUploadedImage(null);
+        setUploadedFile(null);
 
         try {
-            const responseText = await generateMentorResponse(apiKey, userMessage.text, userMessage.image);
+            const { text: responseText, groundingChunks } = await generateMentorResponse(apiKey, userMessage.text, userMessage.file);
             
             const chartRegex = /\[CHART:\s*(.*?)\]/s;
             const chartMatch = responseText.match(chartRegex);
@@ -226,7 +249,7 @@ export const AIMentorView: React.FC = () => {
 
             const modelMessageId = Date.now() + 1;
             
-            const modelMessage: Message = { id: modelMessageId, role: 'model', text: cleanText, isImageLoading: !!chartMatch };
+            const modelMessage: Message = { id: modelMessageId, role: 'model', text: cleanText, isImageLoading: !!chartMatch, groundingChunks };
             setMessages(prev => [...prev, modelMessage]);
 
             if (isTtsEnabled) {
@@ -257,15 +280,15 @@ export const AIMentorView: React.FC = () => {
         }
     };
 
-    const handleImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
         const file = e.target.files?.[0];
         if (file) {
             try {
-                const base64 = await fileToBase64(file);
-                setUploadedImage(base64);
+                const fileData = await readFileAndConvertToBase64(file);
+                setUploadedFile(fileData);
             } catch (err) {
                 console.error("Error converting file to base64:", err);
-                setError("Could not upload image. Please try a different file.");
+                setError("Could not upload file. Please try again.");
             }
         }
     };
@@ -444,8 +467,8 @@ export const AIMentorView: React.FC = () => {
             <h2 className="mt-4 text-3xl font-bold text-white">AI Trading Mentor</h2>
             <p className="mt-2 text-lg text-gray-400">Ask me anything about trading, or upload a chart for analysis.</p>
             <div className="mt-6 text-left max-w-md mx-auto space-y-2 text-gray-300">
-                <p className="p-3 bg-gray-800/50 rounded-lg text-sm">"Explain what an FVG is in simple terms."</p>
-                <p className="p-3 bg-gray-800/50 rounded-lg text-sm">"What's the difference between a BOS and a CHoCH?"</p>
+                <p className="p-3 bg-gray-800/50 rounded-lg text-sm">"What's the latest on the US CPI report?"</p>
+                <p className="p-3 bg-gray-800/50 rounded-lg text-sm">"Summarize this PDF about trading psychology."</p>
                 <p className="p-3 bg-gray-800/50 rounded-lg text-sm">Upload a chart and ask: "Where is the sell-side liquidity on this chart?"</p>
             </div>
         </div>
@@ -459,15 +482,47 @@ export const AIMentorView: React.FC = () => {
                     <div key={msg.id} className={`flex items-start gap-4 animate-[fade-in_0.5s_ease-out] ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}>
                        {msg.role === 'model' && <div className="w-8 h-8 rounded-full bg-cyan-500/20 flex items-center justify-center flex-shrink-0 mt-1"><SparklesIcon className="w-5 h-5 text-cyan-400" /></div>}
                        <div className={`w-full max-w-lg p-4 rounded-xl ${msg.role === 'user' ? 'bg-gray-700' : 'bg-gray-800/50'}`}>
-                           {(msg.image || msg.isImageLoading) && (
+                           {msg.image && (
+                               <div className="mb-3 rounded-lg overflow-hidden border border-gray-600">
+                                <img src={msg.image} alt="User upload" className="max-w-full h-auto" />
+                               </div>
+                           )}
+                           {msg.file && !msg.file.mimeType.startsWith('image/') && (
+                                <div className="mb-3 p-3 bg-gray-800/60 border border-gray-600 rounded-lg flex items-center gap-3">
+                                    <DocumentTextIcon className="w-8 h-8 text-gray-400 flex-shrink-0" />
+                                    <span className="text-sm text-gray-300 truncate font-medium">{msg.file.name}</span>
+                                </div>
+                           )}
+                           {msg.isImageLoading && (
                                <ChartDisplay
-                                   imageUrl={msg.image || ''}
-                                   isLoading={msg.isImageLoading || false}
-                                   loadingText={msg.role === 'model' ? "AI is generating a chart..." : "Loading..."}
+                                   imageUrl=""
+                                   isLoading={true}
+                                   loadingText="AI is generating a chart..."
+                                   containerClassName="mb-3 rounded-lg overflow-hidden border border-gray-600"
+                               />
+                           )}
+                           {msg.image && !msg.isImageLoading && (
+                               <ChartDisplay
+                                   imageUrl={msg.image}
+                                   isLoading={false}
                                    containerClassName="mb-3 rounded-lg overflow-hidden border border-gray-600 hover:border-cyan-500/50 transition-colors"
                                />
                            )}
                            {msg.text && <div className="prose prose-invert prose-sm max-w-none text-gray-300"><FormattedContent text={msg.text} /></div>}
+                           {msg.groundingChunks && msg.groundingChunks.length > 0 && (
+                                <div className="mt-4 pt-3 border-t border-gray-700">
+                                    <h4 className="text-xs font-semibold text-gray-400 uppercase mb-2 flex items-center"><LinkIcon className="w-4 h-4 mr-1.5" /> Sources</h4>
+                                    <ul className="space-y-1.5">
+                                        {msg.groundingChunks.map((chunk, index) => chunk.web && (
+                                            <li key={index}>
+                                                <a href={chunk.web.uri} target="_blank" rel="noopener noreferrer" className="text-xs text-cyan-400 hover:underline truncate block" title={chunk.web.title}>
+                                                    {chunk.web.title}
+                                                </a>
+                                            </li>
+                                        ))}
+                                    </ul>
+                                </div>
+                           )}
                        </div>
                     </div>
                 ))}
@@ -488,16 +543,23 @@ export const AIMentorView: React.FC = () => {
             
             <div className="mt-2 flex-shrink-0">
                 <div className="bg-gray-800 border border-gray-700 rounded-xl p-2 flex flex-col">
-                    {uploadedImage && (
+                    {uploadedFile && (
                          <div className="p-2 relative w-fit">
-                            <img src={uploadedImage} alt="Preview" className="max-h-24 w-auto rounded-md" />
-                            <button onClick={() => setUploadedImage(null)} className="absolute -top-1 -right-1 bg-gray-600 rounded-full p-0.5 text-white hover:bg-red-500"><XMarkIcon className="w-4 h-4" /></button>
+                            {uploadedFile.mimeType.startsWith('image/') ? (
+                                <img src={`data:${uploadedFile.mimeType};base64,${uploadedFile.data}`} alt="Preview" className="max-h-24 w-auto rounded-md" />
+                            ) : (
+                                <div className="flex items-center gap-3 p-2 bg-gray-700 rounded-md">
+                                    <DocumentTextIcon className="w-6 h-6 text-gray-400 flex-shrink-0" />
+                                    <span className="text-sm text-gray-300 truncate">{uploadedFile.name}</span>
+                                </div>
+                            )}
+                            <button onClick={() => setUploadedFile(null)} className="absolute -top-1 -right-1 bg-gray-600 rounded-full p-0.5 text-white hover:bg-red-500"><XMarkIcon className="w-4 h-4" /></button>
                         </div>
                     )}
                     <div className="flex items-end space-x-2">
                         <textarea value={userInput} onChange={(e) => setUserInput(e.target.value)} onKeyDown={handleKeyDown} placeholder="Ask the AI Mentor..." className="flex-1 bg-transparent p-2 text-gray-200 resize-none focus:outline-none placeholder-gray-500" rows={1} disabled={voiceState !== 'idle'}/>
-                        <input type="file" accept="image/*" ref={fileInputRef} onChange={handleImageUpload} className="hidden" />
-                        <button onClick={() => fileInputRef.current?.click()} className="p-2 text-gray-400 hover:text-cyan-400 rounded-full hover:bg-gray-700 transition-colors" aria-label="Upload chart" title="Upload chart" disabled={voiceState !== 'idle'}><PhotoIcon className="w-6 h-6" /></button>
+                        <input type="file" accept="image/*,text/plain,text/csv,application/pdf,.doc,.docx,.xls,.xlsx" ref={fileInputRef} onChange={handleFileUpload} className="hidden" />
+                        <button onClick={() => fileInputRef.current?.click()} className="p-2 text-gray-400 hover:text-cyan-400 rounded-full hover:bg-gray-700 transition-colors" aria-label="Upload file" title="Upload file" disabled={voiceState !== 'idle'}><PaperClipIcon className="w-6 h-6" /></button>
                         <button
                             onClick={handleToggleTts}
                             className={`p-2.5 rounded-full transition-colors ${isTtsEnabled ? 'bg-cyan-500/20 text-cyan-400' : 'text-gray-400 hover:text-cyan-400'}`}
@@ -508,7 +570,7 @@ export const AIMentorView: React.FC = () => {
                             {isTtsEnabled ? <SpeakerWaveIcon className={`w-6 h-6 ${isSpeaking ? 'animate-pulse' : ''}`} /> : <SpeakerXMarkIcon className="w-6 h-6" />}
                         </button>
                         {getVoiceButton()}
-                        <button onClick={handleSendMessage} disabled={(!userInput.trim() && !uploadedImage) || isLoading || voiceState !== 'idle'} className="p-2.5 rounded-full bg-cyan-500 text-gray-900 disabled:bg-gray-600 disabled:cursor-not-allowed hover:bg-cyan-400 transition-colors" aria-label="Send message"><PaperAirplaneIcon className="w-6 h-6" /></button>
+                        <button onClick={handleSendMessage} disabled={(!userInput.trim() && !uploadedFile) || isLoading || voiceState !== 'idle'} className="p-2.5 rounded-full bg-cyan-500 text-gray-900 disabled:bg-gray-600 disabled:cursor-not-allowed hover:bg-cyan-400 transition-colors" aria-label="Send message"><PaperAirplaneIcon className="w-6 h-6" /></button>
                     </div>
                 </div>
             </div>

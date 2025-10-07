@@ -1,5 +1,4 @@
 
-
 import React, { useState, useCallback, useEffect } from 'react';
 import { Sidebar } from './components/Sidebar';
 import { LessonView } from './components/LessonView';
@@ -33,6 +32,8 @@ import { ApiKeyProvider } from './context/ApiKeyContext';
 import { useApiKey } from './hooks/useApiKey';
 import { ApiKeyModal } from './components/ApiKeyModal';
 import { SettingsView } from './components/SettingsView';
+import { FeedbackModal } from './components/FeedbackModal';
+import { DashboardView } from './components/DashboardView';
 
 const allLessons = MODULES.flatMap(module => module.lessons);
 
@@ -42,7 +43,7 @@ const findLessonIndex = (lessonKey: string) => {
 
 const AppContent: React.FC = () => {
   const [isSidebarOpen, setIsSidebarOpen] = useState(true);
-  const [currentView, setCurrentView] = useState<AppView>('lesson');
+  const [currentView, setCurrentView] = useState<AppView>('dashboard');
   const [currentLesson, setCurrentLesson] = useState<Lesson | null>(null);
   const [lessonContent, setLessonContent] = useState<string>('');
   const [chartImageUrl, setChartImageUrl] = useState<string>('');
@@ -51,6 +52,7 @@ const AppContent: React.FC = () => {
   const [error, setError] = useState<string | null>(null);
   const [quizLesson, setQuizLesson] = useState<Lesson | null>(null);
   const [marketUpdate, setMarketUpdate] = useState<MarketUpdate | null>(null);
+  const [isFeedbackModalOpen, setIsFeedbackModalOpen] = useState(false);
   
   const [lessonToLoadKey, setLessonToLoadKey] = useState<string | null>(null);
   const debouncedLessonKey = useDebounce(lessonToLoadKey, 500);
@@ -138,6 +140,57 @@ const AppContent: React.FC = () => {
     }
   }, [debouncedLessonKey, currentLesson?.key, logLessonCompleted, apiKey]);
 
+  // --- Pre-fetching logic ---
+  const prefetchLessons = useCallback(async (startingLessonKey: string) => {
+    if (!apiKey) return;
+
+    const PREFETCH_COUNT = 2; // How many lessons to prefetch ahead
+    const currentIndex = findLessonIndex(startingLessonKey);
+    if (currentIndex === -1) return;
+
+    for (let i = 1; i <= PREFETCH_COUNT; i++) {
+        const nextIndex = currentIndex + i;
+        if (nextIndex < allLessons.length) {
+            const lessonToPrefetch = allLessons[nextIndex];
+            
+            // Check if it's already cached at the component level
+            if (!lessonDataCache.has(lessonToPrefetch.key)) {
+                try {
+                    // This call will populate the service-level cache and return the content
+                    const content = await generateLessonContent(apiKey, lessonToPrefetch.contentPrompt, `lesson-content-${lessonToPrefetch.key}`);
+                    
+                    // Also populate the component-level cache so the UI loads instantly
+                    setLessonDataCache(prevCache => {
+                        // FIX: Explicitly provide generic types to the Map constructor. This prevents
+                        // TypeScript from inferring `existingData` as `unknown`, which causes an error when
+                        // trying to access `existingData.chartUrl`.
+                        const newCache = new Map<string, { content: string; chartUrl?: string }>(prevCache);
+                        // Make sure not to overwrite existing chart data if it somehow exists
+                        const existingData = newCache.get(lessonToPrefetch.key);
+                        newCache.set(lessonToPrefetch.key, {
+                            content: content,
+                            chartUrl: existingData?.chartUrl,
+                        });
+                        return newCache;
+                    });
+                } catch (e) {
+                    console.error(`Failed to prefetch lesson ${lessonToPrefetch.key}:`, e);
+                    // Fail silently in the background and stop prefetching for now
+                    break; 
+                }
+            }
+        }
+    }
+  }, [apiKey, lessonDataCache]);
+
+  // Effect for triggering pre-fetching
+  useEffect(() => {
+    // Only prefetch when the current lesson is fully loaded and there's no error
+    if (currentLesson && !isLoadingContent && lessonContent && !error) {
+        prefetchLessons(currentLesson.key);
+    }
+  }, [currentLesson, isLoadingContent, lessonContent, error, prefetchLessons]);
+  // --- End Pre-fetching logic ---
 
   // Badge check effect
   useEffect(() => {
@@ -169,7 +222,7 @@ const AppContent: React.FC = () => {
     const UPDATE_INTERVAL = 15 * 60 * 1000;
 
     const intervalId = setInterval(async () => {
-        if (apiKey && currentView === 'lesson' && document.visibilityState === 'visible') {
+        if (apiKey && (currentView === 'lesson' || currentView === 'dashboard') && document.visibilityState === 'visible') {
             try {
                 const update = await generateMarketUpdateSnippet(apiKey);
                 setMarketUpdate(update);
@@ -181,16 +234,6 @@ const AppContent: React.FC = () => {
 
     return () => clearInterval(intervalId);
   }, [currentView, apiKey]);
-
-
-  useEffect(() => {
-    // Only trigger the initial lesson load if we have an API key
-    // and if there isn't already a lesson selected. This prevents
-    // re-loading the first lesson if the user changes their API key later.
-    if (apiKey && !currentLesson) {
-      handleSelectLesson(MODULES[0].lessons[0]);
-    }
-  }, [apiKey, currentLesson, handleSelectLesson]);
 
   const handleVisualize = useCallback(async () => {
     if (!currentLesson) return;
@@ -251,12 +294,17 @@ const AppContent: React.FC = () => {
     }
   }, [currentLesson, handleSelectLesson]);
   
+  const openFeedbackModal = () => setIsFeedbackModalOpen(true);
+  const closeFeedbackModal = () => setIsFeedbackModalOpen(false);
+
   const currentIndex = currentLesson ? findLessonIndex(currentLesson.key) : -1;
   const hasNextLesson = currentIndex !== -1 && currentIndex < allLessons.length - 1;
   const hasPreviousLesson = currentIndex > 0;
 
   const renderView = () => {
     switch (currentView) {
+      case 'dashboard':
+        return <DashboardView onSelectLesson={handleSelectLesson} onSetView={handleSetView} />;
       case 'lesson':
         return currentLesson ? (
           <LessonView
@@ -268,6 +316,13 @@ const AppContent: React.FC = () => {
             isLoadingChart={isLoadingChart}
             onStartQuiz={handleStartQuiz}
             error={error}
+            onNextLesson={handleNextLesson}
+            onPreviousLesson={handlePreviousLesson}
+            hasNextLesson={hasNextLesson}
+            hasPreviousLesson={hasPreviousLesson}
+            modules={MODULES}
+            onSelectLesson={handleSelectLesson}
+            completedLessons={completedLessons}
           />
         ) : null;
       case 'pattern':
@@ -290,7 +345,12 @@ const AppContent: React.FC = () => {
         return <AIMentorView />;
       case 'quiz':
         return quizLesson ? (
-            <QuizView lesson={quizLesson} onComplete={() => setCurrentView('lesson')} />
+            <QuizView 
+                lesson={quizLesson} 
+                onComplete={() => setCurrentView('lesson')}
+                onNextLesson={handleNextLesson}
+                hasNextLesson={hasNextLesson}
+            />
         ) : null;
       case 'market_pulse':
         return <MarketPulseView />;
@@ -308,32 +368,41 @@ const AppContent: React.FC = () => {
         return null;
     }
   };
+  
+  let viewTitle = 'Dashboard';
+    if (currentView === 'lesson' && currentLesson) {
+        viewTitle = currentLesson.title;
+    } else if (currentView === 'backtester') {
+        viewTitle = 'AI Strategy Lab';
+    } else if (currentView !== 'dashboard') {
+        viewTitle = currentView.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase());
+    }
 
   return (
-    <div className="relative h-screen bg-gray-900 text-gray-100 font-sans overflow-hidden">
+    <div className="relative h-screen text-slate-200 font-sans overflow-hidden">
       <ApiKeyModal />
+      <FeedbackModal isOpen={isFeedbackModalOpen} onClose={closeFeedbackModal} />
       {isSidebarOpen && <div onClick={() => setIsSidebarOpen(false)} className="fixed inset-0 bg-black/60 z-30 md:hidden" aria-hidden="true" />}
       <Sidebar
         modules={MODULES}
         onSelectLesson={handleSelectLesson}
         selectedLessonKey={currentLesson?.key}
         currentView={currentView}
-        onSetPracticeView={handleSetView}
+        onSetView={handleSetView}
         completedLessons={completedLessons}
         isOpen={isSidebarOpen}
         onClose={() => setIsSidebarOpen(false)}
+        onOpenFeedbackModal={openFeedbackModal}
       />
-      <div className={`flex-1 flex flex-col h-full overflow-hidden transition-all duration-300 ease-in-out ${isSidebarOpen ? 'md:pl-72' : ''}`}>
+      <div className={`flex-1 flex flex-col h-full overflow-hidden transition-all duration-300 ease-in-out ${isSidebarOpen ? 'md:pl-80' : ''}`}>
         <Header 
           onToggleSidebar={toggleSidebar}
-          onNextLesson={handleNextLesson}
-          onPreviousLesson={handlePreviousLesson}
-          hasNextLesson={hasNextLesson}
-          hasPreviousLesson={hasPreviousLesson}
-          currentLessonTitle={currentLesson?.title}
+          viewTitle={viewTitle}
         />
         <main className="flex-1 overflow-y-auto p-6 lg:p-10">
-          {renderView()}
+          <div key={currentView} className="animate-fade-in-up">
+            {renderView()}
+          </div>
         </main>
       </div>
        <BadgeNotification />

@@ -1,5 +1,6 @@
-import { GoogleGenAI, Type, GenerateContentResponse, GenerateImagesResponse } from "@google/genai";
-import { NewsArticle, MarketUpdate, EconomicEvent, MultipleChoiceQuestion } from '../types';
+
+import { GoogleGenAI, Type, GenerateContentResponse, GenerateImagesResponse, FunctionDeclaration } from "@google/genai";
+import { NewsArticle, MarketUpdate, EconomicEvent, MultipleChoiceQuestion, StrategyParams, BacktestResults } from '../types';
 
 // In-memory cache to avoid hitting API rate limits for repeated requests.
 const contentCache = new Map<string, string>();
@@ -269,51 +270,49 @@ For each question, provide 4 options in total (one correct, three plausible dist
     }
 };
 
-export const generateMentorResponse = async (apiKey: string, prompt: string, base64Image?: string): Promise<string> => {
-    const systemInstruction = `You are an expert forex trading mentor. Your primary expertise is in Smart Money Concepts (SMC) and Inner Circle Trader (ICT) methodologies, including liquidity, order blocks, fair value gaps (FVG), market structure (BOS, CHoCH), and premium/discount arrays.
+export const generateMentorResponse = async (
+    apiKey: string, 
+    prompt: string, 
+    file?: { data: string; mimeType: string }
+): Promise<{ text: string; groundingChunks: any[] }> => {
+    const systemInstruction = `You are an expert forex trading mentor. Your primary expertise is in Smart Money Concepts (SMC) and Inner Circle Trader (ICT) methodologies. You can also identify classical technical analysis patterns and explain how they relate to SMC principles.
 
-In addition to your core SMC expertise, you are also skilled at identifying and explaining common classical technical analysis patterns. When you analyze a chart, look for:
-- Head and Shoulders (and Inverse Head and Shoulders)
-- Double and Triple Tops/Bottoms
-- Triangles (Ascending, Descending, Symmetrical)
-- Wedges (Rising and Falling)
-- Flags and Pennants
-
-When a user asks a question or provides a chart, analyze it through the lens of SMC concepts first, but also point out any classical patterns you see. Explain how these patterns relate to SMC principles. For example, you might explain a Head and Shoulders pattern as a visual representation of a liquidity sweep on the left shoulder and a market structure shift (CHoCH) at the neckline.
+You have been upgraded with new agentic capabilities:
+1.  **Real-Time Search:** You have access to Google Search. Use it for any questions about recent market news, economic data, or any topic where up-to-date information is crucial. When you use search, your answer will be grounded in the sources you find.
+2.  **File Analysis:** Users can upload files (images, text, CSV, PDF). Analyze the content provided in these files in your response. For charts, identify patterns. For data files (like CSV), summarize the data or answer questions about it. For documents, analyze the text.
 
 Provide clear, concise, and actionable feedback. Be encouraging and helpful. Use markdown for formatting.
 
-When a visual explanation would be helpful, embed a chart generation request in your response using the format [CHART: a detailed, descriptive prompt for an image generation model]. For example: "A head and shoulders pattern looks like this [CHART: A dark-themed forex chart showing a clear head and shoulders top pattern after an uptrend, with the neckline clearly visible.]".`;
+When a visual explanation would be helpful, embed a chart generation request in your response using the format [CHART: a detailed, descriptive prompt for an image generation model].`;
     
     try {
         const ai = getAiClient(apiKey);
-        const parts: any[] = [{ text: prompt }];
+        
+        const contents: any = { parts: [{ text: prompt }] };
 
-        if (base64Image) {
-            const match = base64Image.match(/^data:(image\/\w+);base64,(.*)$/);
-            if (match) {
-                const mimeType = match[1];
-                const data = match[2];
-                parts.unshift({
-                    inlineData: {
-                        mimeType,
-                        data,
-                    },
-                });
-            } else {
-                console.error("Invalid base64 image format");
-            }
+        if (file) {
+            contents.parts.unshift({
+                inlineData: {
+                    mimeType: file.mimeType,
+                    data: file.data,
+                },
+            });
         }
         
         const response = await withRetry<GenerateContentResponse>(() => ai.models.generateContent({
             model: 'gemini-2.5-flash',
-            contents: { parts },
+            contents: contents,
             config: {
                 systemInstruction: systemInstruction,
+                tools: [{ googleSearch: {} }],
             },
         }));
         
-        return response.text;
+        return {
+            text: response.text,
+            groundingChunks: response.candidates?.[0]?.groundingMetadata?.groundingChunks || [],
+        };
+
     } catch (error) {
         console.error("Error generating mentor response:", error);
         throw error;
@@ -544,10 +543,122 @@ export const generatePostEventSummary = async (apiKey: string, event: EconomicEv
     }
 };
 
+const parseStrategyFunctionDeclaration: FunctionDeclaration = {
+    name: 'parse_strategy',
+    description: 'Parses a natural language trading strategy into its core components.',
+    parameters: {
+        type: Type.OBJECT,
+        properties: {
+            entryCriteria: {
+                type: Type.ARRAY,
+                items: { type: Type.STRING },
+                description: "A list of technical conditions that must be met to enter a trade, e.g., ['Liquidity Sweep', 'Change of Character', 'Entry on FVG']."
+            },
+            stopLoss: {
+                type: Type.STRING,
+                description: "A description of the stop loss placement logic, e.g., 'Above the sweep high' or 'Below the order block low'."
+            },
+            takeProfit: {
+                type: Type.STRING,
+                description: "A description of the take profit placement logic, e.g., 'Target opposing liquidity' or 'Fixed 1:3 Risk/Reward'."
+            },
+        },
+        required: ['entryCriteria', 'stopLoss', 'takeProfit'],
+    },
+};
+
+export const parseStrategyFromText = async (apiKey: string, userText: string, pair: string, timeframe: string): Promise<StrategyParams> => {
+    const prompt = `Parse the following trading strategy description into its structured components. The user is trading ${pair} on the ${timeframe} timeframe.
+
+Strategy: "${userText}"`;
+
+    try {
+        const ai = getAiClient(apiKey);
+        const response = await withRetry<GenerateContentResponse>(() => ai.models.generateContent({
+            model: 'gemini-2.5-flash',
+            contents: prompt,
+            config: {
+                tools: [{ functionDeclarations: [parseStrategyFunctionDeclaration] }],
+            },
+        }));
+
+        const functionCall = response.functionCalls?.[0];
+        if (functionCall?.name === 'parse_strategy' && functionCall.args) {
+            return {
+                pair,
+                timeframe,
+                entryCriteria: functionCall.args.entryCriteria,
+                stopLoss: functionCall.args.stopLoss,
+                takeProfit: functionCall.args.takeProfit,
+            };
+        } else {
+            throw new Error("AI could not parse the strategy. Please try describing it more clearly.");
+        }
+
+    } catch (error) {
+        console.error("Error parsing strategy from text:", error);
+        throw error;
+    }
+};
+
+
+const backtestResultsSchema = {
+    type: Type.OBJECT,
+    properties: {
+        totalTrades: { type: Type.NUMBER },
+        winRate: { type: Type.NUMBER },
+        profitFactor: { type: Type.NUMBER },
+        avgRR: { type: Type.NUMBER },
+        maxDrawdown: { type: Type.NUMBER },
+    },
+    required: ['totalTrades', 'winRate', 'profitFactor', 'avgRR', 'maxDrawdown']
+};
+
+export const generateSimulatedBacktestResults = async (apiKey: string, strategy: StrategyParams, period: string): Promise<BacktestResults> => {
+    const prompt = `You are a quantitative analyst simulating a backtest. Given the following forex trading strategy, generate a realistic, plausible set of performance metrics over the specified period.
+Do not output any text other than the JSON object.
+
+Strategy Details:
+- Pair: ${strategy.pair}
+- Timeframe: ${strategy.timeframe}
+- Entry Logic: ${strategy.entryCriteria.join(', ')}
+- Stop Loss Logic: ${strategy.stopLoss}
+- Take Profit Logic: ${strategy.takeProfit}
+- Backtest Period: ${period}
+
+Consider the typical performance characteristics of Smart Money Concept strategies. They often have lower win rates but high Risk-to-Reward ratios. The results should reflect this. For example, a win rate between 35-55% would be realistic. The profit factor should be positive if the strategy is viable (e.g., 1.5 to 3.0).`;
+
+    try {
+        const ai = getAiClient(apiKey);
+        const response = await withRetry<GenerateContentResponse>(() => ai.models.generateContent({
+            model: 'gemini-2.5-flash',
+            contents: prompt,
+            config: {
+                responseMimeType: "application/json",
+                responseSchema: backtestResultsSchema,
+            },
+        }));
+
+        const jsonText = response.text.trim();
+        const parsed = JSON.parse(jsonText);
+        
+        // Basic validation
+        if (typeof parsed.winRate !== 'number' || typeof parsed.profitFactor !== 'number') {
+             throw new Error("AI returned malformed data for backtest results.");
+        }
+        return parsed;
+
+    } catch (error) {
+        console.error("Error generating simulated backtest results:", error);
+        throw error;
+    }
+};
+
+
 export const analyzeBacktestResults = async (
     apiKey: string,
-    strategyParams: { [key: string]: any },
-    results: { [key: string]: any }
+    strategyParams: StrategyParams,
+    results: BacktestResults
 ): Promise<string> => {
     const prompt = `You are an expert trading coach and data analyst specializing in systematic strategies based on Smart Money Concepts (SMC). A student has just run a backtest with the following parameters and results. Your task is to provide a concise, insightful analysis and a highly specific, actionable suggestion for improvement.
 
@@ -560,9 +671,10 @@ export const analyzeBacktestResults = async (
 
 **Backtest Results:**
 - Total Trades: ${results.totalTrades}
-- Win Rate: ${results.winRate}%
-- Profit Factor: ${results.profitFactor}
+- Win Rate: ${results.winRate.toFixed(1)}%
+- Profit Factor: ${results.profitFactor.toFixed(2)}
 - Average R:R: 1:${results.avgRR.toFixed(2)}
+- Max Drawdown: ${results.maxDrawdown.toFixed(1)}%
 
 **Your Coaching Logic (Follow this logic for your suggestions):**
 - **If the Win Rate is low (e.g., < 45%)**: This suggests an issue with entry timing or setup selection. The trader might be entering too early or on low-probability signals.
@@ -573,8 +685,8 @@ export const analyzeBacktestResults = async (
     - *Suggestion idea*: Suggest a more foundational change. For example, "Your current rules are struggling. Let's rebuild. Try a strategy focused *only* on 'Liquidity Sweep' of a major high/low, followed by a 'CHoCH', and entering on the resulting 'FVG'. This is a classic, high-probability model."
 - **If performance is good but Total Trades are low**: The strategy is too restrictive.
     - *Suggestion idea*: Suggest ways to find more opportunities without sacrificing too much quality. For example, "This strategy is effective but rare. Try applying the same rules to a lower timeframe to increase trade frequency."
-- **If drawdown is high**: The trader is likely holding onto losing trades for too long, or the stop loss placement is not optimal.
-    - *Suggestion idea*: "Your high drawdown suggests risk is not being contained effectively. Consider tightening your stop loss by placing it just below the wick of the order block, instead of the entire swing low. Also, consider implementing a 'time stop'—if the trade hasn't moved into profit after a few candles, it might be an invalid setup."
+- **If max drawdown is high (e.g., > 15%)**: The trader is likely holding onto losing trades for too long, the stop loss placement is not optimal, or they are taking too many consecutive losses.
+    - *Suggestion idea*: "Your high drawdown suggests risk is not being contained effectively. Consider tightening your stop loss by placing it just below the wick of the order block, instead of the entire swing low. Also, consider implementing a 'max daily loss' rule in your plan to prevent significant drawdowns."
 
 **Your Analysis (in markdown format):**
 1.  **Overall Assessment:** Start with a single, bolded sentence summarizing the strategy's performance.
