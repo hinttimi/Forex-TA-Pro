@@ -68,3 +68,8 @@ export interface BacktestResults {
   avgRR: number;
   maxDrawdown: number;
 }
+
+export interface AnalysisResult {
+  text: string;
+  sources: any[];
+}

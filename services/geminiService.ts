@@ -1,6 +1,7 @@
 
+
 import { GoogleGenAI, Type, GenerateContentResponse, GenerateImagesResponse, FunctionDeclaration } from "@google/genai";
-import { NewsArticle, MarketUpdate, EconomicEvent, MultipleChoiceQuestion, StrategyParams, BacktestResults } from '../types';
+import { NewsArticle, MarketUpdate, EconomicEvent, MultipleChoiceQuestion, StrategyParams, BacktestResults, AnalysisResult } from '../types';
 
 // In-memory cache to avoid hitting API rate limits for repeated requests.
 const contentCache = new Map<string, string>();
@@ -704,6 +705,55 @@ export const analyzeBacktestResults = async (
         return response.text;
     } catch (error) {
         console.error("Error analyzing backtest results:", error);
+        throw error;
+    }
+};
+
+export const analyzeLiveChart = async (
+    apiKey: string, 
+    prompt: string, 
+    images: { data: string; mimeType: string }[]
+): Promise<AnalysisResult> => {
+    const systemInstruction = `You are a world-class forex trading analyst and mentor, specializing in Smart Money Concepts (SMC) combined with real-time fundamental analysis. Your analysis must be CRITICAL, ACCURATE, and FACTUAL. You will be given a user's question and one or more screenshots of a live trading chart.
+
+Your task is to:
+1.  **Technical Analysis:** Analyze the provided chart image(s) for price action patterns, market structure (BOS, CHoCH), liquidity pools (buy-side/sell-side), order blocks, fair value gaps (FVGs), premium/discount zones, and any other relevant SMC concepts.
+    - **IMPORTANT:** If multiple images are provided, they likely represent different timeframes (e.g., Daily, 4H, 15M). You MUST perform a multi-timeframe analysis, starting from the highest timeframe to establish context and bias, then drilling down to the lower timeframes for the specific setup.
+2.  **Fundamental Analysis:** Use your real-time Google Search capability to find any high-impact news, economic data releases, or central bank statements that could be affecting the currency pair shown in the chart. Your search must focus on catalysts within the last few hours to ensure relevance.
+3.  **Synthesize:** Combine your multi-timeframe technical and fundamental findings into a single, cohesive analysis. Explain how the fundamentals may be influencing the technical picture.
+4.  **Provide Actionable Feedback:** Based on your synthesis, provide one of the following in clear markdown format:
+    *   **A-Grade Setup:** If a high-probability trade is present, outline a complete trade plan with a bolded **Entry**, **Stop Loss**, **Take Profit**, and the **Reasoning** behind the setup.
+    *   **Things to Watch:** If no immediate setup is present, explain what you are seeing and what specific conditions or price action you would need to see to consider a trade (e.g., "I'm waiting for a sweep of the Asian lows before looking for a long entry." or "The market is consolidating ahead of CPI data; it is best to wait.").
+
+ALWAYS cite your sources for any fundamental data you use.`;
+    
+    try {
+        const ai = getAiClient(apiKey);
+        
+        const imageParts = images.map(image => ({
+            inlineData: {
+                mimeType: image.mimeType,
+                data: image.data,
+            },
+        }));
+        const textPart = { text: prompt };
+        
+        const response = await withRetry<GenerateContentResponse>(() => ai.models.generateContent({
+            model: 'gemini-2.5-flash',
+            contents: { parts: [...imageParts, textPart] },
+            config: {
+                systemInstruction: systemInstruction,
+                tools: [{ googleSearch: {} }],
+            },
+        }));
+        
+        return {
+            text: response.text,
+            sources: response.candidates?.[0]?.groundingMetadata?.groundingChunks || [],
+        };
+
+    } catch (error) {
+        console.error("Error analyzing live chart:", error);
         throw error;
     }
 };
