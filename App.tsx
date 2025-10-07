@@ -60,7 +60,7 @@ const AppContent: React.FC = () => {
     setError(null);
     setIsLoadingContent(true);
     try {
-      const content = await generateLessonContent(lesson.contentPrompt);
+      const content = await generateLessonContent(lesson.contentPrompt, `lesson-content-${lesson.key}`);
       setLessonContent(content);
       logLessonCompleted(lesson.key);
     } catch (e) {
@@ -127,7 +127,7 @@ const AppContent: React.FC = () => {
     setIsLoadingChart(true);
     setChartImageUrl('');
     try {
-      const imageUrl = await generateChartImage(currentLesson.chartPrompt);
+      const imageUrl = await generateChartImage(currentLesson.chartPrompt, `lesson-chart-${currentLesson.key}`);
       setChartImageUrl(imageUrl);
     } catch (e) {
       console.error(e);

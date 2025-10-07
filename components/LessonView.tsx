@@ -1,4 +1,3 @@
-
 import React, { useState } from 'react';
 import { Lesson } from '../types';
 import { ChartDisplay } from './ChartDisplay';
@@ -106,8 +105,8 @@ const CandlestickPatternExplorer: React.FC = () => {
             const explanationPrompt = `You are a trading mentor. Explain the "${patternName}" candlestick pattern in 2-3 concise sentences. Describe what it looks like, where it typically occurs, and what it signifies for traders. Use markdown for **bold** emphasis.`;
 
             const [imageUrl, explanation] = await Promise.all([
-                generateChartImage(chartPrompt),
-                generateLessonContent(explanationPrompt)
+                generateChartImage(chartPrompt, `pattern-chart-${patternName}`),
+                generateLessonContent(explanationPrompt, `pattern-expl-${patternName}`)
             ]);
 
             setExplorerChartUrl(imageUrl);

@@ -1,23 +1,37 @@
 import { GoogleGenAI, Type, GenerateContentResponse } from "@google/genai";
-import { NewsArticle, MarketUpdate, EconomicEvent } from '../types';
+import { NewsArticle, MarketUpdate, EconomicEvent, MultipleChoiceQuestion } from '../types';
 
 if (!process.env.API_KEY) {
     throw new Error("API_KEY environment variable is not set.");
 }
 export const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
 
+// In-memory cache to avoid hitting API rate limits for repeated requests.
+const contentCache = new Map<string, string>();
+const imageCache = new Map<string, string>();
+const quizCache = new Map<string, { question: string; options: string[]; correctAnswer: string; }>();
+const quizSetCache = new Map<string, MultipleChoiceQuestion[]>();
+
 /**
  * Generates educational content for a given lesson prompt.
  * @param prompt - The detailed prompt for the AI to generate content from.
+ * @param cacheKey - An optional unique key to cache the result.
  * @returns The generated text content.
  */
-export const generateLessonContent = async (prompt: string): Promise<string> => {
+export const generateLessonContent = async (prompt: string, cacheKey?: string): Promise<string> => {
+  if (cacheKey && contentCache.has(cacheKey)) {
+    return contentCache.get(cacheKey)!;
+  }
   try {
     const response = await ai.models.generateContent({
         model: 'gemini-2.5-flash',
         contents: prompt,
     });
-    return response.text;
+    const textContent = response.text;
+    if (cacheKey) {
+        contentCache.set(cacheKey, textContent);
+    }
+    return textContent;
   } catch (error) {
     console.error("Error generating lesson content:", error);
     throw new Error("Failed to generate content from Gemini API.");
@@ -27,9 +41,13 @@ export const generateLessonContent = async (prompt: string): Promise<string> => 
 /**
  * Generates a chart image based on a descriptive prompt.
  * @param prompt - The detailed prompt for the AI to generate an image from.
+ * @param cacheKey - An optional unique key to cache the result.
  * @returns A base64 encoded string for the generated image.
  */
-export const generateChartImage = async (prompt: string): Promise<string> => {
+export const generateChartImage = async (prompt: string, cacheKey?: string): Promise<string> => {
+  if (cacheKey && imageCache.has(cacheKey)) {
+    return imageCache.get(cacheKey)!;
+  }
   try {
     const response = await ai.models.generateImages({
         model: 'imagen-4.0-generate-001',
@@ -44,12 +62,14 @@ export const generateChartImage = async (prompt: string): Promise<string> => {
     const base64ImageBytes = response.generatedImages?.[0]?.image?.imageBytes;
 
     if (base64ImageBytes) {
-        return `data:image/png;base64,${base64ImageBytes}`;
+        const imageUrl = `data:image/png;base64,${base64ImageBytes}`;
+        if (cacheKey) {
+            imageCache.set(cacheKey, imageUrl);
+        }
+        return imageUrl;
     } else {
         throw new Error("No image was generated.");
     }
-
-  // FIX: Added missing curly braces for the catch block.
   } catch (error) {
     console.error("Error generating chart image:", error);
     throw new Error("Failed to generate image from Gemini API.");
@@ -94,9 +114,13 @@ const quizQuestionSchema = {
 /**
  * Generates a multiple-choice quiz question based on lesson content.
  * @param lessonContentPrompt - The content prompt of the lesson to base the question on.
+ * @param cacheKey - An optional unique key to cache the result.
  * @returns A structured quiz question object.
  */
-export const generateQuizQuestion = async (lessonContentPrompt: string): Promise<{ question: string; options: string[]; correctAnswer: string; }> => {
+export const generateQuizQuestion = async (lessonContentPrompt: string, cacheKey?: string): Promise<{ question: string; options: string[]; correctAnswer: string; }> => {
+    if (cacheKey && quizCache.has(cacheKey)) {
+        return quizCache.get(cacheKey)!;
+    }
     try {
         const prompt = `Based on the following concept, create one multiple-choice question to test a user's understanding. The question should be clear and concise. Provide 4 options in total (one correct, three plausible distractors). Ensure the 'correctAnswer' field exactly matches one of the strings in the 'options' array. The options should be shuffled.
 
@@ -115,6 +139,9 @@ Concept: "${lessonContentPrompt}"`;
         const parsed = JSON.parse(jsonText);
         
         if (parsed.question && Array.isArray(parsed.options) && parsed.correctAnswer && parsed.options.includes(parsed.correctAnswer)) {
+            if (cacheKey) {
+                quizCache.set(cacheKey, parsed);
+            }
             return parsed;
         } else {
             throw new Error("Generated JSON for quiz question is malformed.");
@@ -123,6 +150,103 @@ Concept: "${lessonContentPrompt}"`;
     } catch (error) {
         console.error("Error generating quiz question:", error);
         throw new Error("Failed to generate quiz question from Gemini API.");
+    }
+};
+
+const quizQuestionSchemaForSet = {
+    type: Type.OBJECT,
+    properties: {
+        question: { type: Type.STRING, description: "The question text." },
+        options: {
+            type: Type.ARRAY,
+            items: { type: Type.STRING },
+            description: "An array of 4 strings: 1 correct answer and 3 distractors."
+        },
+        correctAnswer: { type: Type.STRING, description: "The string of the correct answer, which must be present in the options array." }
+    },
+    required: ['question', 'options', 'correctAnswer']
+};
+
+const quizSetSchema = {
+    type: Type.OBJECT,
+    properties: {
+        questions: {
+            type: Type.ARRAY,
+            items: quizQuestionSchemaForSet
+        }
+    },
+    required: ['questions']
+};
+
+
+/**
+ * Generates a set of multiple-choice quiz questions for a lesson in a single API call.
+ * @param lessonContentPrompt - The content prompt of the lesson.
+ * @param numQuestions - The number of questions to generate.
+ * @param cacheKey - A unique key to cache the result.
+ * @returns An array of structured quiz question objects.
+ */
+export const generateQuizSet = async (lessonContentPrompt: string, numQuestions: number, cacheKey?: string): Promise<MultipleChoiceQuestion[]> => {
+    if (cacheKey && quizSetCache.has(cacheKey)) {
+        return quizSetCache.get(cacheKey)!;
+    }
+    try {
+        const prompt = `Based on the following concept, create a set of ${numQuestions} unique multiple-choice questions to test a user's understanding. Each question should be clear and concise. For each question, provide 4 options in total (one correct, three plausible distractors). Ensure the 'correctAnswer' field for each question exactly matches one of the strings in its 'options' array. The options for each question should be shuffled.
+
+Concept: "${lessonContentPrompt}"`;
+        const response = await ai.models.generateContent({
+            model: 'gemini-2.5-flash',
+            contents: prompt,
+            config: {
+                responseMimeType: "application/json",
+                responseSchema: quizSetSchema,
+            },
+        });
+        const jsonText = response.text.trim();
+        const parsed = JSON.parse(jsonText);
+        if (parsed.questions && Array.isArray(parsed.questions) && parsed.questions.length > 0) {
+            if (cacheKey) {
+                quizSetCache.set(cacheKey, parsed.questions);
+            }
+            return parsed.questions;
+        } else {
+            throw new Error("Generated JSON for quiz set is malformed.");
+        }
+    } catch (error) {
+        console.error("Error generating quiz set:", error);
+        throw new Error("Failed to generate quiz set from Gemini API.");
+    }
+};
+
+/**
+ * Generates a set of questions for the timed challenge in a single API call.
+ * This is not cached to ensure variety on each attempt.
+ * @param numQuestions The number of questions to generate.
+ * @returns An array of structured quiz question objects.
+ */
+export const generateTimedChallengeQuizSet = async (numQuestions: number): Promise<MultipleChoiceQuestion[]> => {
+    try {
+        const prompt = `You are a quiz generator for an advanced Forex trading course. Create a set of ${numQuestions} unique, challenging multiple-choice questions that test a user's understanding of a wide range of topics. The questions should cover concepts like Market Structure (BOS, CHoCH), Liquidity (Buy-side, Sell-side, Sweeps), Order Blocks, Fair Value Gaps (FVG), and Premium/Discount arrays.
+
+For each question, provide 4 options in total (one correct, three plausible distractors). Ensure the 'correctAnswer' field for each question exactly matches one of the strings in its 'options' array. The options for each question should be shuffled. Return a JSON object that adheres to the provided schema.`;
+        const response = await ai.models.generateContent({
+            model: 'gemini-2.5-flash',
+            contents: prompt,
+            config: {
+                responseMimeType: "application/json",
+                responseSchema: quizSetSchema,
+            },
+        });
+        const jsonText = response.text.trim();
+        const parsed = JSON.parse(jsonText);
+        if (parsed.questions && Array.isArray(parsed.questions) && parsed.questions.length > 0) {
+            return parsed.questions;
+        } else {
+            throw new Error("Generated JSON for timed challenge quiz set is malformed.");
+        }
+    } catch (error) {
+        console.error("Error generating timed challenge quiz set:", error);
+        throw new Error("Failed to generate timed challenge quiz set from Gemini API.");
     }
 };
 
@@ -437,7 +561,7 @@ export const analyzeBacktestResults = async (
     strategyParams: { [key: string]: any },
     results: { [key: string]: any }
 ): Promise<string> => {
-    const prompt = `You are an expert trading coach and data analyst specializing in systematic strategies. A student has just run a backtest with the following parameters and results. Your task is to provide a concise, insightful analysis.
+    const prompt = `You are an expert trading coach and data analyst specializing in systematic strategies based on Smart Money Concepts (SMC). A student has just run a backtest with the following parameters and results. Your task is to provide a concise, insightful analysis and a highly specific, actionable suggestion for improvement.
 
 **Strategy Parameters:**
 - Pair: ${strategyParams.pair}
@@ -452,11 +576,23 @@ export const analyzeBacktestResults = async (
 - Profit Factor: ${results.profitFactor}
 - Average R:R: 1:${results.avgRR.toFixed(2)}
 
+**Your Coaching Logic (Follow this logic for your suggestions):**
+- **If the Win Rate is low (e.g., < 45%)**: This suggests an issue with entry timing or setup selection. The trader might be entering too early or on low-probability signals.
+    - *Suggestion idea*: Add a stronger confirmation criterion. For example, if they only use 'CHoCH', suggest adding 'Entry on Order Block' to wait for a clearer Point of Interest. Or suggest filtering trades to only occur in a higher timeframe 'Premium/Discount Zone'.
+- **If the Profit Factor is low (e.g., < 1.5) despite a decent Win Rate**: This suggests the reward from winning trades is not significantly outweighing the losses.
+    - *Suggestion idea*: Propose a more ambitious profit-taking strategy. If they are using 'Fixed 1:2 R:R', suggest switching to 'Target Opposing Liquidity' to allow winners to run further.
+- **If both Win Rate and Profit Factor are low**: This points to a fundamental issue with the strategy's edge.
+    - *Suggestion idea*: Suggest a more foundational change. For example, "Your current rules are struggling. Let's rebuild. Try a strategy focused *only* on 'Liquidity Sweep' of a major high/low, followed by a 'CHoCH', and entering on the resulting 'FVG'. This is a classic, high-probability model."
+- **If performance is good but Total Trades are low**: The strategy is too restrictive.
+    - *Suggestion idea*: Suggest ways to find more opportunities without sacrificing too much quality. For example, "This strategy is effective but rare. Try applying the same rules to a lower timeframe to increase trade frequency."
+- **If drawdown is high**: The trader is likely holding onto losing trades for too long, or the stop loss placement is not optimal.
+    - *Suggestion idea*: "Your high drawdown suggests risk is not being contained effectively. Consider tightening your stop loss by placing it just below the wick of the order block, instead of the entire swing low. Also, consider implementing a 'time stop'—if the trade hasn't moved into profit after a few candles, it might be an invalid setup."
+
 **Your Analysis (in markdown format):**
-1.  **Overall Assessment:** Start with a single, bolded sentence summarizing the strategy's performance (e.g., **"This strategy shows promising profitability but may benefit from improved entry precision."**).
-2.  **Strengths:** In a bulleted list, identify 1-2 key strengths based on the data (e.g., "* The profit factor of ${results.profitFactor} is excellent, indicating strong profitability.").
-3.  **Areas for Improvement:** In a bulleted list, identify 1-2 potential weaknesses or areas to investigate (e.g., "* A win rate of ${results.winRate}% with a 1:${results.avgRR.toFixed(2)} R:R is decent, but could suggest that some entries are premature. You might be getting stopped out before the real move begins.").
-4.  **Actionable Suggestion:** Provide one specific, actionable suggestion for the student to test next. Be creative and base it on the provided data and SMC principles (e.g., "Consider adding a filter to only take trades where the entry order block is located within a higher timeframe fair value gap. This might reduce the number of trades but could significantly improve your win rate.").
+1.  **Overall Assessment:** Start with a single, bolded sentence summarizing the strategy's performance.
+2.  **Strengths:** In a bulleted list, identify 1-2 key strengths based on the data.
+3.  **Areas for Improvement:** In a bulleted list, identify 1-2 potential weaknesses, linking them to the metrics.
+4.  **Actionable Suggestion:** Based on the "Coaching Logic" above, provide ONE specific, actionable suggestion for the student to test next. Explain *why* this change could address the weakness you identified. For example, "Your win rate is low, suggesting premature entries. **Suggestion:** Add 'Entry on FVG' as a required criterion. This forces you to wait for price to rebalance after a CHoCH, which can be a stronger confirmation signal and improve your win rate."
 `;
 
     try {
@@ -468,5 +604,78 @@ export const analyzeBacktestResults = async (
     } catch (error) {
         console.error("Error analyzing backtest results:", error);
         throw new Error("Failed to get analysis from Gemini API.");
+    }
+};
+
+const tradeEvaluationSchema = {
+    type: Type.OBJECT,
+    properties: {
+        outcome: { 
+            type: Type.STRING,
+            description: "The result of the trade. Must be either 'Win' or 'Loss'."
+        },
+        feedback: { 
+            type: Type.STRING,
+            description: "Detailed, constructive feedback on the trade setup and execution in markdown format."
+        }
+    },
+    required: ['outcome', 'feedback']
+};
+
+/**
+ * Evaluates a user's trade on a generated historical chart scenario.
+ * @param chartPrompt The prompt used to generate the chart.
+ * @param strategy The user's defined strategy parameters.
+ * @param tradeDetails A string describing the user's trade placement.
+ * @returns An object containing the trade outcome ('Win' or 'Loss') and detailed feedback.
+ */
+export const evaluateHistoricalTrade = async (
+    chartPrompt: string,
+    strategy: { [key: string]: any },
+    tradeDetails: string
+): Promise<{ outcome: 'Win' | 'Loss'; feedback: string }> => {
+    const prompt = `You are a master trading analyst acting as a trade evaluator.
+A trading scenario chart was generated for a student using this prompt: "${chartPrompt}".
+The student's strategy is defined as:
+- Pair: ${strategy.pair}
+- Timeframe: ${strategy.timeframe}
+- Entry Criteria: ${strategy.entryCriteria.join(', ')}
+- Stop Loss Logic: ${strategy.stopLoss}
+- Take Profit Logic: ${strategy.takeProfit}
+
+The student analyzed the chart and placed the following trade: ${tradeDetails}.
+
+Your task is to:
+1.  **Determine the Outcome:** Based on the logical price action that should have occurred in the chart you were asked to generate, decide if the student's trade would have hit the Take Profit ('Win') or the Stop Loss ('Loss').
+2.  **Provide Expert Feedback:** Write a detailed critique of the student's trade.
+    - Did they correctly identify the setup described in the prompt?
+    - Was their entry precise, or could it have been better?
+    - Was the stop loss placed in a logical and safe location according to SMC principles?
+    - Was the take profit target realistic and aligned with liquidity targets?
+    - Provide your feedback in markdown format. Start with a bolded one-sentence summary (e.g., "**Excellent read of the market structure, but the entry was a bit premature.**"). Then, use bullet points for detailed analysis.
+
+Return your response as a single, clean JSON object string that adheres to the provided schema. Do not include any other text, explanations, or markdown formatting outside of the JSON string.
+`;
+    try {
+        const response = await ai.models.generateContent({
+            model: "gemini-2.5-flash",
+            contents: prompt,
+            config: {
+                responseMimeType: "application/json",
+                responseSchema: tradeEvaluationSchema,
+            },
+        });
+        const jsonText = response.text.trim();
+        const parsed = JSON.parse(jsonText);
+
+        if ((parsed.outcome === 'Win' || parsed.outcome === 'Loss') && parsed.feedback) {
+            return parsed;
+        } else {
+             throw new Error("Generated JSON for trade evaluation is malformed.");
+        }
+
+    } catch (error) {
+        console.error("Error evaluating historical trade:", error);
+        throw new Error("Failed to get trade evaluation from Gemini API.");
     }
 };

@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect, useCallback } from 'react';
 import { generateChartImage } from '../../services/geminiService';
 import { MODULES } from '../../constants';
@@ -58,7 +57,7 @@ export const PatternRecognitionView: React.FC = () => {
 
             setOptions(shuffleArray([...distractors, answerLesson]));
 
-            const imageUrl = await generateChartImage(answerLesson.chartPrompt);
+            const imageUrl = await generateChartImage(answerLesson.chartPrompt, `pattern-recog-${answerLesson.key}`);
             setChartImageUrl(imageUrl);
 
         } catch (error) {

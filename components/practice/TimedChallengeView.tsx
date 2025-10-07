@@ -1,7 +1,5 @@
-
 import React, { useState, useEffect, useCallback, useRef } from 'react';
-import { generateQuizQuestion } from '../../services/geminiService';
-import { MODULES } from '../../constants';
+import { generateTimedChallengeQuizSet } from '../../services/geminiService';
 import { MultipleChoiceQuestion } from '../../types';
 import { LoadingSpinner } from '../LoadingSpinner';
 import { ArrowPathIcon } from '../icons/ArrowPathIcon';
@@ -10,14 +8,11 @@ import { useBadges } from '../../hooks/useBadges';
 const CHALLENGE_LENGTH = 10;
 const TIME_PER_QUESTION = 20; // in seconds
 
-const allLessons = MODULES.flatMap(m => m.lessons);
-const getRandomElement = <T,>(arr: T[]): T => arr[Math.floor(Math.random() * arr.length)];
-
 type ChallengeState = 'idle' | 'loading' | 'active' | 'finished';
 
 export const TimedChallengeView: React.FC = () => {
     const [challengeState, setChallengeState] = useState<ChallengeState>('idle');
-    const [question, setQuestion] = useState<MultipleChoiceQuestion | null>(null);
+    const [questions, setQuestions] = useState<MultipleChoiceQuestion[]>([]);
     const [questionIndex, setQuestionIndex] = useState(0);
     const [timer, setTimer] = useState(TIME_PER_QUESTION);
     const [score, setScore] = useState(0);
@@ -28,28 +23,31 @@ export const TimedChallengeView: React.FC = () => {
     const timerRef = useRef<number | null>(null);
     const answerTimeoutRef = useRef<number | null>(null);
 
-    const loadNextQuestion = useCallback(async () => {
+    const loadAllQuestions = useCallback(async () => {
         setChallengeState('loading');
-        setSelectedAnswer(null);
-        setIsCorrect(null);
-        
         if (answerTimeoutRef.current) clearTimeout(answerTimeoutRef.current);
-
+        
         try {
-            const randomLesson = getRandomElement(allLessons);
-            const nextQuestion = await generateQuizQuestion(randomLesson.contentPrompt);
-            nextQuestion.options = nextQuestion.options.sort(() => Math.random() - 0.5);
-            setQuestion(nextQuestion);
+            const allQuestions = await generateTimedChallengeQuizSet(CHALLENGE_LENGTH);
+            if (allQuestions.length < CHALLENGE_LENGTH) {
+                throw new Error(`AI generated only ${allQuestions.length} questions.`);
+            }
+            // Shuffle options for each question
+            allQuestions.forEach(q => {
+                q.options = q.options.sort(() => Math.random() - 0.5);
+            });
+            setQuestions(allQuestions);
+            setQuestionIndex(0);
             setTimer(TIME_PER_QUESTION);
             setChallengeState('active');
         } catch (error) {
-            console.error("Failed to load quiz question", error);
+            console.error("Failed to load timed challenge questions", error);
             setChallengeState('idle'); 
         }
     }, []);
 
     useEffect(() => {
-        if (challengeState === 'active') {
+        if (challengeState === 'active' && questions.length > 0) {
             timerRef.current = window.setInterval(() => {
                 setTimer(prev => prev - 1);
             }, 1000);
@@ -57,17 +55,21 @@ export const TimedChallengeView: React.FC = () => {
             if (timerRef.current) clearInterval(timerRef.current);
         }
         return () => { if (timerRef.current) clearInterval(timerRef.current); };
-    }, [challengeState]);
+    }, [challengeState, questions, questionIndex]);
     
     const moveToNext = useCallback(() => {
         if (questionIndex + 1 >= CHALLENGE_LENGTH) {
             setChallengeState('finished');
-            unlockBadge('beat-the-clock');
+            if (score > 0) {
+                unlockBadge('beat-the-clock');
+            }
         } else {
             setQuestionIndex(prev => prev + 1);
-            loadNextQuestion();
+            setSelectedAnswer(null);
+            setIsCorrect(null);
+            setTimer(TIME_PER_QUESTION);
         }
-    }, [questionIndex, loadNextQuestion, unlockBadge]);
+    }, [questionIndex, unlockBadge, score]);
 
     useEffect(() => {
         if (timer === 0 && challengeState === 'active') {
@@ -83,8 +85,11 @@ export const TimedChallengeView: React.FC = () => {
 
         if (timerRef.current) clearInterval(timerRef.current);
         
+        const question = questions[questionIndex];
+        if (!question) return;
+
         setSelectedAnswer(answer);
-        const correct = answer === question?.correctAnswer;
+        const correct = answer === question.correctAnswer;
         setIsCorrect(correct);
 
         if (correct) {
@@ -97,19 +102,22 @@ export const TimedChallengeView: React.FC = () => {
     const startChallenge = () => {
         setScore(0);
         setQuestionIndex(0);
-        loadNextQuestion();
+        loadAllQuestions();
     };
 
     const restartChallenge = () => {
         setChallengeState('idle');
-        setQuestion(null);
+        setQuestions([]);
     };
 
     const getButtonClass = (option: string) => {
         if (selectedAnswer === null) {
             return 'bg-gray-700 hover:bg-gray-600';
         }
-        if (option === question?.correctAnswer) {
+        const question = questions[questionIndex];
+        if (!question) return 'bg-gray-700 opacity-50';
+
+        if (option === question.correctAnswer) {
             return 'bg-green-500/80 ring-2 ring-green-400';
         }
         if (option === selectedAnswer && !isCorrect) {
@@ -132,6 +140,15 @@ export const TimedChallengeView: React.FC = () => {
         );
     }
 
+    if (challengeState === 'loading') {
+        return (
+             <div className="flex flex-col items-center justify-center h-full text-center">
+                <LoadingSpinner />
+                <p className="mt-4 text-gray-300">Generating your challenge questions...</p>
+            </div>
+        );
+    }
+
     if (challengeState === 'finished') {
         return (
              <div className="max-w-2xl mx-auto text-center">
@@ -148,6 +165,8 @@ export const TimedChallengeView: React.FC = () => {
         )
     }
 
+    const question = questions[questionIndex];
+
     return (
         <div className="max-w-3xl mx-auto">
             <div className="flex justify-between items-center mb-6">
@@ -159,8 +178,6 @@ export const TimedChallengeView: React.FC = () => {
             <div className="w-full bg-gray-700 rounded-full h-2.5 mb-6">
                 <div className="bg-cyan-500 h-2.5 rounded-full" style={{ width: `${(timer / TIME_PER_QUESTION) * 100}%`, transition: 'width 1s linear' }}></div>
             </div>
-
-            {challengeState === 'loading' && <div className="flex justify-center items-center h-64"><LoadingSpinner /></div>}
 
             {challengeState === 'active' && question && (
                 <div className="animate-[fade-in_0.5s]">

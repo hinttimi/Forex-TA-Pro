@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { Lesson, MultipleChoiceQuestion } from '../types';
-import { generateQuizQuestion } from '../services/geminiService';
+import { generateQuizSet } from '../services/geminiService';
 import { useBadges } from '../hooks/useBadges';
 import { LoadingSpinner } from './LoadingSpinner';
 import { ArrowPathIcon } from './icons/ArrowPathIcon';
@@ -30,17 +30,19 @@ export const QuizView: React.FC<QuizViewProps> = ({ lesson, onComplete }) => {
   const loadQuestions = useCallback(async () => {
     setQuizState('loading');
     try {
-      const questionPromises = Array(QUIZ_LENGTH).fill(null).map(() => 
-        generateQuizQuestion(lesson.contentPrompt)
-      );
-      const generatedQuestions = await Promise.all(questionPromises);
+      const generatedQuestions = await generateQuizSet(lesson.contentPrompt, QUIZ_LENGTH, `quiz-set-${lesson.key}`);
+      
+      if (generatedQuestions.length < QUIZ_LENGTH) {
+        console.warn(`AI generated only ${generatedQuestions.length}/${QUIZ_LENGTH} questions.`);
+      }
+
       setQuestions(generatedQuestions);
       setQuizState('active');
     } catch (error) {
       console.error("Failed to generate quiz questions:", error);
       setQuizState('error');
     }
-  }, [lesson.contentPrompt]);
+  }, [lesson.contentPrompt, lesson.key]);
 
   useEffect(() => {
     loadQuestions();
@@ -59,13 +61,14 @@ export const QuizView: React.FC<QuizViewProps> = ({ lesson, onComplete }) => {
   };
 
   const handleNextQuestion = () => {
-    if (currentQuestionIndex + 1 < QUIZ_LENGTH) {
+    const finalScore = isCorrect ? score + 1 : score;
+    if (currentQuestionIndex + 1 < questions.length) {
       setCurrentQuestionIndex(prev => prev + 1);
       setSelectedAnswer(null);
       setIsCorrect(null);
     } else {
       setQuizState('finished');
-      if (score / QUIZ_LENGTH >= PASS_THRESHOLD) {
+      if (finalScore / questions.length >= PASS_THRESHOLD) {
         unlockBadge('quiz-master');
       }
     }
@@ -100,7 +103,7 @@ export const QuizView: React.FC<QuizViewProps> = ({ lesson, onComplete }) => {
         <div className="p-6 bg-red-900/20 border border-red-500/30 rounded-lg">
             <ExclamationTriangleIcon className="w-12 h-12 mx-auto text-red-400" />
             <h2 className="mt-4 text-2xl font-bold text-white">Failed to Create Quiz</h2>
-            <p className="mt-2 text-red-300">There was an issue generating questions from the AI. Please check your connection or API key and try again.</p>
+            <p className="mt-2 text-red-300">There was an issue generating questions from the AI. This can happen during periods of high demand or if there's a connection issue. Please try again later.</p>
         </div>
         <button onClick={onComplete} className="mt-6 px-6 py-2 bg-gray-700 text-gray-200 font-semibold rounded-lg hover:bg-gray-600">
             Back to Lesson
@@ -110,13 +113,13 @@ export const QuizView: React.FC<QuizViewProps> = ({ lesson, onComplete }) => {
   }
 
   if (quizState === 'finished') {
-    const isPass = (score / QUIZ_LENGTH) >= PASS_THRESHOLD;
+    const isPass = (score / questions.length) >= PASS_THRESHOLD;
     return (
       <div className="max-w-2xl mx-auto text-center animate-[fade-in_0.5s]">
         <h1 className="text-4xl font-extrabold text-white mb-4 tracking-tight">Quiz Complete!</h1>
         <div className={`mt-8 p-8 bg-gray-800/50 border ${isPass ? 'border-cyan-500/30' : 'border-gray-700'} rounded-lg`}>
           <p className="text-2xl text-gray-300">Your final score is:</p>
-          <p className={`text-6xl font-bold my-4 ${isPass ? 'text-cyan-400' : 'text-gray-400'}`}>{score} / {QUIZ_LENGTH}</p>
+          <p className={`text-6xl font-bold my-4 ${isPass ? 'text-cyan-400' : 'text-gray-400'}`}>{score} / {questions.length}</p>
           {isPass && <p className="text-green-400 font-semibold">Great job! You've mastered this topic.</p>}
         </div>
         <button onClick={onComplete} className="mt-8 inline-flex items-center px-6 py-3 bg-cyan-500 text-gray-900 font-semibold rounded-lg shadow-md hover:bg-cyan-400">
@@ -137,7 +140,7 @@ export const QuizView: React.FC<QuizViewProps> = ({ lesson, onComplete }) => {
         </div>
       </div>
       <div className="w-full bg-gray-700 rounded-full h-2.5 mb-6">
-          <div className="bg-cyan-500 h-2.5 rounded-full" style={{ width: `${((currentQuestionIndex + 1) / QUIZ_LENGTH) * 100}%` }}></div>
+          <div className="bg-cyan-500 h-2.5 rounded-full" style={{ width: `${((currentQuestionIndex + 1) / questions.length) * 100}%` }}></div>
       </div>
       <div className="animate-[fade-in_0.5s]">
         <h2 className="text-xl text-left text-gray-200 mb-6 font-semibold">
@@ -163,7 +166,7 @@ export const QuizView: React.FC<QuizViewProps> = ({ lesson, onComplete }) => {
             </p>
             {!isCorrect && <p className="text-gray-300 mt-1">The correct answer was: <strong>{currentQuestion.correctAnswer}</strong></p>}
             <button onClick={handleNextQuestion} className="mt-4 inline-flex items-center px-6 py-3 bg-cyan-500 text-gray-900 font-semibold rounded-lg shadow-md hover:bg-cyan-400">
-                {currentQuestionIndex + 1 < QUIZ_LENGTH ? 'Next Question' : 'Finish Quiz'}
+                {currentQuestionIndex + 1 < questions.length ? 'Next Question' : 'Finish Quiz'}
                 <ArrowRightIcon className="w-5 h-5 ml-2" />
             </button>
           </div>
