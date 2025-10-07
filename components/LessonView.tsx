@@ -56,6 +56,13 @@ const FormattedContent: React.FC<{ text: string }> = ({ text }) => {
     lines.forEach((line, index) => {
         const trimmedLine = line.trim();
         
+        // Handle horizontal rules first
+        if (trimmedLine === '---') {
+            flushListItems();
+            elements.push(<hr key={index} className="my-8 border-gray-700" />);
+            return; // Continue to next line
+        }
+
         const isListItem = /^\d+\.\s/.test(trimmedLine) || trimmedLine.startsWith('* ');
 
         if (isListItem) {
@@ -67,7 +74,10 @@ const FormattedContent: React.FC<{ text: string }> = ({ text }) => {
         // If we encounter a non-list item, flush any existing list
         flushListItems();
 
-        if (trimmedLine.startsWith('### ')) {
+        if (trimmedLine.startsWith('#### ')) {
+            const content = trimmedLine.substring(5);
+            elements.push(<h4 key={index} className="text-lg font-semibold text-cyan-400 mt-5 mb-2">{renderInlineMarkdown(content)}</h4>);
+        } else if (trimmedLine.startsWith('### ')) {
             const content = trimmedLine.substring(4);
             elements.push(<h3 key={index} className="text-xl font-semibold text-white mt-6 mb-3">{renderInlineMarkdown(content)}</h3>);
         } else if (trimmedLine.startsWith('## ')) {

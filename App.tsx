@@ -1,4 +1,5 @@
 
+
 import React, { useState, useCallback, useEffect } from 'react';
 import { Sidebar } from './components/Sidebar';
 import { LessonView } from './components/LessonView';
@@ -110,9 +111,9 @@ const AppContent: React.FC = () => {
         setLessonContent(content);
         // Add the new content to our component-level cache
         setLessonDataCache(prevCache => {
-            const newCache = new Map(prevCache);
+            // FIX: Explicitly providing the type to the Map constructor to ensure correct type inference for `existingData`.
+            const newCache = new Map<string, { content: string; chartUrl?: string }>(prevCache);
             const existingData = newCache.get(lesson.key);
-            // FIX: Replaced object spread with explicit property assignment to address type error.
             const updatedData = {
               content: content,
               chartUrl: existingData?.chartUrl,
@@ -204,10 +205,10 @@ const AppContent: React.FC = () => {
       setChartImageUrl(imageUrl);
       // Add the generated chart URL to our component-level cache
       setLessonDataCache(prevCache => {
-          const newCache = new Map(prevCache);
+          // FIX: Explicitly providing the type to the Map constructor to ensure correct type inference for `existingData`.
+          const newCache = new Map<string, { content: string; chartUrl?: string }>(prevCache);
           const existingData = newCache.get(currentLesson.key);
           if (existingData) { // This should always exist if content has been loaded
-              // FIX: Replaced object spread with explicit property assignment to address type error.
               const updatedData = {
                 content: existingData.content,
                 chartUrl: imageUrl,
