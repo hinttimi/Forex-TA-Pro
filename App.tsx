@@ -18,6 +18,7 @@ import { BadgeNotification } from './components/BadgeNotification';
 import { useCompletion } from './hooks/useCompletion';
 import { useBadges } from './hooks/useBadges';
 import { TradingPlanView } from './components/TradingPlanView';
+import { AIMentorView } from './components/AIMentorView';
 
 const allLessons = MODULES.flatMap(module => module.lessons);
 
@@ -155,6 +156,8 @@ const AppContent: React.FC = () => {
         return <AchievementsView />;
       case 'trading_plan':
         return <TradingPlanView />;
+      case 'mentor':
+        return <AIMentorView />;
       default:
         return null;
     }

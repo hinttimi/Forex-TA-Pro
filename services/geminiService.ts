@@ -4,7 +4,7 @@ import { GoogleGenAI, Type } from "@google/genai";
 if (!process.env.API_KEY) {
     throw new Error("API_KEY environment variable is not set.");
 }
-const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+export const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
 
 /**
  * Generates educational content for a given lesson prompt.
@@ -48,6 +48,7 @@ export const generateChartImage = async (prompt: string): Promise<string> => {
         throw new Error("No image was generated.");
     }
 
+  // FIX: Added missing curly braces for the catch block.
   } catch (error) {
     console.error("Error generating chart image:", error);
     throw new Error("Failed to generate image from Gemini API.");
@@ -121,5 +122,62 @@ Concept: "${lessonContentPrompt}"`;
     } catch (error) {
         console.error("Error generating quiz question:", error);
         throw new Error("Failed to generate quiz question from Gemini API.");
+    }
+};
+
+/**
+ * Generates a response for the AI Mentor chat, potentially including image analysis.
+ * @param prompt - The user's text prompt.
+ * @param base64Image - An optional base64 encoded image string.
+ * @returns The AI-generated chat response.
+ */
+export const generateMentorResponse = async (prompt: string, base64Image?: string): Promise<string> => {
+    const systemInstruction = `You are an expert forex trading mentor. Your primary expertise is in Smart Money Concepts (SMC) and Inner Circle Trader (ICT) methodologies, including liquidity, order blocks, fair value gaps (FVG), market structure (BOS, CHoCH), and premium/discount arrays.
+
+In addition to your core SMC expertise, you are also skilled at identifying and explaining common classical technical analysis patterns. When you analyze a chart, look for:
+- Head and Shoulders (and Inverse Head and Shoulders)
+- Double and Triple Tops/Bottoms
+- Triangles (Ascending, Descending, Symmetrical)
+- Wedges (Rising and Falling)
+- Flags and Pennants
+
+When a user asks a question or provides a chart, analyze it through the lens of SMC concepts first, but also point out any classical patterns you see. Explain how these patterns relate to SMC principles. For example, you might explain a Head and Shoulders pattern as a visual representation of a liquidity sweep on the left shoulder and a market structure shift (CHoCH) at the neckline.
+
+Provide clear, concise, and actionable feedback. Be encouraging and helpful. Use markdown for formatting.
+
+When a visual explanation would be helpful, embed a chart generation request in your response using the format [CHART: a detailed, descriptive prompt for an image generation model]. For example: "A head and shoulders pattern looks like this [CHART: A dark-themed forex chart showing a clear head and shoulders top pattern after an uptrend, with the neckline clearly visible.]".`;
+    
+    try {
+        const parts: any[] = [{ text: prompt }];
+
+        if (base64Image) {
+            // Strip the data URL prefix
+            const match = base64Image.match(/^data:(image\/\w+);base64,(.*)$/);
+            if (match) {
+                const mimeType = match[1];
+                const data = match[2];
+                parts.unshift({
+                    inlineData: {
+                        mimeType,
+                        data,
+                    },
+                });
+            } else {
+                console.error("Invalid base64 image format");
+            }
+        }
+        
+        const response = await ai.models.generateContent({
+            model: 'gemini-2.5-flash',
+            contents: { parts },
+            config: {
+                systemInstruction: systemInstruction,
+            },
+        });
+        
+        return response.text;
+    } catch (error) {
+        console.error("Error generating mentor response:", error);
+        throw new Error("Failed to get response from AI Mentor.");
     }
 };

@@ -11,6 +11,8 @@ import { RocketLaunchIcon } from './icons/RocketLaunchIcon';
 import { BookmarkSquareIcon } from './icons/BookmarkSquareIcon';
 import { MedalIcon } from './icons/MedalIcon';
 import { DocumentTextIcon } from './icons/DocumentTextIcon';
+import { SparklesIcon } from './icons/SparklesIcon';
+import { ChatBubbleLeftRightIcon } from './icons/ChatBubbleLeftRightIcon';
 
 interface SidebarProps {
   modules: Module[];
@@ -52,6 +54,30 @@ export const Sidebar: React.FC<SidebarProps> = ({ modules, onSelectLesson, selec
           </div>
         ))}
       </nav>
+
+      <div className="mt-8 pt-6 border-t border-gray-700">
+        <h2 className="text-sm font-semibold text-gray-400 uppercase tracking-wider mb-3 flex items-center">
+            <SparklesIcon className="w-5 h-5 mr-2" />
+            AI Tools
+        </h2>
+        <ul className="space-y-2">
+            <li>
+                <button
+                    onClick={() => onSetPracticeView('mentor')}
+                    className={`w-full text-left flex items-center px-3 py-2 text-sm rounded-md transition-colors duration-150 ${
+                      currentView === 'mentor'
+                        ? 'bg-cyan-500/10 text-cyan-300 font-semibold'
+                        : 'text-gray-300 hover:bg-gray-700 hover:text-white'
+                    }`}
+                  >
+                    <ChatBubbleLeftRightIcon className={`w-4 h-4 mr-3 flex-shrink-0 ${
+                       currentView === 'mentor' ? 'text-cyan-400' : 'text-gray-500'
+                    }`} />
+                    <span>AI Mentor</span>
+                </button>
+            </li>
+        </ul>
+      </div>
 
       <div className="mt-8 pt-6 border-t border-gray-700">
         <h2 className="text-sm font-semibold text-gray-400 uppercase tracking-wider mb-3 flex items-center">

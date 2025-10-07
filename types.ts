@@ -8,11 +8,11 @@ export interface Lesson {
 }
 
 export interface Module {
-  title: string;
+  title:string;
   lessons: Lesson[];
 }
 
-export type AppView = 'lesson' | 'pattern' | 'timed' | 'canvas' | 'simulator' | 'saved' | 'achievements' | 'trading_plan';
+export type AppView = 'lesson' | 'pattern' | 'timed' | 'canvas' | 'simulator' | 'saved' | 'achievements' | 'trading_plan' | 'mentor';
 
 export interface MultipleChoiceQuestion {
     question: string;
