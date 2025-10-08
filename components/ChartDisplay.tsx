@@ -1,9 +1,11 @@
+
+
 import React, { useState, useEffect, useRef } from 'react';
-import { LoadingSpinner } from './LoadingSpinner';
 import { PhotoIcon } from './icons/PhotoIcon';
 import { ArrowsPointingOutIcon } from './icons/ArrowsPointingOutIcon';
 import { XMarkIcon } from './icons/XMarkIcon';
 import { ArrowPathIcon } from './icons/ArrowPathIcon';
+import { ChartSkeleton } from './ChartSkeleton';
 
 interface ChartDisplayProps {
   imageUrl: string;
@@ -16,7 +18,7 @@ export const ChartDisplay: React.FC<ChartDisplayProps> = ({
   imageUrl, 
   isLoading,
   loadingText = "AI is drawing the chart, please wait...",
-  containerClassName = "mt-6 w-full aspect-video bg-gray-800/50 rounded-lg border border-gray-700 flex items-center justify-center p-4" 
+  containerClassName = "mt-6 w-full aspect-video bg-slate-800/50 rounded-lg border border-slate-700 flex items-center justify-center p-4" 
 }) => {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [scale, setScale] = useState(1);
@@ -99,14 +101,9 @@ export const ChartDisplay: React.FC<ChartDisplayProps> = ({
   return (
     <>
       <div className={containerClassName}>
-        {isLoading && (
-          <div className="flex flex-col items-center text-gray-400">
-            <LoadingSpinner />
-            <span className="mt-2 text-sm">{loadingText}</span>
-          </div>
-        )}
+        {isLoading && <ChartSkeleton loadingText={loadingText} />}
         {!isLoading && !imageUrl && (
-          <div className="text-center text-gray-500">
+          <div className="text-center text-slate-500">
             <PhotoIcon className="w-16 h-16 mx-auto mb-2" />
             <p>Your generated chart will appear here.</p>
           </div>
@@ -159,14 +156,14 @@ export const ChartDisplay: React.FC<ChartDisplayProps> = ({
           <div className="absolute top-4 right-4 flex items-center space-x-2">
             <button
                 onClick={resetTransform}
-                className="text-white bg-gray-800/60 rounded-full p-2 hover:bg-gray-700 focus:outline-none focus:ring-2 focus:ring-white"
+                className="text-white bg-slate-800/60 rounded-full p-2 hover:bg-slate-700 focus:outline-none focus:ring-2 focus:ring-white"
                 aria-label="Reset zoom and pan"
             >
                 <ArrowPathIcon className="w-6 h-6" />
             </button>
             <button
               onClick={handleCloseModal}
-              className="text-white bg-gray-800/60 rounded-full p-2 hover:bg-gray-700 focus:outline-none focus:ring-2 focus:ring-white"
+              className="text-white bg-slate-800/60 rounded-full p-2 hover:bg-slate-700 focus:outline-none focus:ring-2 focus:ring-white"
               aria-label="Close image viewer"
             >
               <XMarkIcon className="w-6 h-6" />

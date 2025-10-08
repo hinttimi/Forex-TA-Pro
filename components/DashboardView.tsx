@@ -1,6 +1,5 @@
-
 import React, { useMemo } from 'react';
-import { AppView, Lesson, Module } from '../types';
+import { AppView, Lesson } from '../types';
 import { useCompletion } from '../hooks/useCompletion';
 import { useBadges } from '../hooks/useBadges';
 import { ALL_BADGES } from '../constants/badges';

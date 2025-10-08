@@ -1,3 +1,6 @@
+
+
+
 import React, { useState, useRef, useEffect, useCallback } from 'react';
 import { generateMentorResponse, getAiClient, generateChartImage } from '../services/geminiService';
 import { SparklesIcon } from './icons/SparklesIcon';
@@ -14,6 +17,11 @@ import { SpeakerXMarkIcon } from './icons/SpeakerXMarkIcon';
 import { useApiKey } from '../hooks/useApiKey';
 import { DocumentTextIcon } from './icons/DocumentTextIcon';
 import { LinkIcon } from './icons/LinkIcon';
+import { AppView } from '../types';
+import { LightBulbIcon } from './icons/LightBulbIcon';
+import { ChartBarIcon } from './icons/ChartBarIcon';
+import { RocketLaunchIcon } from './icons/RocketLaunchIcon';
+import { MagnifyingGlassIcon } from './icons/MagnifyingGlassIcon';
 
 // --- Types ---
 interface UploadedFile {
@@ -31,6 +39,10 @@ interface Message {
     groundingChunks?: any[];
 }
 type VoiceState = 'idle' | 'connecting' | 'active' | 'error';
+
+interface AIMentorViewProps {
+    onSetView: (view: AppView) => void;
+}
 
 // --- Constants ---
 const CHAT_HISTORY_KEY = 'aiMentorChatHistory';
@@ -99,10 +111,29 @@ function createBlob(data: Float32Array): Blob {
 }
 
 const FormattedContent: React.FC<{ text: string }> = ({ text }) => {
+    const renderInlineMarkdown = (text: string): React.ReactNode => {
+        const parts: React.ReactNode[] = [];
+        let lastIndex = 0;
+        const regex = /\*\*(.*?)\*\*/g;
+        let match;
+        let key = 0;
+
+        while ((match = regex.exec(text)) !== null) {
+            if (match.index > lastIndex) {
+                parts.push(text.substring(lastIndex, match.index));
+            }
+            parts.push(<strong key={`strong-${key++}`} className="font-bold text-cyan-300">{match[1]}</strong>);
+            lastIndex = regex.lastIndex;
+        }
+
+        if (lastIndex < text.length) {
+            parts.push(text.substring(lastIndex));
+        }
+
+        return <>{parts}</>;
+    };
+    
     const lines = text.split('\n').filter(p => p.trim() !== '');
-    const renderInlineMarkdown = (lineText: string) => lineText.split(/\*\*(.*?)\*\*/g).map((part, i) =>
-        i % 2 === 1 ? <strong key={i} className="font-bold text-cyan-300">{part}</strong> : part
-    );
     const elements: React.ReactElement[] = [];
     let listItems: React.ReactElement[] = [];
 
@@ -116,14 +147,37 @@ const FormattedContent: React.FC<{ text: string }> = ({ text }) => {
     lines.forEach((line, index) => {
         const trimmedLine = line.trim();
         const isListItem = trimmedLine.startsWith('* ') || trimmedLine.startsWith('- ');
-        if (isListItem) listItems.push(<li key={index}>{renderInlineMarkdown(trimmedLine.substring(2))}</li>);
-        else { flushListItems(); elements.push(<p key={index} className="mb-3 leading-relaxed">{renderInlineMarkdown(trimmedLine)}</p>); }
+        if (isListItem) {
+            listItems.push(<li key={index}>{renderInlineMarkdown(trimmedLine.substring(2))}</li>);
+        } else {
+            flushListItems();
+            elements.push(<p key={index} className="mb-3 leading-relaxed">{renderInlineMarkdown(trimmedLine)}</p>);
+        }
     });
     flushListItems();
     return <>{elements}</>;
 };
 
-export const AIMentorView: React.FC = () => {
+const EXAMPLE_PROMPTS = [
+    {
+        icon: LightBulbIcon,
+        text: "Explain 'Fair Value Gaps' like I'm five."
+    },
+    {
+        icon: ChartBarIcon,
+        text: "Show me a chart of a bearish Change of Character (CHoCH)."
+    },
+    {
+        icon: RocketLaunchIcon,
+        text: "Let's practice identifying order blocks."
+    },
+    {
+        icon: MagnifyingGlassIcon,
+        text: "What was the market impact of the last US CPI report?"
+    },
+]
+
+export const AIMentorView: React.FC<AIMentorViewProps> = ({ onSetView }) => {
     const [messages, setMessages] = useState<Message[]>([]);
     const [userInput, setUserInput] = useState('');
     const [uploadedFile, setUploadedFile] = useState<UploadedFile | null>(null);
@@ -241,19 +295,36 @@ export const AIMentorView: React.FC = () => {
         setUploadedFile(null);
 
         try {
-            const { text: responseText, groundingChunks } = await generateMentorResponse(apiKey, userMessage.text, userMessage.file);
+            const { text: responseText, groundingChunks, functionCalls } = await generateMentorResponse(apiKey, userMessage.text, userMessage.file);
+            
+            const modelMessageId = Date.now() + 1;
             
             const chartRegex = /\[CHART:\s*(.*?)\]/s;
             const chartMatch = responseText.match(chartRegex);
-            const cleanText = responseText.replace(chartRegex, '').trim();
+            let cleanText = responseText.replace(chartRegex, '').trim();
 
-            const modelMessageId = Date.now() + 1;
-            
-            const modelMessage: Message = { id: modelMessageId, role: 'model', text: cleanText, isImageLoading: !!chartMatch, groundingChunks };
-            setMessages(prev => [...prev, modelMessage]);
+            // If the model returns a function call but no text, create a default confirmation message.
+            if (functionCalls && functionCalls.length > 0 && !cleanText) {
+                const toolName = functionCalls[0]?.args?.toolName;
+                if (toolName) {
+                    const formattedToolName = (toolName as string).replace(/_/g, ' ');
+                    cleanText = `Sure thing. Navigating to the ${formattedToolName}...`;
+                }
+            }
 
-            if (isTtsEnabled) {
-                speak(cleanText);
+            if (cleanText) {
+                const modelMessage: Message = { 
+                    id: modelMessageId, 
+                    role: 'model', 
+                    text: cleanText, 
+                    isImageLoading: !!chartMatch, 
+                    groundingChunks 
+                };
+                setMessages(prev => [...prev, modelMessage]);
+    
+                if (isTtsEnabled) {
+                    speak(cleanText);
+                }
             }
             
             if (chartMatch && chartMatch[1]) {
@@ -270,6 +341,19 @@ export const AIMentorView: React.FC = () => {
                     ));
                 }
             }
+
+             // Handle function call AFTER showing the text
+            if (functionCalls && functionCalls.length > 0) {
+                const funcCall = functionCalls[0];
+                if (funcCall.name === 'navigateToTool' && funcCall.args.toolName) {
+                    const toolName = funcCall.args.toolName as AppView;
+                    // Give user time to read the confirmation message before navigation
+                    setTimeout(() => {
+                        onSetView(toolName);
+                    }, 1500); 
+                }
+            }
+
         } catch (e) {
             console.error(e);
             const errorMsg = "Sorry, I couldn't get a response from the AI Mentor. Please check your API key and try again.";
@@ -465,11 +549,18 @@ export const AIMentorView: React.FC = () => {
         <div className="text-center m-auto">
             <SparklesIcon className="w-16 h-16 mx-auto text-cyan-400" />
             <h2 className="mt-4 text-3xl font-bold text-white">AI Trading Mentor</h2>
-            <p className="mt-2 text-lg text-gray-400">Ask me anything about trading, or upload a chart for analysis.</p>
-            <div className="mt-6 text-left max-w-md mx-auto space-y-2 text-gray-300">
-                <p className="p-3 bg-gray-800/50 rounded-lg text-sm">"What's the latest on the US CPI report?"</p>
-                <p className="p-3 bg-gray-800/50 rounded-lg text-sm">"Summarize this PDF about trading psychology."</p>
-                <p className="p-3 bg-gray-800/50 rounded-lg text-sm">Upload a chart and ask: "Where is the sell-side liquidity on this chart?"</p>
+            <p className="mt-2 text-lg text-gray-400">Ask me anything, or try one of the examples below.</p>
+            <div className="mt-8 grid grid-cols-1 md:grid-cols-2 gap-4 max-w-2xl mx-auto">
+                {EXAMPLE_PROMPTS.map((prompt, index) => (
+                    <button
+                        key={index}
+                        onClick={() => setUserInput(prompt.text)}
+                        className="p-4 bg-gray-800/50 border border-gray-700 rounded-lg text-left hover:bg-gray-700/70 hover:border-cyan-500/50 transition-all"
+                    >
+                        <prompt.icon className="w-6 h-6 mb-2 text-cyan-400"/>
+                        <p className="text-sm text-gray-300">{prompt.text}</p>
+                    </button>
+                ))}
             </div>
         </div>
     );

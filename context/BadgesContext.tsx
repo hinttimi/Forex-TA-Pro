@@ -1,5 +1,4 @@
-
-import React, { createContext, useState, useCallback, useEffect, ReactNode } from 'react';
+import React, { createContext, useState, useCallback, useEffect, ReactNode, useMemo } from 'react';
 import { Badge } from '../types';
 import { ALL_BADGES } from '../constants/badges';
 
@@ -55,8 +54,14 @@ export const BadgesProvider: React.FC<{ children: ReactNode }> = ({ children }) 
     });
   }, []);
 
+  const value = useMemo(() => ({
+    unlockedIds,
+    unlockBadge,
+    lastUnlocked
+  }), [unlockedIds, lastUnlocked, unlockBadge]);
+
   return (
-    <BadgesContext.Provider value={{ unlockedIds, unlockBadge, lastUnlocked }}>
+    <BadgesContext.Provider value={value}>
       {children}
     </BadgesContext.Provider>
   );

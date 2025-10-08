@@ -1,4 +1,4 @@
-import React, { createContext, useState, useEffect, ReactNode, useCallback } from 'react';
+import React, { createContext, useState, useEffect, ReactNode, useCallback, useMemo } from 'react';
 
 const API_KEY_STORAGE_KEY = 'gemini_api_key';
 
@@ -8,25 +8,27 @@ interface ApiKeyContextType {
   isKeyModalOpen: boolean;
   openKeyModal: () => void;
   closeKeyModal: () => void;
+  wasKeyJustSet: boolean;
 }
 
 export const ApiKeyContext = createContext<ApiKeyContextType | undefined>(undefined);
 
 export const ApiKeyProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
   const [apiKey, setApiKeyState] = useState<string | null>(null);
+  const [isLoading, setIsLoading] = useState(true);
   const [isKeyModalOpen, setIsKeyModalOpen] = useState(false);
+  const [wasKeyJustSet, setWasKeyJustSet] = useState(false);
 
   useEffect(() => {
     try {
         const storedKey = localStorage.getItem(API_KEY_STORAGE_KEY);
         if (storedKey) {
           setApiKeyState(storedKey);
-        } else {
-          setIsKeyModalOpen(true);
         }
     } catch (error) {
         console.error('Could not access localStorage:', error);
-        setIsKeyModalOpen(true); // Assume no key if localStorage is inaccessible
+    } finally {
+        setIsLoading(false);
     }
   }, []);
 
@@ -36,6 +38,9 @@ export const ApiKeyProvider: React.FC<{ children: ReactNode }> = ({ children }) 
       try {
         localStorage.setItem(API_KEY_STORAGE_KEY, key);
         setIsKeyModalOpen(false);
+        setWasKeyJustSet(true);
+        // Reset after a short delay so tour doesn't re-trigger on refresh
+        setTimeout(() => setWasKeyJustSet(false), 1000); 
       } catch (error) {
         console.error('Could not save API key to localStorage:', error);
       }
@@ -48,17 +53,25 @@ export const ApiKeyProvider: React.FC<{ children: ReactNode }> = ({ children }) 
     }
   }, []);
 
-  const openKeyModal = () => setIsKeyModalOpen(true);
+  const openKeyModal = useCallback(() => setIsKeyModalOpen(true), []);
   
-  const closeKeyModal = () => {
-      // Only allow closing the modal if a key has been set
-      if (apiKey) {
-        setIsKeyModalOpen(false);
-      }
-  };
+  const closeKeyModal = useCallback(() => setIsKeyModalOpen(false), []);
+
+  const value = useMemo(() => ({
+    apiKey,
+    setApiKey,
+    isKeyModalOpen,
+    openKeyModal,
+    closeKeyModal,
+    wasKeyJustSet
+  }), [apiKey, isKeyModalOpen, wasKeyJustSet, setApiKey, openKeyModal, closeKeyModal]);
+
+  if (isLoading) {
+      return null; // Or a loading spinner for the whole app
+  }
 
   return (
-    <ApiKeyContext.Provider value={{ apiKey, setApiKey, isKeyModalOpen, openKeyModal, closeKeyModal }}>
+    <ApiKeyContext.Provider value={value}>
       {children}
     </ApiKeyContext.Provider>
   );

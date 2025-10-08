@@ -3,13 +3,71 @@ import { useApiKey } from '../hooks/useApiKey';
 import { KeyIcon } from './icons/KeyIcon';
 import { CheckCircleIcon } from './icons/CheckCircleIcon';
 import { TrashIcon } from './icons/TrashIcon';
+import { ServerStackIcon } from './icons/ServerStackIcon';
 
 const maskApiKey = (key: string | null): string => {
     if (!key || key.length < 8) {
-        return 'No key set';
+        return 'Not Set';
     }
     return `${key.substring(0, 4)}...${key.substring(key.length - 4)}`;
 };
+
+interface ApiKeyInputRowProps {
+    label: string;
+    storageKey: string;
+}
+
+const ApiKeyInputRow: React.FC<ApiKeyInputRowProps> = ({ label, storageKey }) => {
+    const [storedKey, setStoredKey] = useState<string | null>(() => localStorage.getItem(storageKey));
+    const [inputKey, setInputKey] = useState('');
+    const [isEditing, setIsEditing] = useState(false);
+
+    const handleSave = () => {
+        if (inputKey.trim()) {
+            localStorage.setItem(storageKey, inputKey.trim());
+            setStoredKey(inputKey.trim());
+            setIsEditing(false);
+            setInputKey('');
+        }
+    };
+
+    const handleClear = () => {
+        localStorage.removeItem(storageKey);
+        setStoredKey(null);
+        setInputKey('');
+        setIsEditing(false);
+    }
+
+    return (
+        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between py-3 border-b border-gray-700/50 last:border-b-0">
+            <span className="text-gray-300 font-medium">{label}</span>
+            <div className="flex items-center gap-3 mt-2 sm:mt-0">
+                {isEditing ? (
+                    <>
+                        <input
+                            type="password"
+                            value={inputKey}
+                            onChange={(e) => setInputKey(e.target.value)}
+                            placeholder="Paste new key"
+                            className="flex-grow bg-gray-700 border border-gray-600 rounded-md py-1 px-2 text-sm text-white focus:ring-1 focus:ring-cyan-500"
+                        />
+                        <button onClick={handleSave} className="px-3 py-1 bg-cyan-600 text-white text-sm font-semibold rounded-md hover:bg-cyan-500">Save</button>
+                        <button onClick={() => setIsEditing(false)} className="px-3 py-1 bg-gray-600 text-white text-sm font-semibold rounded-md hover:bg-gray-500">Cancel</button>
+                    </>
+                ) : (
+                    <>
+                        <span className="font-mono text-sm text-gray-400">{maskApiKey(storedKey)}</span>
+                        <button onClick={() => setIsEditing(true)} className="px-3 py-1 bg-gray-600 text-white text-sm font-semibold rounded-md hover:bg-gray-500">
+                            {storedKey ? 'Update' : 'Set'}
+                        </button>
+                        {storedKey && <button onClick={handleClear} className="px-2 py-1 bg-red-800/50 text-red-300 text-sm font-semibold rounded-md hover:bg-red-800/80">Clear</button>}
+                    </>
+                )}
+            </div>
+        </div>
+    );
+};
+
 
 export const SettingsView: React.FC = () => {
     const { apiKey, setApiKey } = useApiKey();
@@ -29,9 +87,28 @@ export const SettingsView: React.FC = () => {
     };
 
     const handleClearData = () => {
-        if (window.confirm('Are you sure you want to clear all app data? This will remove your API key, all lesson progress, and unlocked badges. This action cannot be undone.')) {
+        if (window.confirm('Are you sure you want to clear all app data? This will remove all API keys, lesson progress, and unlocked badges. This action cannot be undone.')) {
             try {
-                localStorage.clear();
+                // Explicitly remove all known keys for robustness
+                const keysToRemove = [
+                    'gemini_api_key',
+                    'completedLessons',
+                    'completionCounts',
+                    'unlockedBadges',
+                    'savedAnalyses',
+                    'userTradingPlan',
+                    'theme',
+                    'user_fcsapi_api_key',
+                    'user_open_exchange_rates_api_key',
+                    'user_twelve_data_api_key',
+                    'aiMentorChatHistory',
+                    'forex_ta_pro_tour_seen',
+                ];
+
+                keysToRemove.forEach(key => {
+                    localStorage.removeItem(key);
+                });
+
                 alert('All application data has been cleared. The app will now reload.');
                 window.location.reload();
             } catch (error) {
@@ -41,27 +118,27 @@ export const SettingsView: React.FC = () => {
         }
     };
 
+    const marketDataProviders = [
+        { label: 'FCSAPI', storageKey: 'user_fcsapi_api_key' },
+        { label: 'Open Exchange Rates', storageKey: 'user_open_exchange_rates_api_key' },
+        { label: 'Twelve Data', storageKey: 'user_twelve_data_api_key' },
+    ];
+
     return (
         <div className="max-w-3xl mx-auto">
             <h1 className="text-4xl font-extrabold text-white mb-2 tracking-tight">Settings</h1>
-            <p className="text-gray-400 mb-8">Manage your API key and application data.</p>
+            <p className="text-gray-400 mb-8">Manage your API keys and application data.</p>
             
             <div className="space-y-8">
-                {/* API Key Management */}
+                {/* AI Model API Key */}
                 <div className="bg-gray-800/50 border border-gray-700 rounded-lg p-6">
                     <h2 className="text-xl font-bold text-white mb-4 flex items-center">
                         <KeyIcon className="w-6 h-6 mr-3 text-cyan-400" />
-                        API Key Management
+                        AI Model API Key (Gemini)
                     </h2>
                     <p className="text-gray-400 text-sm mb-4">
-                        Your Google AI Gemini API key is stored securely in your browser's local storage and is never sent to any server besides Google's.
+                        Your Google Gemini API key is required for all AI-powered features like lessons and the mentor chat.
                     </p>
-                    <div className="mb-4">
-                        <label htmlFor="apiKey" className="block text-sm font-semibold text-gray-300 mb-1">Current API Key</label>
-                        <div className="p-3 bg-gray-900/50 rounded-md font-mono text-gray-400">
-                            {maskApiKey(apiKey)}
-                        </div>
-                    </div>
                     <div>
                         <label htmlFor="updateApiKey" className="block text-sm font-semibold text-gray-300 mb-1">Update Your Key</label>
                         <div className="flex items-center gap-3">
@@ -70,7 +147,7 @@ export const SettingsView: React.FC = () => {
                                 type="password"
                                 value={keyInput}
                                 onChange={(e) => setKeyInput(e.target.value)}
-                                placeholder="Paste new API key here"
+                                placeholder="Paste new Gemini API key here"
                                 className="flex-grow bg-gray-700 border border-gray-600 rounded-md py-2 px-3 text-white focus:ring-2 focus:ring-cyan-500"
                             />
                             <button
@@ -84,6 +161,22 @@ export const SettingsView: React.FC = () => {
                     </div>
                 </div>
 
+                 {/* Market Data API Keys */}
+                <div className="bg-gray-800/50 border border-gray-700 rounded-lg p-6">
+                    <h2 className="text-xl font-bold text-white mb-4 flex items-center">
+                        <ServerStackIcon className="w-6 h-6 mr-3 text-cyan-400" />
+                        Market Data API Keys (Optional)
+                    </h2>
+                    <p className="text-gray-400 text-sm mb-4">
+                        The app uses shared keys for market data, which have limits. Providing your own free keys can prevent rate-limit errors during heavy use of tools like the AI Strategy Lab.
+                    </p>
+                    <div className="space-y-2">
+                        {marketDataProviders.map(provider => (
+                            <ApiKeyInputRow key={provider.storageKey} {...provider} />
+                        ))}
+                    </div>
+                </div>
+
                 {/* Data Management */}
                 <div className="bg-red-900/20 border border-red-500/30 rounded-lg p-6">
                     <h2 className="text-xl font-bold text-white mb-4 flex items-center">
@@ -91,7 +184,7 @@ export const SettingsView: React.FC = () => {
                         Data Management
                     </h2>
                     <p className="text-red-300/80 text-sm mb-4">
-                        This will permanently delete all your data from this browser, including your saved API key, lesson completions, and achievements.
+                        This will permanently delete all your data from this browser, including all saved API keys, lesson completions, and achievements.
                     </p>
                     <button
                         onClick={handleClearData}

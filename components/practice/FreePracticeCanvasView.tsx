@@ -62,6 +62,17 @@ const DEFAULT_FIB_LEVELS: FibLevel[] = [
   { level: 1, enabled: true },
 ];
 
+const CHART_PROMPTS = [
+    "A dark-themed forex candlestick chart showing a clear uptrend with multiple breaks of structure (BOS) and pullbacks to valid demand zones.",
+    "A dark-themed forex candlestick chart showing a clear downtrend with multiple breaks of structure (BOS) and rallies into valid supply zones.",
+    "A dark-themed forex candlestick chart depicting a bullish reversal. The chart should show a downtrend that ends with a liquidity sweep below a key low, followed by a bullish Change of Character (CHoCH) and a rally.",
+    "A dark-themed forex candlestick chart depicting a bearish reversal. The chart should show an uptrend that ends with a liquidity sweep (stop hunt) above a key high, followed by a bearish Change of Character (CHoCH) and a sharp decline.",
+    "A dark-themed forex candlestick chart showing price consolidating in a clear range (accumulation/distribution), with liquidity resting above the range highs and below the range lows.",
+    "A dark-themed forex candlestick chart illustrating a premium vs. discount scenario. Show a large bearish impulse leg, followed by a slow pullback into a premium zone (above 50% retracement) that reacts to a bearish order block.",
+    "A dark-themed forex candlestick chart illustrating inducement. Show an uptrend with a break of structure, followed by a minor, tempting pullback (inducement), which is then swept before price taps into a true bullish order block lower down and continues the trend.",
+    "A dark-themed forex candlestick chart focused on Fair Value Gaps (FVGs). Show an impulsive move that leaves a clear FVG, and then price returns to fill a portion of the gap before continuing in the original direction."
+];
+
 // --- Helper Functions for Geometry and Hit Detection ---
 
 const distance = (p1: {x:number, y:number}, p2: {x:number, y:number}) => Math.sqrt((p1.x - p2.x) ** 2 + (p1.y - p2.y) ** 2);
@@ -251,7 +262,8 @@ export const FreePracticeCanvasView: React.FC = () => {
     setHistory([[]]);
     setHistoryIndex(0);
     try {
-      const prompt = "A random, unlabeled forex candlestick chart on a dark theme, in a 16:9 aspect ratio. The chart should display a variety of price action, suitable for technical analysis practice.";
+      const randomBasePrompt = CHART_PROMPTS[Math.floor(Math.random() * CHART_PROMPTS.length)];
+      const prompt = `${randomBasePrompt} The chart should be unlabeled, in a 16:9 aspect ratio, and suitable for technical analysis practice.`;
       const url = await generateChartImage(apiKey, prompt);
       setImageUrl(url);
     } catch (e) { console.error(e); setError('Failed to generate a practice chart. Please check your API key and try again.'); } 

@@ -1,3 +1,5 @@
+
+
 import React, { useState } from 'react';
 import { generateMarketPulse } from '../services/geminiService';
 import { LoadingSpinner } from './LoadingSpinner';
@@ -6,45 +8,70 @@ import { ExclamationTriangleIcon } from './icons/ExclamationTriangleIcon';
 import { useApiKey } from '../hooks/useApiKey';
 
 const FormattedContent: React.FC<{ text: string }> = ({ text }) => {
-    const renderInlineMarkdown = (lineText: string): React.ReactNode => {
-        return lineText.split(/(\*\*.*?\*\*)/g).map((part, i) => {
-            if (part.startsWith('**') && part.endsWith('**')) {
-                return <strong key={i} className="font-bold text-cyan-300">{part.slice(2, -2)}</strong>;
+    const renderInlineMarkdown = (text: string): React.ReactNode => {
+        const parts: React.ReactNode[] = [];
+        let lastIndex = 0;
+        const regex = /\*\*(.*?)\*\*/g;
+        let match;
+        let key = 0;
+
+        while ((match = regex.exec(text)) !== null) {
+            if (match.index > lastIndex) {
+                parts.push(text.substring(lastIndex, match.index));
             }
-            return part;
-        });
+            parts.push(<strong key={`strong-${key++}`} className="font-bold text-cyan-300">{match[1]}</strong>);
+            lastIndex = regex.lastIndex;
+        }
+
+        if (lastIndex < text.length) {
+            parts.push(text.substring(lastIndex));
+        }
+
+        return <>{parts}</>;
     };
 
-    const sections = text.split(/^(###\s.*$)/m).filter(Boolean);
+    // Pre-process text to normalize different AI output formats into one consistent format.
+    const cleanedText = text
+        // 1. Join description lines (like "- Details...") onto their parent line.
+        .replace(/\n\s*-\s/g, ' - ')
+        // 2. Correct malformed bolding like **text* -> **text**
+        .replace(/\*{2,}(.*?)\*/g, '**$1**')
+        // 3. Ensure list items that start with ** also get a * prefix to be parsed as a list.
+        .replace(/^\s*\*\*(.*)/gm, '* **$1');
+
+    const lines = cleanedText.split('\n').filter(line => line.trim());
     const elements: React.ReactElement[] = [];
+    let currentListItems: React.ReactElement[] = [];
 
-    for (let i = 0; i < sections.length; i += 2) {
-        const title = sections[i].replace('### ', '').trim();
-        const content = sections[i + 1] || '';
-        const lines = content.split('\n').filter(p => p.trim() !== '');
+    const flushList = () => {
+        if (currentListItems.length > 0) {
+            elements.push(<ul key={`ul-${elements.length}`} className="list-disc space-y-3 my-3 pl-6">{currentListItems}</ul>);
+            currentListItems = [];
+        }
+    };
+    
+    lines.forEach((line, index) => {
+        const trimmedLine = line.trim();
         
-        elements.push(<h3 key={`h-${i}`} className="text-xl font-semibold text-white mt-6 mb-3">{title}</h3>);
-
-        let listItems: React.ReactElement[] = [];
-        const flushListItems = () => {
-            if (listItems.length > 0) {
-                elements.push(<ul key={`ul-${i}-${elements.length}`} className="list-disc space-y-2 my-3 pl-6">{listItems}</ul>);
-                listItems = [];
-            }
-        };
-
-        lines.forEach((line, index) => {
-            const trimmedLine = line.trim();
-            if (trimmedLine.startsWith('*')) {
-                listItems.push(<li key={`li-${i}-${index}`}>{renderInlineMarkdown(trimmedLine.substring(1).trim())}</li>);
+        if (trimmedLine.startsWith('### ')) {
+            flushList();
+            elements.push(<h3 key={`h-${index}`} className="text-xl font-semibold text-white mt-6 mb-3">{trimmedLine.substring(4)}</h3>);
+        } else if (trimmedLine.startsWith('* ')) {
+            const content = trimmedLine.substring(2);
+            currentListItems.push(<li key={`li-${index}`}>{renderInlineMarkdown(content)}</li>);
+        } else {
+            flushList();
+            // Treat as a heading if it's short, not punctuated, and likely a title.
+            const isHeading = trimmedLine.length < 50 && !trimmedLine.endsWith('.') && !trimmedLine.endsWith(':');
+            if (isHeading) {
+                 elements.push(<h3 key={`h-${index}`} className="text-xl font-semibold text-white mt-6 mb-3">{trimmedLine}</h3>);
             } else {
-                flushListItems();
-                elements.push(<p key={`p-${i}-${index}`} className="mb-3 leading-relaxed">{renderInlineMarkdown(trimmedLine)}</p>);
+                 elements.push(<p key={`p-${index}`} className="mb-3 leading-relaxed">{renderInlineMarkdown(trimmedLine)}</p>);
             }
-        });
-        flushListItems();
-    }
+        }
+    });
 
+    flushList();
     return <>{elements}</>;
 };
 

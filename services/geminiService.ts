@@ -1,19 +1,10 @@
-
-
 import { GoogleGenAI, Type, GenerateContentResponse, GenerateImagesResponse, FunctionDeclaration } from "@google/genai";
-import { NewsArticle, MarketUpdate, EconomicEvent, MultipleChoiceQuestion, StrategyParams, BacktestResults, AnalysisResult } from '../types';
-
-// In-memory cache to avoid hitting API rate limits for repeated requests.
-const contentCache = new Map<string, string>();
-const imageCache = new Map<string, string>();
-const quizCache = new Map<string, { question: string; options: string[]; correctAnswer: string; }>();
-const quizSetCache = new Map<string, MultipleChoiceQuestion[]>();
+import { NewsArticle, MarketUpdate, EconomicEvent, MultipleChoiceQuestion, StrategyParams, BacktestResults, AnalysisResult, AppView, OhlcData } from '../types';
 
 // --- Client Management ---
-const clientCache = new Map<string, GoogleGenAI>();
-
 /**
- * Gets or creates a GoogleGenAI client for a given API key.
+ * Creates a new GoogleGenAI client for a given API key.
+ * A new client is created for each call to ensure no state is shared.
  * @param apiKey The user's Gemini API key.
  * @returns An instance of the GoogleGenAI client.
  */
@@ -21,12 +12,8 @@ export const getAiClient = (apiKey: string): GoogleGenAI => {
     if (!apiKey) {
         throw new Error("API Key is not provided.");
     }
-    if (clientCache.has(apiKey)) {
-        return clientCache.get(apiKey)!;
-    }
-    const newClient = new GoogleGenAI({ apiKey });
-    clientCache.set(apiKey, newClient);
-    return newClient;
+    // Always create a new client to ensure no session state or caching issues.
+    return new GoogleGenAI({ apiKey });
 };
 
 
@@ -43,13 +30,23 @@ const withRetry = async <T>(
       return await apiCall();
     } catch (error) {
       const errorMessage = String(error).toLowerCase();
-      if (errorMessage.includes('429') || errorMessage.includes('rate limit') || errorMessage.includes('resource_exhausted')) {
+      const isRateLimit = errorMessage.includes('429') || errorMessage.includes('rate limit');
+      const isQuotaExhausted = errorMessage.includes('quota exceeded') || errorMessage.includes('resource_exhausted');
+
+      if (isRateLimit || isQuotaExhausted) {
+        // If it's a permanent quota error, fail immediately with a specific message.
+        if (isQuotaExhausted) {
+            console.error("API call failed due to quota exhaustion. No retries will be attempted.", error);
+            throw new Error("You have exceeded your daily API quota for this model. Please check your Google AI plan or try again tomorrow.");
+        }
+        
+        // If it's a temporary rate limit, retry.
         if (attempt === maxRetries) {
-          console.error("API call failed after max retries due to rate limiting.", error);
-          throw new Error("The service is currently busy. Please try again later.");
+          console.error("API call failed after max retries due to temporary rate limiting.", error);
+          throw new Error("The service is currently busy due to high traffic. Please try again in a moment.");
         }
         const backoffTime = initialDelay * Math.pow(2, attempt - 1) + Math.random() * 1000;
-        console.warn(`Rate limit hit. Retrying in ${backoffTime.toFixed(0)}ms... (Attempt ${attempt}/${maxRetries})`);
+        console.warn(`Temporary rate limit hit. Retrying in ${backoffTime.toFixed(0)}ms... (Attempt ${attempt}/${maxRetries})`);
         await delay(backoffTime);
       } else {
         console.error("API call failed with a non-retriable error.", error);
@@ -65,9 +62,6 @@ const withRetry = async <T>(
 
 
 export const generateLessonContent = async (apiKey: string, prompt: string, cacheKey?: string): Promise<string> => {
-  if (cacheKey && contentCache.has(cacheKey)) {
-    return contentCache.get(cacheKey)!;
-  }
   try {
     const ai = getAiClient(apiKey);
     const response = await withRetry<GenerateContentResponse>(() => ai.models.generateContent({
@@ -75,9 +69,6 @@ export const generateLessonContent = async (apiKey: string, prompt: string, cach
         contents: prompt,
     }));
     const textContent = response.text;
-    if (cacheKey) {
-        contentCache.set(cacheKey, textContent);
-    }
     return textContent;
   } catch (error) {
     console.error("Error generating lesson content:", error);
@@ -85,10 +76,28 @@ export const generateLessonContent = async (apiKey: string, prompt: string, cach
   }
 };
 
+export const generateLessonSummary = async (apiKey: string, lessonContent: string): Promise<string> => {
+    const prompt = `You are an expert educational writer. Summarize the following lesson content into 3-5 key bullet points. The summary should be concise and capture the most critical takeaways for a student. Use markdown for **bold** emphasis.
+
+Lesson Content:
+---
+${lessonContent}
+---
+`;
+    try {
+        const ai = getAiClient(apiKey);
+        const response = await withRetry<GenerateContentResponse>(() => ai.models.generateContent({
+            model: 'gemini-2.5-flash',
+            contents: prompt,
+        }));
+        return response.text;
+    } catch (error) {
+        console.error("Error generating lesson summary:", error);
+        throw error;
+    }
+};
+
 export const generateChartImage = async (apiKey: string, prompt: string, cacheKey?: string): Promise<string> => {
-  if (cacheKey && imageCache.has(cacheKey)) {
-    return imageCache.get(cacheKey)!;
-  }
   try {
     const ai = getAiClient(apiKey);
     const response = await withRetry<GenerateImagesResponse>(() => ai.models.generateImages({
@@ -105,9 +114,6 @@ export const generateChartImage = async (apiKey: string, prompt: string, cacheKe
 
     if (base64ImageBytes) {
         const imageUrl = `data:image/png;base64,${base64ImageBytes}`;
-        if (cacheKey) {
-            imageCache.set(cacheKey, imageUrl);
-        }
         return imageUrl;
     } else {
         throw new Error("No image was generated.");
@@ -149,9 +155,6 @@ const quizQuestionSchema = {
 };
 
 export const generateQuizQuestion = async (apiKey: string, lessonContentPrompt: string, cacheKey?: string): Promise<{ question: string; options: string[]; correctAnswer: string; }> => {
-    if (cacheKey && quizCache.has(cacheKey)) {
-        return quizCache.get(cacheKey)!;
-    }
     try {
         const ai = getAiClient(apiKey);
         const prompt = `Based on the following concept, create one multiple-choice question to test a user's understanding. The question should be clear and concise. Provide 4 options in total (one correct, three plausible distractors). Ensure the 'correctAnswer' field exactly matches one of the strings in the 'options' array. The options should be shuffled.
@@ -171,9 +174,6 @@ Concept: "${lessonContentPrompt}"`;
         const parsed = JSON.parse(jsonText);
         
         if (parsed.question && Array.isArray(parsed.options) && parsed.correctAnswer && parsed.options.includes(parsed.correctAnswer)) {
-            if (cacheKey) {
-                quizCache.set(cacheKey, parsed);
-            }
             return parsed;
         } else {
             throw new Error("Generated JSON for quiz question is malformed.");
@@ -212,9 +212,6 @@ const quizSetSchema = {
 
 
 export const generateQuizSet = async (apiKey: string, lessonContentPrompt: string, numQuestions: number, cacheKey?: string): Promise<MultipleChoiceQuestion[]> => {
-    if (cacheKey && quizSetCache.has(cacheKey)) {
-        return quizSetCache.get(cacheKey)!;
-    }
     try {
         const ai = getAiClient(apiKey);
         const prompt = `Based on the following concept, create a set of ${numQuestions} unique multiple-choice questions to test a user's understanding. Each question should be clear and concise. For each question, provide 4 options in total (one correct, three plausible distractors). Ensure the 'correctAnswer' field for each question exactly matches one of the strings in its 'options' array. The options for each question should be shuffled.
@@ -231,9 +228,6 @@ Concept: "${lessonContentPrompt}"`;
         const jsonText = response.text.trim();
         const parsed = JSON.parse(jsonText);
         if (parsed.questions && Array.isArray(parsed.questions) && parsed.questions.length > 0) {
-            if (cacheKey) {
-                quizSetCache.set(cacheKey, parsed.questions);
-            }
             return parsed.questions;
         } else {
             throw new Error("Generated JSON for quiz set is malformed.");
@@ -271,16 +265,39 @@ For each question, provide 4 options in total (one correct, three plausible dist
     }
 };
 
+const navigateToToolFunctionDeclaration: FunctionDeclaration = {
+  name: 'navigateToTool',
+  description: 'Navigates the user to a specific tool or practice area within the application based on their request. Use this when the user asks to practice something or wants to see a specific tool.',
+  parameters: {
+    type: Type.OBJECT,
+    properties: {
+      toolName: {
+        type: Type.STRING,
+        description: "The name of the tool to navigate to. Must be one of the available tool views.",
+        enum: [
+            'simulator', 'live_simulator', 'backtester', 'pattern', 'timed', 
+            'canvas', 'market_pulse', 'news_feed', 'market_analyzer', 
+            'economic_calendar', 'trading_plan', 'achievements'
+        ]
+      },
+    },
+    required: ['toolName'],
+  },
+};
+
 export const generateMentorResponse = async (
     apiKey: string, 
     prompt: string, 
     file?: { data: string; mimeType: string }
-): Promise<{ text: string; groundingChunks: any[] }> => {
+): Promise<{ text: string; groundingChunks: any[]; functionCalls?: any[] }> => {
     const systemInstruction = `You are an expert forex trading mentor. Your primary expertise is in Smart Money Concepts (SMC) and Inner Circle Trader (ICT) methodologies. You can also identify classical technical analysis patterns and explain how they relate to SMC principles.
 
 You have been upgraded with new agentic capabilities:
 1.  **Real-Time Search:** You have access to Google Search. Use it for any questions about recent market news, economic data, or any topic where up-to-date information is crucial. When you use search, your answer will be grounded in the sources you find.
 2.  **File Analysis:** Users can upload files (images, text, CSV, PDF). Analyze the content provided in these files in your response. For charts, identify patterns. For data files (like CSV), summarize the data or answer questions about it. For documents, analyze the text.
+3.  **In-App Navigation:** You can navigate the user to any of the practice or market analysis tools within the app. Be proactive! If a user's request can be best fulfilled by one of the tools, you should suggest it and navigate them there.
+    - **When to use:** If a user asks to practice a concept (e.g., "I want to practice finding order blocks"), wants to see a specific tool (e.g., "show me the economic calendar"), or describes a task that a tool can perform (e.g., "backtest a strategy for me"), use the \`navigateToTool\` function.
+    - **How to use:** First, respond with a brief, conversational confirmation message. Then, immediately call the function. For example, if the user says "Let's practice identifying fair value gaps", your response should be a text part like "Great idea, the Pattern Recognition tool is perfect for that. Let's go." followed by a function call to \`navigateToTool({ toolName: 'pattern' })\`.
 
 Provide clear, concise, and actionable feedback. Be encouraging and helpful. Use markdown for formatting.
 
@@ -305,13 +322,14 @@ When a visual explanation would be helpful, embed a chart generation request in 
             contents: contents,
             config: {
                 systemInstruction: systemInstruction,
-                tools: [{ googleSearch: {} }],
+                tools: [{ functionDeclarations: [navigateToToolFunctionDeclaration] }],
             },
         }));
         
         return {
             text: response.text,
             groundingChunks: response.candidates?.[0]?.groundingMetadata?.groundingChunks || [],
+            functionCalls: response.functionCalls,
         };
 
     } catch (error) {
@@ -602,6 +620,77 @@ Strategy: "${userText}"`;
     }
 };
 
+const ohlcDataSchema = {
+    type: Type.OBJECT,
+    properties: {
+        timestamp: { type: Type.NUMBER, description: "The millisecond timestamp for the candle, must be sequential." },
+        open: { type: Type.NUMBER },
+        high: { type: Type.NUMBER },
+        low: { type: Type.NUMBER },
+        close: { type: Type.NUMBER },
+    },
+    required: ['timestamp', 'open', 'high', 'low', 'close'],
+};
+
+const ohlcDataArraySchema = {
+    type: Type.OBJECT,
+    properties: {
+        data: {
+            type: Type.ARRAY,
+            items: ohlcDataSchema,
+        }
+    },
+    required: ['data']
+};
+
+
+export const generateSimulatedOhlcData = async (apiKey: string, strategy: StrategyParams): Promise<OhlcData[]> => {
+    const prompt = `You are a financial data simulator. Based on the following trading strategy, generate a realistic-looking JSON array of 200 OHLC data points for the ${strategy.timeframe} timeframe. The data MUST include at least one or two clear examples of a valid trade setup according to the strategy. The timestamps must be sequential and realistic for the timeframe (e.g., increasing by 15 minutes for a 15M timeframe).
+
+Strategy:
+- Pair: ${strategy.pair}
+- Entry: ${strategy.entryCriteria.join(', ')}
+- Stop Loss: ${strategy.stopLoss}
+- Take Profit: ${strategy.takeProfit}
+
+Return ONLY the JSON object containing the data array.`;
+
+    try {
+        const ai = getAiClient(apiKey);
+        const response = await withRetry<GenerateContentResponse>(() => ai.models.generateContent({
+            model: 'gemini-2.5-flash',
+            contents: prompt,
+            config: {
+                responseMimeType: "application/json",
+                responseSchema: ohlcDataArraySchema,
+            },
+        }));
+
+        const jsonText = response.text.trim();
+        const parsed = JSON.parse(jsonText);
+
+        if (parsed.data && Array.isArray(parsed.data)) {
+            return parsed.data;
+        } else {
+            throw new Error("AI returned malformed data for simulated OHLC.");
+        }
+    } catch (error) {
+        console.error("Error generating simulated OHLC data:", error);
+        throw error;
+    }
+};
+
+const backtestTradeLogSchema = {
+    type: Type.OBJECT,
+    properties: {
+        entryTimestamp: { type: Type.NUMBER, description: "The millisecond timestamp of the trade entry." },
+        exitTimestamp: { type: Type.NUMBER, description: "The millisecond timestamp of the trade exit." },
+        entryPrice: { type: Type.NUMBER },
+        exitPrice: { type: Type.NUMBER },
+        outcome: { type: Type.STRING, enum: ['Win', 'Loss'] },
+    },
+    required: ['entryTimestamp', 'exitTimestamp', 'entryPrice', 'exitPrice', 'outcome'],
+};
 
 const backtestResultsSchema = {
     type: Type.OBJECT,
@@ -611,28 +700,42 @@ const backtestResultsSchema = {
         profitFactor: { type: Type.NUMBER },
         avgRR: { type: Type.NUMBER },
         maxDrawdown: { type: Type.NUMBER },
+        tradeLog: {
+            type: Type.ARRAY,
+            items: backtestTradeLogSchema,
+        }
     },
-    required: ['totalTrades', 'winRate', 'profitFactor', 'avgRR', 'maxDrawdown']
+    required: ['totalTrades', 'winRate', 'profitFactor', 'avgRR', 'maxDrawdown', 'tradeLog']
 };
 
-export const generateSimulatedBacktestResults = async (apiKey: string, strategy: StrategyParams, period: string): Promise<BacktestResults> => {
-    const prompt = `You are a quantitative analyst simulating a backtest. Given the following forex trading strategy, generate a realistic, plausible set of performance metrics over the specified period.
-Do not output any text other than the JSON object.
+export const runBacktestOnHistoricalData = async (apiKey: string, strategy: StrategyParams, ohlcData: OhlcData[]): Promise<BacktestResults> => {
+    const dataSubset = ohlcData.slice(-500);
 
-Strategy Details:
-- Pair: ${strategy.pair}
-- Timeframe: ${strategy.timeframe}
-- Entry Logic: ${strategy.entryCriteria.join(', ')}
-- Stop Loss Logic: ${strategy.stopLoss}
-- Take Profit Logic: ${strategy.takeProfit}
-- Backtest Period: ${period}
+    const prompt = `You are a quantitative analyst and a sophisticated backtesting engine specializing in Smart Money Concepts (SMC).
+    Your task is to analyze a provided dataset of historical OHLC data and execute trades based on a user-defined strategy.
 
-Consider the typical performance characteristics of Smart Money Concept strategies. They often have lower win rates but high Risk-to-Reward ratios. The results should reflect this. For example, a win rate between 35-55% would be realistic. The profit factor should be positive if the strategy is viable (e.g., 1.5 to 3.0).`;
+    Strategy Details:
+    - Pair: ${strategy.pair}
+    - Timeframe: ${strategy.timeframe}
+    - Entry Logic: ${strategy.entryCriteria.join(', ')}
+    - Stop Loss Logic: ${strategy.stopLoss}
+    - Take Profit Logic: ${strategy.takeProfit}
 
+    Historical OHLC Data (JSON format):
+    ${JSON.stringify(dataSubset)}
+
+    Instructions:
+    1.  Analyze the OHLC data candle-by-candle.
+    2.  Identify every point where the user's Entry Logic is met.
+    3.  For each valid entry, determine the outcome: would the trade have hit the Stop Loss or the Take Profit first? Use the provided logic to determine these levels. Assume subsequent candles determine the outcome.
+    4.  Log every trade you take in the 'tradeLog' array.
+    5.  After analyzing all data, calculate the final performance metrics: totalTrades, winRate (percentage), profitFactor, avgRR (average risk-to-reward ratio of winning trades), and maxDrawdown (percentage).
+    6.  Return the final results as a single JSON object that conforms to the schema. The 'tradeLog' must not be empty if trades were found.`;
+    
     try {
         const ai = getAiClient(apiKey);
         const response = await withRetry<GenerateContentResponse>(() => ai.models.generateContent({
-            model: 'gemini-2.5-flash',
+            model: "gemini-2.5-flash",
             contents: prompt,
             config: {
                 responseMimeType: "application/json",
@@ -642,59 +745,37 @@ Consider the typical performance characteristics of Smart Money Concept strategi
 
         const jsonText = response.text.trim();
         const parsed = JSON.parse(jsonText);
-        
-        // Basic validation
-        if (typeof parsed.winRate !== 'number' || typeof parsed.profitFactor !== 'number') {
-             throw new Error("AI returned malformed data for backtest results.");
+
+        if (parsed.totalTrades !== undefined && parsed.winRate !== undefined) {
+            return parsed;
+        } else {
+            throw new Error("AI returned malformed backtest results.");
         }
-        return parsed;
 
     } catch (error) {
-        console.error("Error generating simulated backtest results:", error);
+        console.error("Error running backtest:", error);
         throw error;
     }
 };
 
+export const analyzeBacktestResults = async (apiKey: string, strategy: StrategyParams, results: BacktestResults): Promise<string> => {
+    const prompt = `You are an expert trading coach. A student has just backtested the following strategy and received the results below. Provide concise, actionable feedback.
 
-export const analyzeBacktestResults = async (
-    apiKey: string,
-    strategyParams: StrategyParams,
-    results: BacktestResults
-): Promise<string> => {
-    const prompt = `You are an expert trading coach and data analyst specializing in systematic strategies based on Smart Money Concepts (SMC). A student has just run a backtest with the following parameters and results. Your task is to provide a concise, insightful analysis and a highly specific, actionable suggestion for improvement.
+    Strategy Tested:
+    - Logic: ${strategy.entryCriteria.join(', ')}
+    - Stop Loss: ${strategy.stopLoss}
+    - Take Profit: ${strategy.takeProfit}
 
-**Strategy Parameters:**
-- Pair: ${strategyParams.pair}
-- Timeframe: ${strategyParams.timeframe}
-- Entry Criteria: ${strategyParams.entryCriteria.join(', ')}
-- Stop Loss: ${strategyParams.stopLoss}
-- Take Profit: ${strategyParams.takeProfit}
+    Backtest Results:
+    - Total Trades: ${results.totalTrades}
+    - Win Rate: ${results.winRate.toFixed(1)}%
+    - Profit Factor: ${results.profitFactor.toFixed(2)}
+    - Average R:R of Wins: 1:${results.avgRR.toFixed(2)}
+    - Max Drawdown: ${results.maxDrawdown.toFixed(1)}%
 
-**Backtest Results:**
-- Total Trades: ${results.totalTrades}
-- Win Rate: ${results.winRate.toFixed(1)}%
-- Profit Factor: ${results.profitFactor.toFixed(2)}
-- Average R:R: 1:${results.avgRR.toFixed(2)}
-- Max Drawdown: ${results.maxDrawdown.toFixed(1)}%
-
-**Your Coaching Logic (Follow this logic for your suggestions):**
-- **If the Win Rate is low (e.g., < 45%)**: This suggests an issue with entry timing or setup selection. The trader might be entering too early or on low-probability signals.
-    - *Suggestion idea*: Add a stronger confirmation criterion. For example, if they only use 'CHoCH', suggest adding 'Entry on Order Block' to wait for a clearer Point of Interest. Or suggest filtering trades to only occur in a higher timeframe 'Premium/Discount Zone'.
-- **If the Profit Factor is low (e.g., < 1.5) despite a decent Win Rate**: This suggests the reward from winning trades is not significantly outweighing the losses.
-    - *Suggestion idea*: Propose a more ambitious profit-taking strategy. If they are using 'Fixed 1:2 R:R', suggest switching to 'Target Opposing Liquidity' to allow winners to run further.
-- **If both Win Rate and Profit Factor are low**: This points to a fundamental issue with the strategy's edge.
-    - *Suggestion idea*: Suggest a more foundational change. For example, "Your current rules are struggling. Let's rebuild. Try a strategy focused *only* on 'Liquidity Sweep' of a major high/low, followed by a 'CHoCH', and entering on the resulting 'FVG'. This is a classic, high-probability model."
-- **If performance is good but Total Trades are low**: The strategy is too restrictive.
-    - *Suggestion idea*: Suggest ways to find more opportunities without sacrificing too much quality. For example, "This strategy is effective but rare. Try applying the same rules to a lower timeframe to increase trade frequency."
-- **If max drawdown is high (e.g., > 15%)**: The trader is likely holding onto losing trades for too long, the stop loss placement is not optimal, or they are taking too many consecutive losses.
-    - *Suggestion idea*: "Your high drawdown suggests risk is not being contained effectively. Consider tightening your stop loss by placing it just below the wick of the order block, instead of the entire swing low. Also, consider implementing a 'max daily loss' rule in your plan to prevent significant drawdowns."
-
-**Your Analysis (in markdown format):**
-1.  **Overall Assessment:** Start with a single, bolded sentence summarizing the strategy's performance.
-2.  **Strengths:** In a bulleted list, identify 1-2 key strengths based on the data.
-3.  **Areas for Improvement:** In a bulleted list, identify 1-2 potential weaknesses, linking them to the metrics.
-4.  **Actionable Suggestion:** Based on the "Coaching Logic" above, provide ONE specific, actionable suggestion for the student to test next. Explain *why* this change could address the weakness you identified. For example, "Your win rate is low, suggesting premature entries. **Suggestion:** Add 'Entry on FVG' as a required criterion. This forces you to wait for price to rebalance after a CHoCH, which can be a stronger confirmation signal and improve your win rate."
-`;
+    Your feedback should be structured in markdown with two sections:
+    1.  **### Performance Summary:** A brief, one-paragraph summary of the results. Is the strategy profitable? Is it robust?
+    2.  **### Suggestions for Improvement:** Provide 2-3 specific, actionable bullet points on how the student could potentially improve these results. For example, suggest filtering for higher timeframe alignment, being more selective with POIs, or adjusting the risk-to-reward targets.`;
 
     try {
         const ai = getAiClient(apiKey);
@@ -709,44 +790,41 @@ export const analyzeBacktestResults = async (
     }
 };
 
-export const analyzeLiveChart = async (
-    apiKey: string, 
-    prompt: string, 
-    images: { data: string; mimeType: string }[]
-): Promise<AnalysisResult> => {
-    const systemInstruction = `You are a world-class forex trading analyst and mentor, specializing in Smart Money Concepts (SMC) combined with real-time fundamental analysis. Your analysis must be CRITICAL, ACCURATE, and FACTUAL. You will be given a user's question and one or more screenshots of a live trading chart.
+export const analyzeLiveChart = async (apiKey: string, userPrompt: string, files: { data: string; mimeType: string }[]): Promise<AnalysisResult> => {
+    const systemInstruction = `You are an expert forex trading mentor specializing in Smart Money Concepts (SMC) and ICT methodologies. Analyze the user-uploaded chart image(s) and their optional prompt. Your goal is to identify high-probability trade setups or critique the user's analysis.
 
-Your task is to:
-1.  **Technical Analysis:** Analyze the provided chart image(s) for price action patterns, market structure (BOS, CHoCH), liquidity pools (buy-side/sell-side), order blocks, fair value gaps (FVGs), premium/discount zones, and any other relevant SMC concepts.
-    - **IMPORTANT:** If multiple images are provided, they likely represent different timeframes (e.g., Daily, 4H, 15M). You MUST perform a multi-timeframe analysis, starting from the highest timeframe to establish context and bias, then drilling down to the lower timeframes for the specific setup.
-2.  **Fundamental Analysis:** Use your real-time Google Search capability to find any high-impact news, economic data releases, or central bank statements that could be affecting the currency pair shown in the chart. Your search must focus on catalysts within the last few hours to ensure relevance.
-3.  **Synthesize:** Combine your multi-timeframe technical and fundamental findings into a single, cohesive analysis. Explain how the fundamentals may be influencing the technical picture.
-4.  **Provide Actionable Feedback:** Based on your synthesis, provide one of the following in clear markdown format:
-    *   **A-Grade Setup:** If a high-probability trade is present, outline a complete trade plan with a bolded **Entry**, **Stop Loss**, **Take Profit**, and the **Reasoning** behind the setup.
-    *   **Things to Watch:** If no immediate setup is present, explain what you are seeing and what specific conditions or price action you would need to see to consider a trade (e.g., "I'm waiting for a sweep of the Asian lows before looking for a long entry." or "The market is consolidating ahead of CPI data; it is best to wait.").
+Your analysis MUST include:
+1.  **Context:** Use your real-time search tool to find the current market narrative for the currency pair mentioned or shown. Is there recent news or data driving price?
+2.  **Technical Analysis:** Identify key SMC concepts on the chart: market structure (BOS/CHoCH), liquidity pools, order blocks, FVGs, premium/discount zones.
+3.  **Trade Idea (if applicable):** If a valid setup exists, formulate a clear trade idea with an entry, stop loss, and take profit level. Explain your reasoning based on the technicals and market context.
+4.  **Critique (if applicable):** If the user has provided their own analysis in the prompt, critique it constructively.
 
-ALWAYS cite your sources for any fundamental data you use.`;
-    
+Structure your response clearly in markdown. Use **bold** for key terms.`;
+
     try {
         const ai = getAiClient(apiKey);
-        
-        const imageParts = images.map(image => ({
+        const parts: any[] = files.map(file => ({
             inlineData: {
-                mimeType: image.mimeType,
-                data: image.data,
+                mimeType: file.mimeType,
+                data: file.data,
             },
         }));
-        const textPart = { text: prompt };
-        
+
+        if (userPrompt) {
+            parts.push({ text: userPrompt });
+        } else {
+            parts.push({ text: "Analyze this chart for potential SMC trade setups. What do you see?" });
+        }
+
         const response = await withRetry<GenerateContentResponse>(() => ai.models.generateContent({
             model: 'gemini-2.5-flash',
-            contents: { parts: [...imageParts, textPart] },
+            contents: { parts },
             config: {
                 systemInstruction: systemInstruction,
                 tools: [{ googleSearch: {} }],
             },
         }));
-        
+
         return {
             text: response.text,
             sources: response.candidates?.[0]?.groundingMetadata?.groundingChunks || [],
@@ -758,70 +836,24 @@ ALWAYS cite your sources for any fundamental data you use.`;
     }
 };
 
-const tradeEvaluationSchema = {
-    type: Type.OBJECT,
-    properties: {
-        outcome: { 
-            type: Type.STRING,
-            description: "The result of the trade. Must be either 'Win' or 'Loss'."
-        },
-        feedback: { 
-            type: Type.STRING,
-            description: "Detailed, constructive feedback on the trade setup and execution in markdown format."
-        }
-    },
-    required: ['outcome', 'feedback']
-};
-
-export const evaluateHistoricalTrade = async (
-    apiKey: string,
-    chartPrompt: string,
-    strategy: { [key: string]: any },
-    tradeDetails: string
-): Promise<{ outcome: 'Win' | 'Loss'; feedback: string }> => {
-    const prompt = `You are a master trading analyst acting as a trade evaluator.
-A trading scenario chart was generated for a student using this prompt: "${chartPrompt}".
-The student's strategy is defined as:
-- Pair: ${strategy.pair}
-- Timeframe: ${strategy.timeframe}
-- Entry Criteria: ${strategy.entryCriteria.join(', ')}
-- Stop Loss Logic: ${strategy.stopLoss}
-- Take Profit Logic: ${strategy.takeProfit}
-
-The student analyzed the chart and placed the following trade: ${tradeDetails}.
-
-Your task is to:
-1.  **Determine the Outcome:** Based on the logical price action that should have occurred in the chart you were asked to generate, decide if the student's trade would have hit the Take Profit ('Win') or the Stop Loss ('Loss').
-2.  **Provide Expert Feedback:** Write a detailed critique of the student's trade.
-    - Did they correctly identify the setup described in the prompt?
-    - Was their entry precise, or could it have been better?
-    - Was the stop loss placed in a logical and safe location according to SMC principles?
-    - Was the take profit target realistic and aligned with liquidity targets?
-    - Provide your feedback in markdown format. Start with a bolded one-sentence summary (e.g., "**Excellent read of the market structure, but the entry was a bit premature.**"). Then, use bullet points for detailed analysis.
-
-Return your response as a single, clean JSON object string that adheres to the provided schema. Do not include any other text, explanations, or markdown formatting outside of the JSON string.
-`;
+export const getRealtimePriceWithSearch = async (apiKey: string, pair: string): Promise<number> => {
+    const prompt = `Using your search tool, what is the current real-time price of the forex pair ${pair}? Respond with only the numerical price, nothing else. For example: 1.07123`;
     try {
         const ai = getAiClient(apiKey);
         const response = await withRetry<GenerateContentResponse>(() => ai.models.generateContent({
             model: "gemini-2.5-flash",
             contents: prompt,
             config: {
-                responseMimeType: "application/json",
-                responseSchema: tradeEvaluationSchema,
+                tools: [{ googleSearch: {} }],
             },
         }));
-        const jsonText = response.text.trim();
-        const parsed = JSON.parse(jsonText);
-
-        if ((parsed.outcome === 'Win' || parsed.outcome === 'Loss') && parsed.feedback) {
-            return parsed;
-        } else {
-             throw new Error("Generated JSON for trade evaluation is malformed.");
+        const price = parseFloat(response.text.replace(/,/g, ''));
+        if (isNaN(price)) {
+            throw new Error(`AI returned a non-numeric price: "${response.text}"`);
         }
-
+        return price;
     } catch (error) {
-        console.error("Error evaluating historical trade:", error);
+        console.error(`Error fetching real-time price for ${pair} with Gemini:`, error);
         throw error;
     }
 };

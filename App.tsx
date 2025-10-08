@@ -1,10 +1,12 @@
 
+
+
 import React, { useState, useCallback, useEffect } from 'react';
 import { Sidebar } from './components/Sidebar';
 import { LessonView } from './components/LessonView';
 import { Header } from './components/Header';
 import { Lesson, AppView, MarketUpdate } from './types';
-import { generateLessonContent, generateChartImage, generateMarketUpdateSnippet } from './services/geminiService';
+import { generateLessonContent, generateMarketUpdateSnippet } from './services/geminiService';
 import { MODULES } from './constants';
 import { PatternRecognitionView } from './components/practice/PatternRecognitionView';
 import { TimedChallengeView } from './components/practice/TimedChallengeView';
@@ -34,6 +36,12 @@ import { ApiKeyModal } from './components/ApiKeyModal';
 import { SettingsView } from './components/SettingsView';
 import { FeedbackModal } from './components/FeedbackModal';
 import { DashboardView } from './components/DashboardView';
+import { OnboardingWizard } from './components/OnboardingWizard';
+import { BottomNavBar } from './components/BottomNavBar';
+import { FloatingActionButton } from './components/FloatingActionButton';
+import { WelcomeTour } from './components/WelcomeTour';
+import { LiveSimulatorProvider } from './context/LiveSimulatorContext';
+import { ThemeProvider } from './context/ThemeContext';
 
 const allLessons = MODULES.flatMap(module => module.lessons);
 
@@ -42,53 +50,78 @@ const findLessonIndex = (lessonKey: string) => {
 };
 
 const AppContent: React.FC = () => {
+  // --- ALL HOOKS MUST BE AT THE TOP AND UNCONDITIONAL ---
   const [isSidebarOpen, setIsSidebarOpen] = useState(true);
   const [currentView, setCurrentView] = useState<AppView>('dashboard');
   const [currentLesson, setCurrentLesson] = useState<Lesson | null>(null);
   const [lessonContent, setLessonContent] = useState<string>('');
-  const [chartImageUrl, setChartImageUrl] = useState<string>('');
   const [isLoadingContent, setIsLoadingContent] = useState<boolean>(false);
-  const [isLoadingChart, setIsLoadingChart] = useState<boolean>(false);
   const [error, setError] = useState<string | null>(null);
   const [quizLesson, setQuizLesson] = useState<Lesson | null>(null);
   const [marketUpdate, setMarketUpdate] = useState<MarketUpdate | null>(null);
   const [isFeedbackModalOpen, setIsFeedbackModalOpen] = useState(false);
-  
+  const [isTourActive, setIsTourActive] = useState(false);
   const [lessonToLoadKey, setLessonToLoadKey] = useState<string | null>(null);
+
   const debouncedLessonKey = useDebounce(lessonToLoadKey, 500);
 
-  // Component-level cache for lesson data to prevent re-loading UI
-  const [lessonDataCache, setLessonDataCache] = useState<Map<string, { content: string; chartUrl?: string }>>(new Map());
-
-  const { apiKey } = useApiKey();
+  const { apiKey, isKeyModalOpen, wasKeyJustSet, setApiKey } = useApiKey();
   const { logLessonCompleted, getCompletedLessons } = useCompletion();
   const { unlockBadge } = useBadges();
   const completedLessons = getCompletedLessons();
-
-  const toggleSidebar = () => {
-    setIsSidebarOpen(prev => !prev);
-  };
-
+  
   const handleSelectLesson = useCallback((lesson: Lesson) => {
     setCurrentView('lesson');
     setCurrentLesson(lesson);
     setError(null);
 
-    // Check component cache first for an instant load
-    if (lessonDataCache.has(lesson.key)) {
-        const cachedData = lessonDataCache.get(lesson.key)!;
-        setLessonContent(cachedData.content);
-        setChartImageUrl(cachedData.chartUrl || '');
-        setIsLoadingContent(false);
-        setLessonToLoadKey(null); // Prevent re-triggering API call
-    } else {
-        // Otherwise, clear state and trigger a new load
-        setChartImageUrl('');
-        setLessonContent('');
-        setIsLoadingContent(true);
-        setLessonToLoadKey(lesson.key);
+    // Always trigger a new load to ensure no stale data.
+    setLessonContent('');
+    setIsLoadingContent(true);
+    setLessonToLoadKey(lesson.key);
+  }, []);
+  
+  const handleNextLesson = useCallback(() => {
+    if (!currentLesson) return;
+    const currentIndex = findLessonIndex(currentLesson.key);
+    if (currentIndex !== -1 && currentIndex < allLessons.length - 1) {
+      handleSelectLesson(allLessons[currentIndex + 1]);
     }
-  }, [lessonDataCache]);
+  }, [currentLesson, handleSelectLesson]);
+
+  const handlePreviousLesson = useCallback(() => {
+    if (!currentLesson) return;
+    const currentIndex = findLessonIndex(currentLesson.key);
+    if (currentIndex > 0) {
+      handleSelectLesson(allLessons[currentIndex - 1]);
+    }
+  }, [currentLesson, handleSelectLesson]);
+  
+  const handleGoToLessonFromNav = useCallback(() => {
+    if (currentLesson && currentView === 'lesson') return;
+
+    if (currentLesson) {
+        setCurrentView('lesson');
+    } else {
+        const nextLesson = allLessons.find(lesson => !completedLessons.has(lesson.key)) || allLessons[0];
+        handleSelectLesson(nextLesson);
+    }
+  }, [currentLesson, currentView, completedLessons, handleSelectLesson]);
+
+  // Handle tour for first-time users
+  useEffect(() => {
+    if (wasKeyJustSet) {
+        const tourSeen = localStorage.getItem('forex_ta_pro_tour_seen');
+        if (!tourSeen) {
+            // Delay to allow main UI to render before starting tour
+            setTimeout(() => {
+                setIsTourActive(true);
+                // Ensure sidebar is open to highlight curriculum
+                setIsSidebarOpen(true);
+            }, 500);
+        }
+    }
+  }, [wasKeyJustSet]);
 
   // Effect for debounced content loading
   useEffect(() => {
@@ -109,25 +142,20 @@ const AppContent: React.FC = () => {
       }
       
       try {
-        const content = await generateLessonContent(apiKey, lesson.contentPrompt, `lesson-content-${lesson.key}`);
+        let chartIndex = 0;
+        const modifiedForTextPrompt = lesson.contentPrompt.replace(/\[CHART:.*?\]/gs, () => `||CHART_PLACEHOLDER_${++chartIndex}||`);
+        const finalPrompt = `You are an expert forex trading mentor. Generate the lesson content based on the following text. IMPORTANT: You will see placeholders like ||CHART_PLACEHOLDER_1||. You MUST preserve these placeholders exactly as they are in your output, in their correct positions. Do not attempt to generate any visual content like mermaid diagrams for them; simply keep the placeholder text.\n\n---\n\n${modifiedForTextPrompt}`;
+
+        const content = await generateLessonContent(apiKey, finalPrompt, `lesson-content-${lesson.key}`);
         setLessonContent(content);
-        // Add the new content to our component-level cache
-        setLessonDataCache(prevCache => {
-            // FIX: Explicitly providing the type to the Map constructor to ensure correct type inference for `existingData`.
-            const newCache = new Map<string, { content: string; chartUrl?: string }>(prevCache);
-            const existingData = newCache.get(lesson.key);
-            const updatedData = {
-              content: content,
-              chartUrl: existingData?.chartUrl,
-            };
-            newCache.set(lesson.key, updatedData);
-            return newCache;
-        });
         logLessonCompleted(lesson.key);
       } catch (e) {
         console.error(e);
         const errorMessage = e instanceof Error ? e.message : 'Failed to load lesson content. Please check your API key and try again.';
         setError(errorMessage);
+        if (errorMessage.includes('not valid')) {
+            setApiKey(null);
+        }
       } finally {
         if (currentLesson?.key === key) {
             setIsLoadingContent(false);
@@ -138,59 +166,7 @@ const AppContent: React.FC = () => {
     if (debouncedLessonKey) {
       loadContent(debouncedLessonKey);
     }
-  }, [debouncedLessonKey, currentLesson?.key, logLessonCompleted, apiKey]);
-
-  // --- Pre-fetching logic ---
-  const prefetchLessons = useCallback(async (startingLessonKey: string) => {
-    if (!apiKey) return;
-
-    const PREFETCH_COUNT = 2; // How many lessons to prefetch ahead
-    const currentIndex = findLessonIndex(startingLessonKey);
-    if (currentIndex === -1) return;
-
-    for (let i = 1; i <= PREFETCH_COUNT; i++) {
-        const nextIndex = currentIndex + i;
-        if (nextIndex < allLessons.length) {
-            const lessonToPrefetch = allLessons[nextIndex];
-            
-            // Check if it's already cached at the component level
-            if (!lessonDataCache.has(lessonToPrefetch.key)) {
-                try {
-                    // This call will populate the service-level cache and return the content
-                    const content = await generateLessonContent(apiKey, lessonToPrefetch.contentPrompt, `lesson-content-${lessonToPrefetch.key}`);
-                    
-                    // Also populate the component-level cache so the UI loads instantly
-                    setLessonDataCache(prevCache => {
-                        // FIX: Explicitly provide generic types to the Map constructor. This prevents
-                        // TypeScript from inferring `existingData` as `unknown`, which causes an error when
-                        // trying to access `existingData.chartUrl`.
-                        const newCache = new Map<string, { content: string; chartUrl?: string }>(prevCache);
-                        // Make sure not to overwrite existing chart data if it somehow exists
-                        const existingData = newCache.get(lessonToPrefetch.key);
-                        newCache.set(lessonToPrefetch.key, {
-                            content: content,
-                            chartUrl: existingData?.chartUrl,
-                        });
-                        return newCache;
-                    });
-                } catch (e) {
-                    console.error(`Failed to prefetch lesson ${lessonToPrefetch.key}:`, e);
-                    // Fail silently in the background and stop prefetching for now
-                    break; 
-                }
-            }
-        }
-    }
-  }, [apiKey, lessonDataCache]);
-
-  // Effect for triggering pre-fetching
-  useEffect(() => {
-    // Only prefetch when the current lesson is fully loaded and there's no error
-    if (currentLesson && !isLoadingContent && lessonContent && !error) {
-        prefetchLessons(currentLesson.key);
-    }
-  }, [currentLesson, isLoadingContent, lessonContent, error, prefetchLessons]);
-  // --- End Pre-fetching logic ---
+  }, [debouncedLessonKey, currentLesson?.key, logLessonCompleted, apiKey, setApiKey]);
 
   // Badge check effect
   useEffect(() => {
@@ -234,39 +210,22 @@ const AppContent: React.FC = () => {
 
     return () => clearInterval(intervalId);
   }, [currentView, apiKey]);
+  
+  // --- END OF HOOKS ---
 
-  const handleVisualize = useCallback(async () => {
-    if (!currentLesson) return;
-    if (!apiKey) {
-        setError("Please set your Gemini API key to generate charts.");
-        return;
-    }
-    setIsLoadingChart(true);
-    setChartImageUrl('');
-    try {
-      const imageUrl = await generateChartImage(apiKey, currentLesson.chartPrompt, `lesson-chart-${currentLesson.key}`);
-      setChartImageUrl(imageUrl);
-      // Add the generated chart URL to our component-level cache
-      setLessonDataCache(prevCache => {
-          // FIX: Explicitly providing the type to the Map constructor to ensure correct type inference for `existingData`.
-          const newCache = new Map<string, { content: string; chartUrl?: string }>(prevCache);
-          const existingData = newCache.get(currentLesson.key);
-          if (existingData) { // This should always exist if content has been loaded
-              const updatedData = {
-                content: existingData.content,
-                chartUrl: imageUrl,
-              };
-              newCache.set(currentLesson.key, updatedData);
-          }
-          return newCache;
-      });
-    } catch (e) {
-      console.error(e);
-      setError('Failed to generate chart. Please try again.');
-    } finally {
-      setIsLoadingChart(false);
-    }
-  }, [currentLesson, apiKey]);
+  // Show onboarding wizard if no API key is set. This MUST be after all hooks.
+  if (!apiKey && !isKeyModalOpen) {
+    return <OnboardingWizard />;
+  }
+  
+  const handleTourComplete = () => {
+    setIsTourActive(false);
+    localStorage.setItem('forex_ta_pro_tour_seen', 'true');
+  };
+
+  const toggleSidebar = () => {
+    setIsSidebarOpen(prev => !prev);
+  };
 
   const handleSetView = (view: AppView) => {
     setCurrentView(view);
@@ -277,22 +236,6 @@ const AppContent: React.FC = () => {
     setQuizLesson(lesson);
     setCurrentView('quiz');
   };
-
-  const handleNextLesson = useCallback(() => {
-    if (!currentLesson) return;
-    const currentIndex = findLessonIndex(currentLesson.key);
-    if (currentIndex !== -1 && currentIndex < allLessons.length - 1) {
-      handleSelectLesson(allLessons[currentIndex + 1]);
-    }
-  }, [currentLesson, handleSelectLesson]);
-
-  const handlePreviousLesson = useCallback(() => {
-    if (!currentLesson) return;
-    const currentIndex = findLessonIndex(currentLesson.key);
-    if (currentIndex > 0) {
-      handleSelectLesson(allLessons[currentIndex - 1]);
-    }
-  }, [currentLesson, handleSelectLesson]);
   
   const openFeedbackModal = () => setIsFeedbackModalOpen(true);
   const closeFeedbackModal = () => setIsFeedbackModalOpen(false);
@@ -310,10 +253,7 @@ const AppContent: React.FC = () => {
           <LessonView
             lesson={currentLesson}
             content={lessonContent}
-            chartImageUrl={chartImageUrl}
-            onVisualize={handleVisualize}
             isLoadingContent={isLoadingContent}
-            isLoadingChart={isLoadingChart}
             onStartQuiz={handleStartQuiz}
             error={error}
             onNextLesson={handleNextLesson}
@@ -336,13 +276,13 @@ const AppContent: React.FC = () => {
       case 'live_simulator':
         return <LiveChartSimulatorView />;
       case 'saved':
-        return <SavedAnalysisView />;
+        return <SavedAnalysisView onSetView={handleSetView} />;
       case 'achievements':
         return <AchievementsView />;
       case 'trading_plan':
         return <TradingPlanView />;
       case 'mentor':
-        return <AIMentorView />;
+        return <AIMentorView onSetView={handleSetView} />;
       case 'quiz':
         return quizLesson ? (
             <QuizView 
@@ -379,10 +319,11 @@ const AppContent: React.FC = () => {
     }
 
   return (
-    <div className="relative h-screen text-slate-200 font-sans overflow-hidden">
+    <div className="relative h-screen font-sans overflow-hidden">
+      {isTourActive && <WelcomeTour onClose={handleTourComplete} />}
       <ApiKeyModal />
       <FeedbackModal isOpen={isFeedbackModalOpen} onClose={closeFeedbackModal} />
-      {isSidebarOpen && <div onClick={() => setIsSidebarOpen(false)} className="fixed inset-0 bg-black/60 z-30 md:hidden" aria-hidden="true" />}
+      {isSidebarOpen && <div onClick={() => setIsSidebarOpen(false)} className="fixed inset-0 bg-gray-900/40 dark:bg-black/60 z-30 md:hidden" aria-hidden="true" />}
       <Sidebar
         modules={MODULES}
         onSelectLesson={handleSelectLesson}
@@ -399,7 +340,7 @@ const AppContent: React.FC = () => {
           onToggleSidebar={toggleSidebar}
           viewTitle={viewTitle}
         />
-        <main className="flex-1 overflow-y-auto p-6 lg:p-10">
+        <main className="flex-1 overflow-y-auto p-6 lg:p-10 pb-20 md:pb-10">
           <div key={currentView} className="animate-fade-in-up">
             {renderView()}
           </div>
@@ -407,16 +348,22 @@ const AppContent: React.FC = () => {
       </div>
        <BadgeNotification />
        <MarketUpdateToast update={marketUpdate} onClose={() => setMarketUpdate(null)} />
+       <BottomNavBar currentView={currentView} onSetView={handleSetView} onSelectLesson={handleGoToLessonFromNav} />
+       {currentView !== 'mentor' && currentView !== 'dashboard' && <FloatingActionButton onSetView={handleSetView} />}
     </div>
   );
 };
 
 const App: React.FC = () => (
-  <ApiKeyProvider>
-    <BadgesProvider>
-      <AppContent />
-    </BadgesProvider>
-  </ApiKeyProvider>
+  <ThemeProvider>
+    <ApiKeyProvider>
+      <BadgesProvider>
+          <LiveSimulatorProvider>
+              <AppContent />
+          </LiveSimulatorProvider>
+      </BadgesProvider>
+    </ApiKeyProvider>
+  </ThemeProvider>
 );
 
 

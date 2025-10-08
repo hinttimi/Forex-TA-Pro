@@ -1,10 +1,10 @@
 
 
 import React, { useState, useEffect } from 'react';
-import { TrashIcon } from '../icons/TrashIcon';
-import { BookmarkSquareIcon } from '../icons/BookmarkSquareIcon';
-import { RocketLaunchIcon } from '../icons/RocketLaunchIcon';
-import { AppView } from '../../types';
+import { TrashIcon } from './icons/TrashIcon';
+import { BookmarkSquareIcon } from './icons/BookmarkSquareIcon';
+import { RocketLaunchIcon } from './icons/RocketLaunchIcon';
+import { AppView } from '../types';
 
 interface SavedItem {
     id: number;

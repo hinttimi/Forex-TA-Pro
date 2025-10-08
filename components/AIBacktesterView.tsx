@@ -1,16 +1,20 @@
 
 
+
 import React, { useState, useRef } from 'react';
-import { parseStrategyFromText, generateSimulatedBacktestResults, analyzeBacktestResults, analyzeLiveChart } from '../services/geminiService';
+import { runBacktestOnHistoricalData, parseStrategyFromText, analyzeBacktestResults, analyzeLiveChart, generateSimulatedOhlcData } from '../services/geminiService';
+import { MarketDataManager } from '../services/marketDataService';
 import { LoadingSpinner } from './LoadingSpinner';
 import { SparklesIcon } from './icons/SparklesIcon';
 import { BeakerIcon } from './icons/BeakerIcon';
 import { useApiKey } from '../hooks/useApiKey';
-import { StrategyParams, BacktestResults, AnalysisResult } from '../types';
+import { StrategyParams, BacktestResults, AnalysisResult, OhlcData } from '../types';
 import { PaperClipIcon } from './icons/PaperClipIcon';
 import { XMarkIcon } from './icons/XMarkIcon';
 import { PhotoIcon } from './icons/PhotoIcon';
 import { LinkIcon } from './icons/LinkIcon';
+import { OhlcChart } from './OhlcChart';
+import { EquityCurveChart } from './EquityCurveChart';
 
 const MAJOR_PAIRS = ['EUR/USD', 'GBP/USD', 'USD/JPY', 'USD/CAD', 'AUD/USD', 'NZD/USD', 'USD/CHF'];
 const TIMEFRAMES = ['1M', '5M', '15M', '1H', '4H', 'Daily'];
@@ -36,10 +40,29 @@ const readFileAndConvertToBase64 = (file: File): Promise<UploadedFile> =>
   });
 
 const FormattedContent: React.FC<{ text: string }> = ({ text }) => {
+    const renderInlineMarkdown = (text: string): React.ReactNode => {
+        const parts: React.ReactNode[] = [];
+        let lastIndex = 0;
+        const regex = /\*\*(.*?)\*\*/g;
+        let match;
+        let key = 0;
+
+        while ((match = regex.exec(text)) !== null) {
+            if (match.index > lastIndex) {
+                parts.push(text.substring(lastIndex, match.index));
+            }
+            parts.push(<strong key={`strong-${key++}`} className="font-bold text-cyan-300">{match[1]}</strong>);
+            lastIndex = regex.lastIndex;
+        }
+
+        if (lastIndex < text.length) {
+            parts.push(text.substring(lastIndex));
+        }
+
+        return <>{parts}</>;
+    };
+
     const lines = text.split('\n').filter(p => p.trim() !== '');
-    const renderInlineMarkdown = (lineText: string) => lineText.split(/\*\*(.*?)\*\*/g).map((part, i) =>
-        i % 2 === 1 ? <strong key={i} className="font-bold text-cyan-300">{part}</strong> : part
-    );
     const elements: React.ReactElement[] = [];
     let listItems: React.ReactElement[] = [];
 
@@ -77,9 +100,10 @@ const MetricCard: React.FC<{ label: string; value: string; className?: string }>
     </div>
 );
 
-type LabState = 'idle' | 'parsing' | 'simulating' | 'analyzing' | 'results' | 'error';
+type LabState = 'idle' | 'parsing' | 'fetching_data' | 'generating_simulation_data' | 'analyzing_data' | 'generating_feedback' | 'results' | 'error';
 type AnalyzerState = 'idle' | 'analyzing' | 'results' | 'error';
 type ActiveTab = 'lab' | 'analyzer';
+type ChartTab = 'ohlc' | 'equity';
 
 
 export const AIBacktesterView: React.FC = () => {
@@ -96,6 +120,9 @@ export const AIBacktesterView: React.FC = () => {
     const [parsedStrategy, setParsedStrategy] = useState<StrategyParams | null>(null);
     const [backtestResults, setBacktestResults] = useState<BacktestResults | null>(null);
     const [coachingAnalysis, setCoachingAnalysis] = useState<string>('');
+    const [ohlcData, setOhlcData] = useState<OhlcData[]>([]);
+    const [dataSource, setDataSource] = useState<'real' | 'simulated' | null>(null);
+    const [chartTab, setChartTab] = useState<ChartTab>('ohlc');
     
     // --- State for Live Chart Analyzer ---
     const [chartAnalysisPrompt, setChartAnalysisPrompt] = useState('');
@@ -105,6 +132,19 @@ export const AIBacktesterView: React.FC = () => {
     const [analysisResult, setAnalysisResult] = useState<AnalysisResult | null>(null);
     const fileInputRef = useRef<HTMLInputElement>(null);
 
+     const getDatesForPeriod = (period: string): { startDate: string, endDate: string } => {
+        const endDate = new Date();
+        const startDate = new Date();
+        switch (period) {
+            case 'Last Month': startDate.setMonth(endDate.getMonth() - 1); break;
+            case 'Last 3 Months': startDate.setMonth(endDate.getMonth() - 3); break;
+            case 'Last 6 Months': startDate.setMonth(endDate.getMonth() - 6); break;
+            case 'Last Year': startDate.setFullYear(endDate.getFullYear() - 1); break;
+        }
+        const toYYYYMMDD = (d: Date) => d.toISOString().split('T')[0];
+        return { startDate: toYYYYMMDD(startDate), endDate: toYYYYMMDD(endDate) };
+    }
+
     const handleRunLab = async () => {
         if (!apiKey) { setLabError("Please set your Gemini API key."); openKeyModal(); return; }
         if (!strategyText.trim()) { setLabError("Please describe your trading strategy."); return; }
@@ -113,17 +153,43 @@ export const AIBacktesterView: React.FC = () => {
         setParsedStrategy(null);
         setBacktestResults(null);
         setCoachingAnalysis('');
+        setOhlcData([]);
+        setDataSource(null);
+        setChartTab('ohlc');
+
+        const hasMarketDataKey = !!(localStorage.getItem('user_twelve_data_api_key') || localStorage.getItem('user_fcsapi_api_key'));
 
         try {
             setLabState('parsing');
             const parsed = await parseStrategyFromText(apiKey, strategyText, pair, timeframe);
             setParsedStrategy(parsed);
 
-            setLabState('simulating');
-            const results = await generateSimulatedBacktestResults(apiKey, parsed, period);
+            let data: OhlcData[];
+
+            if (hasMarketDataKey) {
+                setDataSource('real');
+                setLabState('fetching_data');
+                const { startDate, endDate } = getDatesForPeriod(period);
+                data = await MarketDataManager.getHistoricalData(pair, timeframe, startDate, endDate);
+                if (data.length === 0) {
+                    throw new Error("No historical data could be fetched. The provider may not have data for this range or timeframe, or your key may be invalid.");
+                }
+            } else {
+                setDataSource('simulated');
+                setLabState('generating_simulation_data');
+                data = await generateSimulatedOhlcData(apiKey, parsed);
+                 if (data.length === 0) {
+                    throw new Error("The AI could not generate a simulated dataset for this strategy.");
+                }
+            }
+            
+            setOhlcData(data);
+
+            setLabState('analyzing_data');
+            const results = await runBacktestOnHistoricalData(apiKey, parsed, data);
             setBacktestResults(results);
 
-            setLabState('analyzing');
+            setLabState('generating_feedback');
             const analysis = await analyzeBacktestResults(apiKey, parsed, results);
             setCoachingAnalysis(analysis);
 
@@ -162,9 +228,6 @@ export const AIBacktesterView: React.FC = () => {
                 return;
             }
             try {
-                // FIX: The map function was causing a type error where the 'file' argument was not
-                // being correctly inferred as type 'File'. Switching to a standard for-loop with
-                // the .item() method ensures correct type handling for the FileList object.
                 const newFilesPromises = [];
                 for (let i = 0; i < files.length; i++) {
                     const file = files.item(i);
@@ -189,14 +252,16 @@ export const AIBacktesterView: React.FC = () => {
         setUploadedFiles(prev => prev.filter((_, index) => index !== indexToRemove));
     };
 
-    const resetLab = () => { setLabState('idle'); setLabError(''); setParsedStrategy(null); setBacktestResults(null); setCoachingAnalysis(''); };
+    const resetLab = () => { setLabState('idle'); setLabError(''); setParsedStrategy(null); setBacktestResults(null); setCoachingAnalysis(''); setOhlcData([]); };
     const resetAnalyzer = () => { setAnalyzerState('idle'); setAnalyzerError(''); setUploadedFiles([]); setChartAnalysisPrompt(''); setAnalysisResult(null); };
 
     const getLabLoadingMessage = () => {
         switch(labState) {
             case 'parsing': return "AI is understanding your strategy...";
-            case 'simulating': return "Running plausible simulation...";
-            case 'analyzing': return "Generating coaching feedback...";
+            case 'fetching_data': return `Fetching historical data for ${pair}...`;
+            case 'generating_simulation_data': return 'No market data key found in Settings. AI is generating a simulated dataset...';
+            case 'analyzing_data': return `AI is running backtest on ${dataSource} data...`;
+            case 'generating_feedback': return "Generating coaching feedback...";
             default: return "";
         }
     };
@@ -205,6 +270,15 @@ export const AIBacktesterView: React.FC = () => {
         <button
             onClick={() => setActiveTab(tab)}
             className={`px-4 py-2 text-sm font-semibold rounded-md transition-colors ${activeTab === tab ? 'bg-cyan-500 text-slate-900' : 'text-slate-300 hover:bg-slate-700'}`}
+        >
+            {label}
+        </button>
+    );
+
+    const ChartTabButton: React.FC<{ tab: ChartTab, label: string }> = ({ tab, label }) => (
+         <button
+            onClick={() => setChartTab(tab)}
+            className={`px-3 py-1 text-xs font-semibold rounded-md transition-colors ${chartTab === tab ? 'bg-slate-700 text-white' : 'text-slate-400 hover:bg-slate-800'}`}
         >
             {label}
         </button>
@@ -241,12 +315,33 @@ export const AIBacktesterView: React.FC = () => {
                     {/* Strategy Lab Output Panel */}
                     <div className="bg-gray-800/50 border border-gray-700 rounded-lg p-6 min-h-[400px] flex flex-col">
                         {labState === 'idle' && <div className="m-auto text-center"><BeakerIcon className="w-12 h-12 mx-auto text-slate-500" /><p className="mt-2 text-slate-400">Results will appear here.</p></div>}
-                        {(labState === 'parsing' || labState === 'simulating' || labState === 'analyzing') && <div className="m-auto text-center"><LoadingSpinner /><p className="mt-3 text-gray-400">{getLabLoadingMessage()}</p></div>}
+                        {labState !== 'idle' && labState !== 'results' && labState !== 'error' && <div className="m-auto text-center"><LoadingSpinner /><p className="mt-3 text-gray-400">{getLabLoadingMessage()}</p></div>}
                         {labState === 'error' && <div className="m-auto text-center"><p className="text-red-400 bg-red-500/10 p-4 rounded-md">{labError}</p><button onClick={resetLab} className="mt-4 px-4 py-2 bg-gray-600 rounded-md hover:bg-gray-500">Try Again</button></div>}
                         {labState === 'results' && backtestResults && coachingAnalysis && (
-                            <div className="animate-[fade-in_0.5s] space-y-6">
+                            <div className="animate-[fade-in_0.5s] space-y-6 overflow-y-auto">
                                 <div>
-                                    <h3 className="text-xl font-bold text-white mb-3">Plausible Performance Report</h3>
+                                    <div className="flex justify-between items-center mb-3">
+                                        <h3 className="text-xl font-bold text-white">
+                                            Chart ({dataSource === 'real' ? 'Real Historical Data' : 'AI-Generated Simulation'})
+                                        </h3>
+                                        <div className="flex space-x-1 p-1 bg-slate-900/50 rounded-lg">
+                                            <ChartTabButton tab="ohlc" label="Price Chart" />
+                                            <ChartTabButton tab="equity" label="Equity Curve" />
+                                        </div>
+                                    </div>
+                                    <div className="w-full aspect-video bg-slate-900 rounded-md">
+                                        {chartTab === 'ohlc' ? (
+                                             <OhlcChart data={ohlcData} trades={backtestResults.tradeLog} />
+                                        ) : (
+                                            <EquityCurveChart tradeLog={backtestResults.tradeLog || []} avgRR={backtestResults.avgRR} />
+                                        )}
+                                    </div>
+                                    <p className="text-xs text-slate-500 mt-1 text-center">
+                                        {chartTab === 'ohlc' ? 'Chart displays up to 500 most recent candles from the dataset.' : 'Equity curve assumes 1 unit of risk per trade.'}
+                                    </p>
+                                </div>
+                                <div>
+                                    <h3 className="text-xl font-bold text-white mb-3">Performance Report</h3>
                                     <div className="grid grid-cols-2 md:grid-cols-3 gap-3 text-center">
                                         <MetricCard label="Win Rate" value={`${backtestResults.winRate.toFixed(1)}%`} /><MetricCard label="Profit Factor" value={backtestResults.profitFactor.toFixed(2)} /><MetricCard label="Avg. R:R" value={`1:${backtestResults.avgRR.toFixed(2)}`} /><MetricCard label="Total Trades" value={String(backtestResults.totalTrades)} /><MetricCard label="Max Drawdown" value={`${backtestResults.maxDrawdown.toFixed(1)}%`} />
                                     </div>

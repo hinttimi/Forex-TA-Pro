@@ -12,7 +12,6 @@ import { Cog6ToothIcon } from './icons/Cog6ToothIcon';
 import { ChatBubbleBottomCenterTextIcon } from './icons/ChatBubbleBottomCenterTextIcon';
 import { HomeIcon } from './icons/HomeIcon';
 import { ChartBarIcon } from './icons/ChartBarIcon';
-// FIX: Import missing icons.
 import { RocketLaunchIcon } from './icons/RocketLaunchIcon';
 import { PlayIcon } from './icons/PlayIcon';
 import { MagnifyingGlassChartIcon } from './icons/MagnifyingGlassChartIcon';
@@ -164,7 +163,6 @@ export const Sidebar: React.FC<SidebarProps> = ({ modules, onSelectLesson, selec
               <nav className="space-y-1 mt-1">
                 {modules.map((module) => {
                     const isExpanded = expandedModules.has(module.title);
-                    // FIX: Moved `totalInModule` declaration before it is used.
                     const totalInModule = module.lessons.length;
                     const completedInModule = module.lessons.filter(l => completedLessons.has(l.key)).length;
                     const progress = totalInModule > 0 ? (completedInModule / totalInModule) * 100 : 0;

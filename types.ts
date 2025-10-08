@@ -1,4 +1,5 @@
 
+
 import React from 'react';
 
 export interface Lesson {
@@ -25,7 +26,6 @@ export interface Badge {
   id: string;
   title: string;
   description: string;
-  // FIX: React was not imported, causing an error on the line below.
   icon: React.FC<{ className?: string }>;
 }
 
@@ -61,12 +61,29 @@ export interface StrategyParams {
   takeProfit: string;
 }
 
+export interface OhlcData {
+    timestamp: number;
+    open: number;
+    high: number;
+    low: number;
+    close: number;
+}
+
+export interface BacktestTradeLog {
+    entryTimestamp: number;
+    exitTimestamp: number;
+    entryPrice: number;
+    exitPrice: number;
+    outcome: 'Win' | 'Loss';
+}
+
 export interface BacktestResults {
   totalTrades: number;
   winRate: number;
   profitFactor: number;
   avgRR: number;
   maxDrawdown: number;
+  tradeLog?: BacktestTradeLog[];
 }
 
 export interface AnalysisResult {

@@ -1,25 +1,24 @@
 
-import React, { useState } from 'react';
-import { Lesson, Module, AppView } from '../types';
+
+import React, { useState, useCallback, useEffect } from 'react';
+import { Lesson, Module } from '../types';
 import { ChartDisplay } from './ChartDisplay';
-import { LoadingSpinner } from './LoadingSpinner';
-import { LightBulbIcon } from './icons/LightBulbIcon';
 import { ExclamationTriangleIcon } from './icons/ExclamationTriangleIcon';
-import { generateChartImage, generateLessonContent } from '../services/geminiService';
+import { generateChartImage, generateLessonContent, generateLessonSummary } from '../services/geminiService';
 import { SparklesIcon } from './icons/SparklesIcon';
 import { QuestionMarkCircleIcon } from './icons/QuestionMarkCircleIcon';
 import { useApiKey } from '../hooks/useApiKey';
 import { LessonCurriculumSidebar } from './LessonCurriculumSidebar';
 import { ChevronLeftIcon } from './icons/ChevronLeftIcon';
 import { ChevronRightIcon } from './icons/ChevronRightIcon';
+import { DocumentTextIcon } from './icons/DocumentTextIcon';
+import { LoadingSpinner } from './LoadingSpinner';
+import { LessonSkeleton } from './LessonSkeleton';
 
 interface LessonViewProps {
   lesson: Lesson;
   content: string;
-  chartImageUrl: string;
-  onVisualize: () => void;
   isLoadingContent: boolean;
-  isLoadingChart: boolean;
   onStartQuiz: (lesson: Lesson) => void;
   error: string | null;
   onNextLesson: () => void;
@@ -32,163 +31,161 @@ interface LessonViewProps {
 }
 
 // Helper function to render inline markdown like **bold**
-const renderInlineMarkdown = (text: string): React.ReactElement => {
-    const parts = text.split(/\*\*(.*?)\*\*/g);
+const renderInlineMarkdown = (text: string): React.ReactNode => {
+    const parts: React.ReactNode[] = [];
+    let lastIndex = 0;
+    const regex = /\*\*(.*?)\*\*/g;
+    let match;
+    let key = 0;
+
+    while ((match = regex.exec(text)) !== null) {
+        // Text before the match
+        if (match.index > lastIndex) {
+            parts.push(text.substring(lastIndex, match.index));
+        }
+        // The bolded text
+        parts.push(<strong key={`strong-${key++}`} className="font-bold text-cyan-300">{match[1]}</strong>);
+        lastIndex = regex.lastIndex;
+    }
+
+    // Any remaining text
+    if (lastIndex < text.length) {
+        parts.push(text.substring(lastIndex));
+    }
+
+    return <>{parts}</>;
+};
+
+// This component renders a text segment, handling paragraphs, lists, and headings.
+const TextSegment: React.FC<{ text: string }> = ({ text }) => {
+    // Split into blocks by one or more empty lines
+    const blocks = text.split(/\n\s*\n/).filter(block => block.trim() !== '');
+
     return (
         <>
-            {parts.map((part, i) =>
-                i % 2 === 1 ? (
-                    <strong key={i} className="font-bold text-cyan-300">{part}</strong>
-                ) : (
-                    part
-                )
-            )}
+            {blocks.map((block, blockIndex) => {
+                const trimmedBlock = block.trim();
+                const isList = /^\s*(\*|\-|\d+\.)\s/.test(trimmedBlock);
+
+                if (isList) {
+                    const lines = block.split('\n');
+                    const listType = /^\s*\d+\./.test(trimmedBlock) ? 'ol' : 'ul';
+                    const listItems = lines.map((line, lineIndex) => {
+                        // This handles indented list items visually but not structurally (as nested lists)
+                        const indentLevel = (line.match(/^\s*/) || [''])[0].length;
+                        const content = line.replace(/^\s*(\*|\-|\d+\.)\s/, '').trim();
+                        if (!content) return null;
+                        return <li key={lineIndex} style={{ marginLeft: `${Math.floor(indentLevel/2) * 1.5}em` }}>{renderInlineMarkdown(content)}</li>;
+                    }).filter(Boolean); // Remove nulls from empty lines
+                    
+                    if (listType === 'ul') {
+                        return <ul key={blockIndex} className="list-disc space-y-2 my-6 pl-6">{listItems}</ul>;
+                    } else {
+                        return <ol key={blockIndex} className="list-decimal space-y-2 my-6 pl-6">{listItems}</ol>;
+                    }
+                }
+
+                // Handle headings
+                if (trimmedBlock.startsWith('#### ')) return <h4 key={blockIndex} className="text-lg font-semibold text-cyan-400 mt-6 mb-2">{renderInlineMarkdown(trimmedBlock.substring(5))}</h4>;
+                if (trimmedBlock.startsWith('### ')) return <h3 key={blockIndex} className="text-xl font-semibold text-white mt-8 mb-3">{renderInlineMarkdown(trimmedBlock.substring(4))}</h3>;
+                if (trimmedBlock.startsWith('## ')) return <h2 key={blockIndex} className="text-2xl font-bold text-white mt-10 mb-4 border-b border-slate-700 pb-2">{renderInlineMarkdown(trimmedBlock.substring(3))}</h2>;
+                if (trimmedBlock.startsWith('# ')) return <h1 key={blockIndex} className="text-3xl font-extrabold text-white mt-12 mb-5 border-b-2 border-cyan-500 pb-3">{renderInlineMarkdown(trimmedBlock.substring(2))}</h1>;
+                if (trimmedBlock === '---') return <hr key={blockIndex} className="my-8 border-slate-700" />;
+                
+                // If it's none of the above, it's a paragraph block.
+                return <p key={blockIndex} className="mb-6 leading-relaxed">{renderInlineMarkdown(block)}</p>;
+            })}
         </>
     );
 };
 
-const FormattedContent: React.FC<{ text: string }> = ({ text }) => {
-    const lines = text.split('\n').filter(p => p.trim() !== '');
-    
-    const elements: React.ReactElement[] = [];
-    let listItems: React.ReactElement[] = [];
-
-    const flushListItems = () => {
-        if (listItems.length > 0) {
-            elements.push(
-                <ul key={`ul-${elements.length}`} className="list-disc space-y-3 my-5 pl-6">
-                    {listItems}
-                </ul>
-            );
-            listItems = [];
-        }
-    };
-
-    lines.forEach((line, index) => {
-        const trimmedLine = line.trim();
-        
-        if (trimmedLine === '---') {
-            flushListItems();
-            elements.push(<hr key={index} className="my-8 border-slate-700" />);
-            return;
-        }
-
-        const isListItem = /^\d+\.\s/.test(trimmedLine) || trimmedLine.startsWith('* ');
-
-        if (isListItem) {
-            const content = trimmedLine.replace(/^\d+\.\s|^\* \s?/, '').trim();
-            listItems.push(<li key={index}>{renderInlineMarkdown(content)}</li>);
-            return;
-        }
-        
-        flushListItems();
-
-        if (trimmedLine.startsWith('#### ')) elements.push(<h4 key={index} className="text-lg font-semibold text-cyan-400 mt-6 mb-2">{renderInlineMarkdown(trimmedLine.substring(5))}</h4>);
-        else if (trimmedLine.startsWith('### ')) elements.push(<h3 key={index} className="text-xl font-semibold text-white mt-8 mb-3">{renderInlineMarkdown(trimmedLine.substring(4))}</h3>);
-        else if (trimmedLine.startsWith('## ')) elements.push(<h2 key={index} className="text-2xl font-bold text-white mt-10 mb-4 border-b border-slate-700 pb-2">{renderInlineMarkdown(trimmedLine.substring(3))}</h2>);
-        else if (trimmedLine.startsWith('# ')) elements.push(<h1 key={index} className="text-3xl font-extrabold text-white mt-12 mb-5 border-b-2 border-cyan-500 pb-3">{renderInlineMarkdown(trimmedLine.substring(2))}</h1>);
-        else elements.push(<p key={index} className="mb-5 leading-relaxed">{renderInlineMarkdown(line)}</p>);
-    });
-
-    flushListItems();
-
-    return <>{elements}</>;
-};
-
-const CandlestickPatternExplorer: React.FC = () => {
-    const [explorerChartUrl, setExplorerChartUrl] = useState('');
-    const [explorerExplanation, setExplorerExplanation] = useState('');
-    const [isExplorerLoading, setIsExplorerLoading] = useState(false);
-    const [activePattern, setActivePattern] = useState<string | null>(null);
-    const [explorerError, setExplorerError] = useState<string | null>(null);
-
+// This component will handle fetching and displaying a single chart embedded in the content.
+const EmbeddedChart: React.FC<{ prompt: string; lessonKey: string }> = ({ prompt, lessonKey }) => {
+    const [imageUrl, setImageUrl] = useState('');
+    const [isLoading, setIsLoading] = useState(true);
+    const [error, setError] = useState<string | null>(null);
     const { apiKey } = useApiKey();
-    const patterns = ['Bullish Engulfing', 'Bearish Engulfing', 'Hammer', 'Doji', 'Morning Star', 'Evening Star'];
 
-    const handlePatternSelect = async (patternName: string) => {
-        if (!apiKey) {
-            setExplorerError('Please set your Gemini API key to use the explorer.');
-            return;
-        }
-        setActivePattern(patternName);
-        setIsExplorerLoading(true);
-        setExplorerChartUrl('');
-        setExplorerExplanation('');
-        setExplorerError(null);
-        try {
-            const chartPrompt = `A dark-themed forex candlestick chart showing a clear, highlighted example of a "${patternName}" pattern. The context of the prior trend should be visible (e.g., a downtrend for a bullish reversal pattern).`;
-            const explanationPrompt = `You are a trading mentor. Explain the "${patternName}" candlestick pattern in 2-3 concise sentences. Describe what it looks like, where it typically occurs, and what it signifies for traders. Use markdown for **bold** emphasis.`;
+    useEffect(() => {
+        const generateImage = async () => {
+            if (!apiKey) {
+                setError('API key not set.');
+                setIsLoading(false);
+                return;
+            }
+            setIsLoading(true);
+            setError(null);
+            try {
+                // Generate a unique cache key based on lesson and a snippet of the prompt
+                const promptSnippet = prompt.slice(0, 30).replace(/\s/g, '');
+                const cacheKey = `embedded-chart-${lessonKey}-${promptSnippet}`;
+                const url = await generateChartImage(apiKey, prompt, cacheKey);
+                setImageUrl(url);
+            } catch (e) {
+                console.error("Failed to generate embedded chart:", e);
+                setError('Failed to load chart.');
+            } finally {
+                setIsLoading(false);
+            }
+        };
 
-            const [imageUrl, explanation] = await Promise.all([
-                generateChartImage(apiKey, chartPrompt, `pattern-chart-${patternName}`),
-                generateLessonContent(apiKey, explanationPrompt, `pattern-expl-${patternName}`)
-            ]);
-
-            setExplorerChartUrl(imageUrl);
-            setExplorerExplanation(explanation);
-        } catch (e) {
-            console.error(e);
-            setExplorerError('Failed to generate pattern analysis. Please check your API key.');
-        } finally {
-            setIsExplorerLoading(false);
-        }
-    };
+        generateImage();
+    }, [prompt, apiKey, lessonKey]);
 
     return (
-        <div className="mt-12 border-t border-cyan-500/20 pt-8">
-            <div className="flex items-start mb-6">
-                <SparklesIcon className="w-8 h-8 text-cyan-400 mr-3 mt-1 flex-shrink-0" />
-                <div>
-                    <h3 className="text-xl font-bold text-white">Interactive Pattern Explorer</h3>
-                    <p className="text-slate-400 text-sm">Click a pattern to generate a chart and an AI-powered explanation.</p>
-                </div>
-            </div>
-            <div className="flex flex-wrap gap-2 mb-4">
-                {patterns.map(pattern => (
-                    <button 
-                        key={pattern} 
-                        onClick={() => handlePatternSelect(pattern)}
-                        disabled={isExplorerLoading}
-                        className={`px-3 py-1.5 text-sm font-semibold rounded-full transition-colors duration-200 disabled:cursor-not-allowed ${
-                            activePattern === pattern 
-                            ? 'bg-cyan-500 text-slate-900' 
-                            : 'bg-slate-700 text-slate-300 hover:bg-slate-600 disabled:bg-slate-800'
-                        }`}
-                    >
-                        {isExplorerLoading && activePattern === pattern ? 'Loading...' : pattern}
-                    </button>
-                ))}
-            </div>
-            
-            <div className="mt-4 grid grid-cols-1 lg:grid-cols-2 gap-6 items-center">
-                 <ChartDisplay
-                    imageUrl={explorerChartUrl}
-                    isLoading={isExplorerLoading}
-                    loadingText={activePattern ? `AI is analyzing ${activePattern}...` : 'Generating...'}
-                    containerClassName="w-full aspect-video bg-slate-800/50 rounded-lg border border-slate-700 flex items-center justify-center p-2"
-                />
-                <div className="min-h-[10rem] text-slate-300">
-                    {explorerExplanation && !isExplorerLoading && <FormattedContent text={explorerExplanation} />}
-                     {explorerError && (
-                        <div className="mt-6 bg-red-500/10 border border-red-500/30 text-red-300 px-4 py-3 rounded-lg flex items-center">
-                            <ExclamationTriangleIcon className="w-5 h-5 mr-3" />
-                            <span>{explorerError}</span>
-                        </div>
-                    )}
-                </div>
-            </div>
+        <div className="my-8">
+             <ChartDisplay
+                imageUrl={imageUrl}
+                isLoading={isLoading}
+                loadingText="AI is drawing the chart..."
+                containerClassName="w-full aspect-video bg-slate-800/50 rounded-lg border border-slate-700 flex items-center justify-center p-2"
+            />
+            {error && <p className="text-xs text-red-400 text-center mt-2">{error}</p>}
         </div>
-    )
+    );
+};
+
+interface DynamicLessonContentProps {
+    text: string;
+    lessonKey: string;
+    originalPrompt: string;
 }
+
+// This component parses the full lesson content for [CHART:...] placeholders
+// and renders either text segments or embedded charts.
+const DynamicLessonContent: React.FC<DynamicLessonContentProps> = ({ text, lessonKey, originalPrompt }) => {
+    // Regex to find chart prompts in the original content
+    const chartPromptRegex = /\[CHART:\s*(.*?)\]/gs;
+    const chartPrompts = [...originalPrompt.matchAll(chartPromptRegex)].map(match => match[1]);
+
+    // Regex to split the AI-generated text by our placeholders
+    const placeholderRegex = /\|\|CHART_PLACEHOLDER_\d+\|\|/g;
+    const textSegments = text.split(placeholderRegex);
+
+    return (
+        <div className="prose prose-invert prose-lg max-w-none text-slate-300">
+            {textSegments.map((segment, index) => (
+                <React.Fragment key={index}>
+                    <TextSegment text={segment} />
+                    {index < chartPrompts.length && (
+                        <EmbeddedChart 
+                            key={`chart-${index}`} 
+                            prompt={chartPrompts[index]} 
+                            lessonKey={lessonKey} 
+                        />
+                    )}
+                </React.Fragment>
+            ))}
+        </div>
+    );
+};
+
 
 export const LessonView: React.FC<LessonViewProps> = (props) => {
     const {
         lesson,
         content,
-        chartImageUrl,
-        onVisualize,
         isLoadingContent,
-        isLoadingChart,
         onStartQuiz,
         error,
         onNextLesson,
@@ -199,22 +196,79 @@ export const LessonView: React.FC<LessonViewProps> = (props) => {
         onSelectLesson,
         completedLessons,
     } = props;
+    
+    const [keyTakeaways, setKeyTakeaways] = useState('');
+    const [isLoadingTakeaways, setIsLoadingTakeaways] = useState(false);
+    const { apiKey } = useApiKey();
+    
+    // Swipe navigation state
+    const [touchStart, setTouchStart] = useState<number | null>(null);
+    const [touchEnd, setTouchEnd] = useState<number | null>(null);
+    const minSwipeDistance = 60;
+
+    const handleGenerateTakeaways = useCallback(async () => {
+        if (!apiKey || !content) return;
+        setIsLoadingTakeaways(true);
+        try {
+            const summary = await generateLessonSummary(apiKey, content);
+            setKeyTakeaways(summary);
+        } catch (e) {
+            console.error("Failed to generate key takeaways", e);
+            setKeyTakeaways("Sorry, could not generate a summary at this time.");
+        } finally {
+            setIsLoadingTakeaways(false);
+        }
+    }, [apiKey, content]);
+
+    // Reset takeaways when lesson changes
+    useEffect(() => {
+        setKeyTakeaways('');
+    }, [lesson.key]);
+
+    const onTouchStart = (e: React.TouchEvent) => {
+        setTouchEnd(null);
+        setTouchStart(e.targetTouches[0].clientX);
+    };
+
+    const onTouchMove = (e: React.TouchEvent) => {
+        setTouchEnd(e.targetTouches[0].clientX);
+    };
+
+    const onTouchEnd = () => {
+        if (!touchStart || !touchEnd) return;
+        const distance = touchStart - touchEnd;
+        const isLeftSwipe = distance > minSwipeDistance;
+        const isRightSwipe = distance < -minSwipeDistance;
+
+        if (isLeftSwipe && hasNextLesson) onNextLesson();
+        if (isRightSwipe && hasPreviousLesson) onPreviousLesson();
+
+        setTouchStart(null);
+        setTouchEnd(null);
+    };
   
     return (
-        <div className="flex flex-col lg:flex-row gap-8 xl:gap-12">
+        <div 
+            className="flex flex-col lg:flex-row gap-8 xl:gap-12"
+            onTouchStart={onTouchStart}
+            onTouchMove={onTouchMove}
+            onTouchEnd={onTouchEnd}
+        >
             {/* Main Content */}
             <div className="flex-1 min-w-0">
                 <div className="max-w-4xl">
-                    <h1 className="text-4xl font-extrabold text-slate-100 mb-4 tracking-tight">{lesson.title}</h1>
-                    <div className="prose prose-invert prose-lg max-w-none text-slate-300">
-                        {isLoadingContent ? (
-                        <div className="flex items-center justify-center py-10">
-                            <LoadingSpinner />
-                        </div>
-                        ) : (
-                        <FormattedContent text={content} />
-                        )}
-                    </div>
+                     {isLoadingContent ? (
+                        <LessonSkeleton />
+                     ) : (
+                        <>
+                            <h1 className="text-4xl font-extrabold text-slate-100 mb-6 tracking-tight">{lesson.title}</h1>
+                            <DynamicLessonContent 
+                                text={content} 
+                                lessonKey={lesson.key}
+                                originalPrompt={lesson.contentPrompt} 
+                            />
+                        </>
+                     )}
 
                     {error && (
                         <div className="mt-6 bg-red-500/10 border border-red-500/30 text-red-300 px-4 py-3 rounded-lg flex items-center">
@@ -222,29 +276,31 @@ export const LessonView: React.FC<LessonViewProps> = (props) => {
                             <span>{error}</span>
                         </div>
                     )}
-                    
-                    {/* Visualizer Section */}
-                    <div className="mt-12 border-t border-slate-700 pt-8">
-                        <div className="flex items-start md:items-center justify-between flex-col md:flex-row gap-4">
+
+                    {!isLoadingContent && content && (
+                        <div className="mt-12 border-t border-slate-700 pt-8" id="tour-step-4-visualize">
                              <div className="flex items-start">
-                                <LightBulbIcon className="w-8 h-8 text-yellow-300 mr-4 mt-1 flex-shrink-0" />
+                                <DocumentTextIcon className="w-8 h-8 text-cyan-400 mr-4 mt-1 flex-shrink-0" />
                                 <div>
-                                    <h3 className="text-lg font-bold text-white">Visualize the Concept</h3>
-                                    <p className="text-slate-400 text-sm">Ask the AI to generate a chart illustrating this topic.</p>
+                                    <h3 className="text-lg font-bold text-white">Key Takeaways</h3>
+                                    <p className="text-slate-400 text-sm">Get a quick, AI-powered summary of this lesson.</p>
                                 </div>
                             </div>
-                            <button
-                                onClick={onVisualize}
-                                disabled={isLoadingChart || isLoadingContent}
-                                className="px-5 py-2.5 bg-cyan-500 text-slate-900 font-semibold rounded-lg shadow-md hover:bg-cyan-400 hover:shadow-lg hover:shadow-cyan-500/20 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-offset-slate-900 focus:ring-cyan-500 disabled:bg-slate-600 disabled:cursor-not-allowed transition-all duration-200 flex-shrink-0"
-                            >
-                                {isLoadingChart ? 'Generating...' : 'Generate Chart'}
-                            </button>
+                             {keyTakeaways ? (
+                                <div className="mt-4 bg-slate-800/50 border border-slate-700 rounded-lg p-5 prose prose-invert prose-sm max-w-none text-slate-300">
+                                    <TextSegment text={keyTakeaways} />
+                                </div>
+                            ) : (
+                                <button
+                                    onClick={handleGenerateTakeaways}
+                                    disabled={isLoadingTakeaways}
+                                    className="mt-4 px-4 py-2 bg-cyan-500/10 border border-cyan-500/30 text-cyan-300 font-semibold rounded-lg hover:bg-cyan-500/20 transition-colors flex items-center"
+                                >
+                                    {isLoadingTakeaways ? <LoadingSpinner /> : 'Generate Summary'}
+                                </button>
+                            )}
                         </div>
-                        <ChartDisplay imageUrl={chartImageUrl} isLoading={isLoadingChart} />
-                    </div>
-
-                    {lesson.key === 'l1-candlestick-anatomy' && !isLoadingContent && <CandlestickPatternExplorer />}
+                    )}
 
                      {/* Lesson Navigation */}
                     <div className="mt-12 pt-6 border-t border-slate-700 flex justify-between items-center">

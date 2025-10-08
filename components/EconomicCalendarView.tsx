@@ -1,3 +1,4 @@
+
 import React, { useState } from 'react';
 import { EconomicEvent } from '../types';
 import { CALENDAR_EVENTS } from '../constants/calendarEvents';
@@ -16,14 +17,28 @@ type AnalysisContent = { [key in AnalysisType]?: string };
 type LoadingState = { [key in AnalysisType]?: boolean };
 
 const FormattedContent: React.FC<{ text: string }> = ({ text }) => {
-    const renderInlineMarkdown = (lineText: string): React.ReactNode => {
-        return lineText.split(/(\*\*.*?\*\*)/g).map((part, i) => {
-            if (part.startsWith('**') && part.endsWith('**')) {
-                return <strong key={i} className="font-bold text-cyan-300">{part.slice(2, -2)}</strong>;
+    const renderInlineMarkdown = (text: string): React.ReactNode => {
+        const parts: React.ReactNode[] = [];
+        let lastIndex = 0;
+        const regex = /\*\*(.*?)\*\*/g;
+        let match;
+        let key = 0;
+
+        while ((match = regex.exec(text)) !== null) {
+            if (match.index > lastIndex) {
+                parts.push(text.substring(lastIndex, match.index));
             }
-            return part;
-        });
+            parts.push(<strong key={`strong-${key++}`} className="font-bold text-cyan-300">{match[1]}</strong>);
+            lastIndex = regex.lastIndex;
+        }
+
+        if (lastIndex < text.length) {
+            parts.push(text.substring(lastIndex));
+        }
+
+        return <>{parts}</>;
     };
+
     const lines = text.split('\n').filter(p => p.trim() !== '');
     const elements: React.ReactElement[] = [];
     let listItems: React.ReactElement[] = [];

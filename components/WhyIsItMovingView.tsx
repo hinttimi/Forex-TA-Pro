@@ -1,3 +1,5 @@
+
+
 import React, { useState, useEffect, useCallback } from 'react';
 import { analyzePriceMovement } from '../services/geminiService';
 import { LoadingSpinner } from './LoadingSpinner';
@@ -7,48 +9,83 @@ import { LinkIcon } from './icons/LinkIcon';
 import { useDebounce } from '../../hooks/useDebounce';
 import { useApiKey } from '../hooks/useApiKey';
 
-const MAJOR_PAIRS = ['EUR/USD', 'GBP/USD', 'USD/JPY', 'USD/CAD', 'AUD/USD', 'NZD/USD', 'USD/CHF'];
+const MAJOR_PAIRS = ['AUD/USD', 'EUR/USD', 'GBP/USD', 'NZD/USD', 'USD/CAD', 'USD/CHF', 'USD/JPY', 'XAU/USD'].sort();
 
 const FormattedContent: React.FC<{ text: string }> = ({ text }) => {
-    const renderInlineMarkdown = (lineText: string): React.ReactNode => {
-        return lineText.split(/(\*\*.*?\*\*)/g).map((part, i) => {
-            if (part.startsWith('**') && part.endsWith('**')) {
-                return <strong key={i} className="font-bold text-cyan-300">{part.slice(2, -2)}</strong>;
+    const renderInlineMarkdown = (text: string): React.ReactNode => {
+        const parts: React.ReactNode[] = [];
+        let lastIndex = 0;
+        const regex = /\*\*(.*?)\*\*/g;
+        let match;
+        let key = 0;
+
+        while ((match = regex.exec(text)) !== null) {
+            if (match.index > lastIndex) {
+                parts.push(text.substring(lastIndex, match.index));
             }
-            return part;
-        });
+            parts.push(<strong key={`strong-${key++}`} className="font-bold text-cyan-300">{match[1]}</strong>);
+            lastIndex = regex.lastIndex;
+        }
+
+        if (lastIndex < text.length) {
+            parts.push(text.substring(lastIndex));
+        }
+
+        return <>{parts}</>;
     };
 
-    const lines = text.split('\n').filter(p => p.trim() !== '');
+    const lines = text.split('\n').filter(line => line.trim() !== '');
     const elements: React.ReactElement[] = [];
-    let listItems: React.ReactElement[] = [];
+    let currentListItems: React.ReactElement[] = [];
 
-    const flushListItems = () => {
-        if (listItems.length > 0) {
-            elements.push(<ul key={`ul-${elements.length}`} className="list-disc space-y-2 my-3 pl-6">{listItems}</ul>);
-            listItems = [];
+    const flushList = () => {
+        if (currentListItems.length > 0) {
+            elements.push(<ul key={`ul-${elements.length}`} className="list-disc space-y-2 my-3 pl-6">{currentListItems}</ul>);
+            currentListItems = [];
         }
     };
 
     lines.forEach((line, index) => {
         const trimmedLine = line.trim();
-        if (trimmedLine.startsWith('*')) {
-            listItems.push(<li key={`li-${index}`}>{renderInlineMarkdown(trimmedLine.substring(1).trim())}</li>);
-        } else {
-            flushListItems();
-            const isHeading = /^\d+\.\s/.test(trimmedLine);
-            if (isHeading) {
-                const headingText = trimmedLine.substring(trimmedLine.indexOf(' ') + 1);
-                elements.push(<h3 key={`h-${index}`} className="text-xl font-semibold text-white mt-5 mb-2">{renderInlineMarkdown(headingText)}</h3>);
+        
+        // Differentiate between a heading (*Title*) and a list item (* item)
+        const isListItem = trimmedLine.startsWith('* ');
+        const isHeading = trimmedLine.startsWith('*') && !isListItem;
+
+        if (isHeading) {
+            flushList();
+            // This is a more complex heading that might have content on the same line.
+            // Example: `*Primary Driver:* **Some text here.**`
+            // We find the title part and the content part.
+            
+            // The title is the text between the first '*' and the first ':' or the last '*'.
+            const titleEndMarker = trimmedLine.indexOf(':') > 0 ? trimmedLine.indexOf(':') : trimmedLine.lastIndexOf('*');
+            
+            if (titleEndMarker > 1) {
+                const title = trimmedLine.substring(1, titleEndMarker).trim();
+                const content = trimmedLine.substring(titleEndMarker + 1).trim();
+                
+                elements.push(<h3 key={`h-${index}`} className="text-xl font-semibold text-white mt-6 mb-3">{renderInlineMarkdown(title)}</h3>);
+                if (content) {
+                    elements.push(<p key={`p-content-${index}`} className="mb-3 leading-relaxed">{renderInlineMarkdown(content)}</p>);
+                }
             } else {
-                 elements.push(<p key={`p-${index}`} className="mb-3 leading-relaxed">{renderInlineMarkdown(trimmedLine)}</p>);
+                 // Fallback for lines that start with * but don't fit the pattern, like `***`
+                 elements.push(<p key={`p-fallback-${index}`} className="mb-3 leading-relaxed">{renderInlineMarkdown(trimmedLine)}</p>);
             }
+        } else if (isListItem) {
+            const content = trimmedLine.substring(2);
+            currentListItems.push(<li key={`li-${index}`}>{renderInlineMarkdown(content)}</li>);
+        } else {
+            flushList();
+            elements.push(<p key={`p-${index}`} className="mb-3 leading-relaxed">{renderInlineMarkdown(trimmedLine)}</p>);
         }
     });
-    flushListItems();
 
+    flushList();
     return <>{elements}</>;
 };
+
 
 export const WhyIsItMovingView: React.FC = () => {
     const [selectedPair, setSelectedPair] = useState<string | null>(null);
