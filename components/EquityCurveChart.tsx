@@ -18,11 +18,12 @@ interface EquityCurveChartProps {
 }
 
 const CustomTooltip: React.FC<any> = ({ active, payload, label }) => {
+  const { theme } = useTheme();
   if (active && payload && payload.length) {
     return (
-      <div className="bg-slate-700/80 backdrop-blur-sm border border-slate-600 p-3 rounded-md text-sm">
-        <p className="label text-slate-300">{`Trade #${label}`}</p>
-        <p className="intro text-cyan-300">{`Equity: ${payload[0].value.toFixed(2)}R`}</p>
+      <div className="bg-white/80 dark:bg-slate-700/80 backdrop-blur-sm border border-slate-300 dark:border-slate-600 p-3 rounded-md text-sm shadow-lg">
+        <p className="label text-slate-600 dark:text-slate-300">{`Trade #${label}`}</p>
+        <p className="intro text-blue-600 dark:text-cyan-300 font-semibold">{`Equity: ${payload[0].value.toFixed(2)}R`}</p>
       </div>
     );
   }
@@ -55,16 +56,14 @@ export const EquityCurveChart: React.FC<EquityCurveChartProps> = ({ tradeLog, av
   
   const themeColors = {
       light: {
-          line: '#0891b2', // cyan-600
+          line: '#2563eb', // blue-600
           grid: '#e2e8f0', // slate-200
           tick: '#475569', // slate-600
-          tooltipBg: 'rgba(255, 255, 255, 0.8)',
       },
       dark: {
           line: '#22d3ee', // cyan-400
           grid: '#334155', // slate-700
           tick: '#94a3b8', // slate-400
-          tooltipBg: 'rgba(30, 41, 59, 0.8)',
       }
   };
 
@@ -77,8 +76,8 @@ export const EquityCurveChart: React.FC<EquityCurveChartProps> = ({ tradeLog, av
         margin={{
           top: 5,
           right: 20,
-          left: 0,
-          bottom: 5,
+          left: -10,
+          bottom: 20,
         }}
       >
         <CartesianGrid strokeDasharray="3 3" stroke={colors.grid} />
@@ -88,7 +87,7 @@ export const EquityCurveChart: React.FC<EquityCurveChartProps> = ({ tradeLog, av
           fontSize={12}
           tickLine={false}
           axisLine={false}
-          label={{ value: 'Number of Trades', position: 'insideBottom', offset: -5, fill: colors.tick, fontSize: 12 }}
+          label={{ value: 'Number of Trades', position: 'insideBottom', offset: -10, fill: colors.tick, fontSize: 12 }}
         />
         <YAxis
           stroke={colors.tick}
@@ -98,7 +97,6 @@ export const EquityCurveChart: React.FC<EquityCurveChartProps> = ({ tradeLog, av
           label={{ value: 'Equity (R)', angle: -90, position: 'insideLeft', offset: 10, fill: colors.tick, fontSize: 12 }}
         />
         <Tooltip content={<CustomTooltip />} />
-        <Legend wrapperStyle={{fontSize: "12px"}} />
         <Line
           type="monotone"
           dataKey="equity"

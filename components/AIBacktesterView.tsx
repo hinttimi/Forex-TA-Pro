@@ -1,7 +1,4 @@
-
-
-
-import React, { useState, useRef } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import { runBacktestOnHistoricalData, parseStrategyFromText, analyzeBacktestResults, analyzeLiveChart, generateSimulatedOhlcData } from '../services/geminiService';
 import { MarketDataManager } from '../services/marketDataService';
 import { LoadingSpinner } from './LoadingSpinner';
@@ -25,6 +22,15 @@ interface UploadedFile {
     data: string; // base64 data without the prefix
     mimeType: string;
     name: string;
+}
+
+interface AIBacktesterViewProps {
+    initialRequest?: {
+        pair: string;
+        timeframe: string;
+        period: string;
+        strategyDescription: string;
+    }
 }
 
 const readFileAndConvertToBase64 = (file: File): Promise<UploadedFile> =>
@@ -106,7 +112,7 @@ type ActiveTab = 'lab' | 'analyzer';
 type ChartTab = 'ohlc' | 'equity';
 
 
-export const AIBacktesterView: React.FC = () => {
+export const AIBacktesterView: React.FC<AIBacktesterViewProps> = ({ initialRequest }) => {
     const [activeTab, setActiveTab] = useState<ActiveTab>('lab');
     const { apiKey, openKeyModal } = useApiKey();
 
@@ -145,9 +151,10 @@ export const AIBacktesterView: React.FC = () => {
         return { startDate: toYYYYMMDD(startDate), endDate: toYYYYMMDD(endDate) };
     }
 
-    const handleRunLab = async () => {
+    const handleRunLab = async (strategyOverride?: string) => {
+        const finalStrategyText = strategyOverride || strategyText;
         if (!apiKey) { setLabError("Please set your Gemini API key."); openKeyModal(); return; }
-        if (!strategyText.trim()) { setLabError("Please describe your trading strategy."); return; }
+        if (!finalStrategyText.trim()) { setLabError("Please describe your trading strategy."); return; }
 
         setLabError('');
         setParsedStrategy(null);
@@ -161,7 +168,7 @@ export const AIBacktesterView: React.FC = () => {
 
         try {
             setLabState('parsing');
-            const parsed = await parseStrategyFromText(apiKey, strategyText, pair, timeframe);
+            const parsed = await parseStrategyFromText(apiKey, finalStrategyText, pair, timeframe);
             setParsedStrategy(parsed);
 
             let data: OhlcData[];
@@ -200,6 +207,17 @@ export const AIBacktesterView: React.FC = () => {
             setLabState('error');
         }
     };
+
+    useEffect(() => {
+        if (initialRequest) {
+            setPair(initialRequest.pair);
+            setTimeframe(initialRequest.timeframe);
+            setPeriod(initialRequest.period);
+            setStrategyText(initialRequest.strategyDescription);
+            handleRunLab(initialRequest.strategyDescription);
+        }
+    }, [initialRequest]);
+
 
     const handleAnalyzeChart = async () => {
         if (!apiKey) { setAnalyzerError("Please set your Gemini API key."); openKeyModal(); return; }
@@ -310,7 +328,7 @@ export const AIBacktesterView: React.FC = () => {
                                 <select value={period} onChange={e => setPeriod(e.target.value)} className="w-full bg-gray-800 border border-gray-600 rounded-md px-3 py-2 text-white font-semibold focus:ring-2 focus:ring-cyan-500"><option disabled>Period</option>{PERIODS.map(p => <option key={p} value={p}>{p}</option>)}</select>
                             </div>
                         </div>
-                        <button onClick={handleRunLab} disabled={labState !== 'idle' && labState !== 'error'} className="w-full py-3 bg-cyan-500 text-gray-900 font-bold rounded-lg shadow-md hover:bg-cyan-400 disabled:bg-gray-600 flex items-center justify-center"><SparklesIcon className="w-6 h-6 mr-2" />Analyze Strategy</button>
+                        <button onClick={() => handleRunLab()} disabled={labState !== 'idle' && labState !== 'error'} className="w-full py-3 bg-cyan-500 text-gray-900 font-bold rounded-lg shadow-md hover:bg-cyan-400 disabled:bg-gray-600 flex items-center justify-center"><SparklesIcon className="w-6 h-6 mr-2" />Analyze Strategy</button>
                     </div>
                     {/* Strategy Lab Output Panel */}
                     <div className="bg-gray-800/50 border border-gray-700 rounded-lg p-6 min-h-[400px] flex flex-col">

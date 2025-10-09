@@ -1,6 +1,3 @@
-
-
-
 import React, { useState, useRef, useEffect, useCallback } from 'react';
 import { generateMentorResponse, getAiClient, generateChartImage } from '../services/geminiService';
 import { SparklesIcon } from './icons/SparklesIcon';
@@ -17,11 +14,13 @@ import { SpeakerXMarkIcon } from './icons/SpeakerXMarkIcon';
 import { useApiKey } from '../hooks/useApiKey';
 import { DocumentTextIcon } from './icons/DocumentTextIcon';
 import { LinkIcon } from './icons/LinkIcon';
-import { AppView } from '../types';
+import { AppView, Lesson } from '../types';
 import { LightBulbIcon } from './icons/LightBulbIcon';
 import { ChartBarIcon } from './icons/ChartBarIcon';
 import { RocketLaunchIcon } from './icons/RocketLaunchIcon';
 import { MagnifyingGlassIcon } from './icons/MagnifyingGlassIcon';
+import { useCompletion } from '../hooks/useCompletion';
+import { MODULES } from '../constants';
 
 // --- Types ---
 interface UploadedFile {
@@ -34,7 +33,8 @@ interface Message {
     role: 'user' | 'model';
     text: string;
     file?: UploadedFile;
-    image?: string; // base64 data URL for display
+    userImage?: string; // base64 data URL for user upload display
+    modelResponseImage?: string; // base64 data URL for model's annotated image
     isImageLoading?: boolean;
     groundingChunks?: any[];
 }
@@ -42,10 +42,12 @@ type VoiceState = 'idle' | 'connecting' | 'active' | 'error';
 
 interface AIMentorViewProps {
     onSetView: (view: AppView) => void;
+    onExecuteTool: (payload: { toolName: AppView, params: any }) => void;
 }
 
 // --- Constants ---
 const CHAT_HISTORY_KEY = 'aiMentorChatHistory';
+const allLessons = MODULES.flatMap(module => module.lessons);
 
 // --- Helper Functions ---
 const readFileAndConvertToBase64 = (file: File): Promise<UploadedFile> =>
@@ -122,7 +124,7 @@ const FormattedContent: React.FC<{ text: string }> = ({ text }) => {
             if (match.index > lastIndex) {
                 parts.push(text.substring(lastIndex, match.index));
             }
-            parts.push(<strong key={`strong-${key++}`} className="font-bold text-cyan-300">{match[1]}</strong>);
+            parts.push(<strong key={`strong-${key++}`} className="font-bold text-blue-600 dark:text-cyan-400">{match[1]}</strong>);
             lastIndex = regex.lastIndex;
         }
 
@@ -177,13 +179,14 @@ const EXAMPLE_PROMPTS = [
     },
 ]
 
-export const AIMentorView: React.FC<AIMentorViewProps> = ({ onSetView }) => {
+export const AIMentorView: React.FC<AIMentorViewProps> = ({ onSetView, onExecuteTool }) => {
     const [messages, setMessages] = useState<Message[]>([]);
     const [userInput, setUserInput] = useState('');
     const [uploadedFile, setUploadedFile] = useState<UploadedFile | null>(null);
     const [isLoading, setIsLoading] = useState(false);
     const [error, setError] = useState<string | null>(null);
     const { apiKey, openKeyModal } = useApiKey();
+    const { getCompletedLessons } = useCompletion();
     
     // Voice state
     const [voiceState, setVoiceState] = useState<VoiceState>('idle');
@@ -286,7 +289,7 @@ export const AIMentorView: React.FC<AIMentorViewProps> = ({ onSetView }) => {
             role: 'user', 
             text: userInput.trim(), 
             ...(uploadedFile && { file: uploadedFile }),
-            ...(isImage && uploadedFile && { image: `data:${uploadedFile.mimeType};base64,${uploadedFile.data}` })
+            ...(isImage && uploadedFile && { userImage: `data:${uploadedFile.mimeType};base64,${uploadedFile.data}` })
         };
         setMessages(prev => [...prev, userMessage]);
         
@@ -295,7 +298,12 @@ export const AIMentorView: React.FC<AIMentorViewProps> = ({ onSetView }) => {
         setUploadedFile(null);
 
         try {
-            const { text: responseText, groundingChunks, functionCalls } = await generateMentorResponse(apiKey, userMessage.text, userMessage.file);
+            const completedLessons = getCompletedLessons();
+            const completedLessonTitles = allLessons
+                .filter(l => completedLessons.has(l.key))
+                .map(l => l.title);
+
+            const { text: responseText, image: responseImage, groundingChunks, functionCalls } = await generateMentorResponse(apiKey, userMessage.text, completedLessonTitles, userMessage.file);
             
             const modelMessageId = Date.now() + 1;
             
@@ -303,26 +311,26 @@ export const AIMentorView: React.FC<AIMentorViewProps> = ({ onSetView }) => {
             const chartMatch = responseText.match(chartRegex);
             let cleanText = responseText.replace(chartRegex, '').trim();
 
-            // If the model returns a function call but no text, create a default confirmation message.
             if (functionCalls && functionCalls.length > 0 && !cleanText) {
                 const toolName = functionCalls[0]?.args?.toolName;
                 if (toolName) {
                     const formattedToolName = (toolName as string).replace(/_/g, ' ');
-                    cleanText = `Sure thing. Navigating to the ${formattedToolName}...`;
+                    cleanText = `Of course. Navigating to the ${formattedToolName} for you...`;
                 }
             }
 
-            if (cleanText) {
+            if (cleanText || responseImage) {
                 const modelMessage: Message = { 
                     id: modelMessageId, 
                     role: 'model', 
                     text: cleanText, 
-                    isImageLoading: !!chartMatch, 
+                    isImageLoading: !!chartMatch,
+                    modelResponseImage: responseImage,
                     groundingChunks 
                 };
                 setMessages(prev => [...prev, modelMessage]);
     
-                if (isTtsEnabled) {
+                if (isTtsEnabled && cleanText) {
                     speak(cleanText);
                 }
             }
@@ -332,7 +340,7 @@ export const AIMentorView: React.FC<AIMentorViewProps> = ({ onSetView }) => {
                 try {
                     const imageUrl = await generateChartImage(apiKey, chartPrompt);
                     setMessages(prev => prev.map(m => 
-                        m.id === modelMessageId ? { ...m, image: imageUrl, isImageLoading: false } : m
+                        m.id === modelMessageId ? { ...m, modelResponseImage: imageUrl, isImageLoading: false } : m
                     ));
                 } catch (chartError) {
                     console.error("Failed to generate chart requested by AI:", chartError);
@@ -342,14 +350,11 @@ export const AIMentorView: React.FC<AIMentorViewProps> = ({ onSetView }) => {
                 }
             }
 
-             // Handle function call AFTER showing the text
             if (functionCalls && functionCalls.length > 0) {
                 const funcCall = functionCalls[0];
-                if (funcCall.name === 'navigateToTool' && funcCall.args.toolName) {
-                    const toolName = funcCall.args.toolName as AppView;
-                    // Give user time to read the confirmation message before navigation
+                if (funcCall.name === 'executeTool' && funcCall.args.toolName) {
                     setTimeout(() => {
-                        onSetView(toolName);
+                         onExecuteTool({ toolName: funcCall.args.toolName as AppView, params: funcCall.args.params });
                     }, 1500); 
                 }
             }
@@ -529,7 +534,7 @@ export const AIMentorView: React.FC<AIMentorViewProps> = ({ onSetView }) => {
     
     const getVoiceButton = () => {
         const classMap = {
-            idle: 'bg-gray-700 text-gray-300 hover:bg-cyan-500 hover:text-gray-900',
+            idle: 'bg-slate-200 text-slate-600 hover:bg-blue-500 hover:text-white dark:bg-slate-700 dark:text-slate-300 dark:hover:bg-cyan-500 dark:hover:text-slate-900',
             connecting: 'bg-yellow-500 text-white animate-pulse',
             active: 'bg-red-500 text-white',
             error: 'bg-red-700 text-white',
@@ -547,18 +552,18 @@ export const AIMentorView: React.FC<AIMentorViewProps> = ({ onSetView }) => {
 
     const WelcomeScreen = () => (
         <div className="text-center m-auto">
-            <SparklesIcon className="w-16 h-16 mx-auto text-cyan-400" />
-            <h2 className="mt-4 text-3xl font-bold text-white">AI Trading Mentor</h2>
-            <p className="mt-2 text-lg text-gray-400">Ask me anything, or try one of the examples below.</p>
+            <SparklesIcon className="w-16 h-16 mx-auto text-blue-500 dark:text-cyan-400" />
+            <h2 className="mt-4 text-3xl font-bold text-slate-900 dark:text-white">AI Trading Mentor</h2>
+            <p className="mt-2 text-lg text-slate-600 dark:text-slate-400">Ask me anything, or try one of the examples below.</p>
             <div className="mt-8 grid grid-cols-1 md:grid-cols-2 gap-4 max-w-2xl mx-auto">
                 {EXAMPLE_PROMPTS.map((prompt, index) => (
                     <button
                         key={index}
                         onClick={() => setUserInput(prompt.text)}
-                        className="p-4 bg-gray-800/50 border border-gray-700 rounded-lg text-left hover:bg-gray-700/70 hover:border-cyan-500/50 transition-all"
+                        className="p-4 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg text-left shadow-sm hover:border-blue-500/50 dark:hover:border-cyan-500/50 hover:-translate-y-0.5 transition-all"
                     >
-                        <prompt.icon className="w-6 h-6 mb-2 text-cyan-400"/>
-                        <p className="text-sm text-gray-300">{prompt.text}</p>
+                        <prompt.icon className="w-6 h-6 mb-2 text-blue-500 dark:text-cyan-400"/>
+                        <p className="text-sm text-slate-800 dark:text-slate-300">{prompt.text}</p>
                     </button>
                 ))}
             </div>
@@ -571,17 +576,17 @@ export const AIMentorView: React.FC<AIMentorViewProps> = ({ onSetView }) => {
                 {messages.length === 0 && voiceState === 'idle' && <WelcomeScreen />}
                 {messages.map((msg) => (
                     <div key={msg.id} className={`flex items-start gap-4 animate-[fade-in_0.5s_ease-out] ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}>
-                       {msg.role === 'model' && <div className="w-8 h-8 rounded-full bg-cyan-500/20 flex items-center justify-center flex-shrink-0 mt-1"><SparklesIcon className="w-5 h-5 text-cyan-400" /></div>}
-                       <div className={`w-full max-w-lg p-4 rounded-xl ${msg.role === 'user' ? 'bg-gray-700' : 'bg-gray-800/50'}`}>
-                           {msg.image && (
-                               <div className="mb-3 rounded-lg overflow-hidden border border-gray-600">
-                                <img src={msg.image} alt="User upload" className="max-w-full h-auto" />
+                       {msg.role === 'model' && <div className="w-8 h-8 rounded-full bg-blue-100 dark:bg-cyan-500/20 flex items-center justify-center flex-shrink-0 mt-1"><SparklesIcon className="w-5 h-5 text-blue-600 dark:text-cyan-400" /></div>}
+                       <div className={`w-full max-w-lg p-4 rounded-xl shadow-sm ${msg.role === 'user' ? 'bg-slate-100 dark:bg-slate-700' : 'bg-white dark:bg-slate-800'}`}>
+                           {msg.userImage && (
+                               <div className="mb-3 rounded-lg overflow-hidden border border-slate-200 dark:border-slate-600">
+                                <img src={msg.userImage} alt="User upload" className="max-w-full h-auto" />
                                </div>
                            )}
                            {msg.file && !msg.file.mimeType.startsWith('image/') && (
-                                <div className="mb-3 p-3 bg-gray-800/60 border border-gray-600 rounded-lg flex items-center gap-3">
-                                    <DocumentTextIcon className="w-8 h-8 text-gray-400 flex-shrink-0" />
-                                    <span className="text-sm text-gray-300 truncate font-medium">{msg.file.name}</span>
+                                <div className="mb-3 p-3 bg-slate-200 dark:bg-slate-800/60 border border-slate-300 dark:border-slate-600 rounded-lg flex items-center gap-3">
+                                    <DocumentTextIcon className="w-8 h-8 text-slate-500 dark:text-slate-400 flex-shrink-0" />
+                                    <span className="text-sm text-slate-800 dark:text-slate-300 truncate font-medium">{msg.file.name}</span>
                                 </div>
                            )}
                            {msg.isImageLoading && (
@@ -589,24 +594,24 @@ export const AIMentorView: React.FC<AIMentorViewProps> = ({ onSetView }) => {
                                    imageUrl=""
                                    isLoading={true}
                                    loadingText="AI is generating a chart..."
-                                   containerClassName="mb-3 rounded-lg overflow-hidden border border-gray-600"
+                                   containerClassName="mb-3 rounded-lg overflow-hidden border border-slate-200 dark:border-slate-600"
                                />
                            )}
-                           {msg.image && !msg.isImageLoading && (
+                           {msg.modelResponseImage && !msg.isImageLoading && (
                                <ChartDisplay
-                                   imageUrl={msg.image}
+                                   imageUrl={msg.modelResponseImage}
                                    isLoading={false}
-                                   containerClassName="mb-3 rounded-lg overflow-hidden border border-gray-600 hover:border-cyan-500/50 transition-colors"
+                                   containerClassName="mb-3 rounded-lg overflow-hidden border border-slate-200 dark:border-slate-600 hover:border-blue-500/50 dark:hover:border-cyan-500/50 transition-colors"
                                />
                            )}
-                           {msg.text && <div className="prose prose-invert prose-sm max-w-none text-gray-300"><FormattedContent text={msg.text} /></div>}
+                           {msg.text && <div className="prose dark:prose-invert prose-sm max-w-none text-slate-800 dark:text-slate-200"><FormattedContent text={msg.text} /></div>}
                            {msg.groundingChunks && msg.groundingChunks.length > 0 && (
-                                <div className="mt-4 pt-3 border-t border-gray-700">
-                                    <h4 className="text-xs font-semibold text-gray-400 uppercase mb-2 flex items-center"><LinkIcon className="w-4 h-4 mr-1.5" /> Sources</h4>
+                                <div className="mt-4 pt-3 border-t border-slate-200 dark:border-slate-700">
+                                    <h4 className="text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase mb-2 flex items-center"><LinkIcon className="w-4 h-4 mr-1.5" /> Sources</h4>
                                     <ul className="space-y-1.5">
                                         {msg.groundingChunks.map((chunk, index) => chunk.web && (
                                             <li key={index}>
-                                                <a href={chunk.web.uri} target="_blank" rel="noopener noreferrer" className="text-xs text-cyan-400 hover:underline truncate block" title={chunk.web.title}>
+                                                <a href={chunk.web.uri} target="_blank" rel="noopener noreferrer" className="text-xs text-blue-600 dark:text-cyan-400 hover:underline truncate block" title={chunk.web.title}>
                                                     {chunk.web.title}
                                                 </a>
                                             </li>
@@ -619,41 +624,41 @@ export const AIMentorView: React.FC<AIMentorViewProps> = ({ onSetView }) => {
                 ))}
                  {isLoading && (
                     <div className="flex items-start gap-4 justify-start">
-                        <div className="w-8 h-8 rounded-full bg-cyan-500/20 flex items-center justify-center flex-shrink-0 mt-1"><SparklesIcon className="w-5 h-5 text-cyan-400" /></div>
-                        <div className="w-full max-w-lg p-4 rounded-xl bg-gray-800/50 flex items-center space-x-2"><LoadingSpinner /><span className="text-gray-400 text-sm">AI Mentor is thinking...</span></div>
+                        <div className="w-8 h-8 rounded-full bg-blue-100 dark:bg-cyan-500/20 flex items-center justify-center flex-shrink-0 mt-1"><SparklesIcon className="w-5 h-5 text-blue-600 dark:text-cyan-400" /></div>
+                        <div className="w-full max-w-lg p-4 rounded-xl bg-white dark:bg-slate-800 flex items-center space-x-2"><LoadingSpinner /><span className="text-slate-500 dark:text-slate-400 text-sm">AI Mentor is thinking...</span></div>
                     </div>
                 )}
-                 {error && <div className="text-center text-red-400 bg-red-500/10 p-3 rounded-lg">{error}</div>}
+                 {error && <div className="text-center text-red-600 dark:text-red-400 bg-red-100 dark:bg-red-500/10 p-3 rounded-lg">{error}</div>}
                  {voiceState !== 'idle' && (
-                    <div className="sticky bottom-0 bg-gray-900/50 backdrop-blur-sm p-3 rounded-lg border border-gray-700">
-                        <p className="text-sm text-gray-400"><strong>You:</strong> {currentInputTranscription}<span className="inline-block w-1.5 h-4 bg-cyan-400 ml-1 animate-pulse"></span></p>
-                        <p className="text-sm text-cyan-300 mt-1"><strong>Mentor:</strong> {currentOutputTranscription}</p>
+                    <div className="sticky bottom-0 bg-slate-100/80 dark:bg-slate-900/80 backdrop-blur-sm p-3 rounded-lg border border-slate-200 dark:border-slate-700">
+                        <p className="text-sm text-slate-600 dark:text-slate-400"><strong>You:</strong> {currentInputTranscription}<span className="inline-block w-1.5 h-4 bg-blue-500 dark:bg-cyan-400 ml-1 animate-pulse"></span></p>
+                        <p className="text-sm text-blue-700 dark:text-cyan-300 mt-1"><strong>Mentor:</strong> {currentOutputTranscription}</p>
                     </div>
                 )}
             </div>
             
             <div className="mt-2 flex-shrink-0">
-                <div className="bg-gray-800 border border-gray-700 rounded-xl p-2 flex flex-col">
+                <div className="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl p-2 flex flex-col">
                     {uploadedFile && (
                          <div className="p-2 relative w-fit">
                             {uploadedFile.mimeType.startsWith('image/') ? (
-                                <img src={`data:${uploadedFile.mimeType};base64,${uploadedFile.data}`} alt="Preview" className="max-h-24 w-auto rounded-md" />
+                                <img src={`data:${uploadedFile.mimeType};base64,${uploadedFile.data}`} alt="Preview" className="max-h-24 w-auto rounded-md border border-slate-200 dark:border-slate-600" />
                             ) : (
-                                <div className="flex items-center gap-3 p-2 bg-gray-700 rounded-md">
-                                    <DocumentTextIcon className="w-6 h-6 text-gray-400 flex-shrink-0" />
-                                    <span className="text-sm text-gray-300 truncate">{uploadedFile.name}</span>
+                                <div className="flex items-center gap-3 p-2 bg-slate-100 dark:bg-slate-700 rounded-md">
+                                    <DocumentTextIcon className="w-6 h-6 text-slate-500 dark:text-slate-400 flex-shrink-0" />
+                                    <span className="text-sm text-slate-800 dark:text-slate-300 truncate">{uploadedFile.name}</span>
                                 </div>
                             )}
-                            <button onClick={() => setUploadedFile(null)} className="absolute -top-1 -right-1 bg-gray-600 rounded-full p-0.5 text-white hover:bg-red-500"><XMarkIcon className="w-4 h-4" /></button>
+                            <button onClick={() => setUploadedFile(null)} className="absolute -top-1 -right-1 bg-slate-500 dark:bg-slate-600 rounded-full p-0.5 text-white hover:bg-red-500"><XMarkIcon className="w-4 h-4" /></button>
                         </div>
                     )}
                     <div className="flex items-end space-x-2">
-                        <textarea value={userInput} onChange={(e) => setUserInput(e.target.value)} onKeyDown={handleKeyDown} placeholder="Ask the AI Mentor..." className="flex-1 bg-transparent p-2 text-gray-200 resize-none focus:outline-none placeholder-gray-500" rows={1} disabled={voiceState !== 'idle'}/>
+                        <textarea value={userInput} onChange={(e) => setUserInput(e.target.value)} onKeyDown={handleKeyDown} placeholder="Ask the AI Mentor..." className="flex-1 bg-transparent p-2 text-slate-900 dark:text-slate-200 resize-none focus:outline-none placeholder-slate-500 dark:placeholder-slate-500" rows={1} disabled={voiceState !== 'idle'}/>
                         <input type="file" accept="image/*,text/plain,text/csv,application/pdf,.doc,.docx,.xls,.xlsx" ref={fileInputRef} onChange={handleFileUpload} className="hidden" />
-                        <button onClick={() => fileInputRef.current?.click()} className="p-2 text-gray-400 hover:text-cyan-400 rounded-full hover:bg-gray-700 transition-colors" aria-label="Upload file" title="Upload file" disabled={voiceState !== 'idle'}><PaperClipIcon className="w-6 h-6" /></button>
+                        <button onClick={() => fileInputRef.current?.click()} className="p-2 text-slate-500 dark:text-slate-400 hover:text-blue-600 dark:hover:text-cyan-400 rounded-full hover:bg-slate-100 dark:hover:bg-slate-700 transition-colors" aria-label="Upload file" title="Upload file" disabled={voiceState !== 'idle'}><PaperClipIcon className="w-6 h-6" /></button>
                         <button
                             onClick={handleToggleTts}
-                            className={`p-2.5 rounded-full transition-colors ${isTtsEnabled ? 'bg-cyan-500/20 text-cyan-400' : 'text-gray-400 hover:text-cyan-400'}`}
+                            className={`p-2.5 rounded-full transition-colors ${isTtsEnabled ? 'bg-blue-100 text-blue-600 dark:bg-cyan-500/20 dark:text-cyan-400' : 'text-slate-500 dark:text-slate-400 hover:text-blue-600 dark:hover:text-cyan-400'}`}
                             aria-label={isTtsEnabled ? "Disable voice output" : "Enable voice output"}
                             title={isTtsEnabled ? "Disable voice output" : "Enable voice output"}
                             disabled={voiceState !== 'idle'}
@@ -661,7 +666,7 @@ export const AIMentorView: React.FC<AIMentorViewProps> = ({ onSetView }) => {
                             {isTtsEnabled ? <SpeakerWaveIcon className={`w-6 h-6 ${isSpeaking ? 'animate-pulse' : ''}`} /> : <SpeakerXMarkIcon className="w-6 h-6" />}
                         </button>
                         {getVoiceButton()}
-                        <button onClick={handleSendMessage} disabled={(!userInput.trim() && !uploadedFile) || isLoading || voiceState !== 'idle'} className="p-2.5 rounded-full bg-cyan-500 text-gray-900 disabled:bg-gray-600 disabled:cursor-not-allowed hover:bg-cyan-400 transition-colors" aria-label="Send message"><PaperAirplaneIcon className="w-6 h-6" /></button>
+                        <button onClick={handleSendMessage} disabled={(!userInput.trim() && !uploadedFile) || isLoading || voiceState !== 'idle'} className="p-2.5 rounded-full bg-blue-600 text-white dark:bg-cyan-500 dark:text-slate-900 disabled:bg-slate-300 dark:disabled:bg-slate-600 disabled:cursor-not-allowed hover:bg-blue-700 dark:hover:bg-cyan-400 transition-colors" aria-label="Send message"><PaperAirplaneIcon className="w-6 h-6" /></button>
                     </div>
                 </div>
             </div>

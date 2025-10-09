@@ -1,6 +1,3 @@
-
-
-
 import React, { useState, useCallback, useEffect } from 'react';
 import { Sidebar } from './components/Sidebar';
 import { LessonView } from './components/LessonView';
@@ -62,6 +59,26 @@ const AppContent: React.FC = () => {
   const [isFeedbackModalOpen, setIsFeedbackModalOpen] = useState(false);
   const [isTourActive, setIsTourActive] = useState(false);
   const [lessonToLoadKey, setLessonToLoadKey] = useState<string | null>(null);
+  const [toolExecutionParams, setToolExecutionParams] = useState<{ toolName: AppView, params: any } | null>(null);
+
+  const getLessonPrompt = (lesson: Lesson): string => {
+    // This new prompt instructs the text-generation AI to create a new, detailed image prompt.
+    return `You are an expert forex trading mentor creating a lesson. The user will provide content with placeholders like [CHART: a general description of a chart].
+
+Your task is to rewrite the lesson content for the user. When you encounter a [CHART: ...] placeholder, you MUST replace it with a new, highly detailed, and specific prompt for an image generation AI. This new prompt must be enclosed in [AI_CHART_PROMPT: ...].
+
+This new AI_CHART_PROMPT must:
+1.  Be extremely descriptive and directly correspond to the text you have just written before it.
+2.  Specify the chart type (e.g., candlestick, line), theme (always dark theme), specific patterns, labels, arrows, and any elements needed to perfectly illustrate the concept.
+3.  For example, if you just explained a Bullish Engulfing pattern, the AI_CHART_PROMPT should explicitly describe a small red candle followed by a large green candle that engulfs it at the bottom of a downtrend.
+
+After creating and inserting the [AI_CHART_PROMPT: ...], continue writing the rest of the lesson.
+
+Here is the lesson content you need to process:
+---
+${lesson.contentPrompt}
+---`;
+  };
 
   const debouncedLessonKey = useDebounce(lessonToLoadKey, 500);
 
@@ -108,6 +125,19 @@ const AppContent: React.FC = () => {
     }
   }, [currentLesson, currentView, completedLessons, handleSelectLesson]);
 
+  const handleExecuteTool = useCallback((payload: { toolName: AppView, params: any }) => {
+    setToolExecutionParams(payload);
+    setCurrentView(payload.toolName);
+  }, []);
+
+  // Effect to clear tool execution params after they have been used for a render.
+  // This prevents the tool from re-triggering if the view is revisited.
+  useEffect(() => {
+    if (toolExecutionParams) {
+        setToolExecutionParams(null);
+    }
+  }, [toolExecutionParams]);
+
   // Handle tour for first-time users
   useEffect(() => {
     if (wasKeyJustSet) {
@@ -142,10 +172,7 @@ const AppContent: React.FC = () => {
       }
       
       try {
-        let chartIndex = 0;
-        const modifiedForTextPrompt = lesson.contentPrompt.replace(/\[CHART:.*?\]/gs, () => `||CHART_PLACEHOLDER_${++chartIndex}||`);
-        const finalPrompt = `You are an expert forex trading mentor. Generate the lesson content based on the following text. IMPORTANT: You will see placeholders like ||CHART_PLACEHOLDER_1||. You MUST preserve these placeholders exactly as they are in your output, in their correct positions. Do not attempt to generate any visual content like mermaid diagrams for them; simply keep the placeholder text.\n\n---\n\n${modifiedForTextPrompt}`;
-
+        const finalPrompt = getLessonPrompt(lesson);
         const content = await generateLessonContent(apiKey, finalPrompt, `lesson-content-${lesson.key}`);
         setLessonContent(content);
         logLessonCompleted(lesson.key);
@@ -167,6 +194,38 @@ const AppContent: React.FC = () => {
       loadContent(debouncedLessonKey);
     }
   }, [debouncedLessonKey, currentLesson?.key, logLessonCompleted, apiKey, setApiKey]);
+
+  // Effect for preloading next lessons
+  useEffect(() => {
+    const preloadLessons = async () => {
+      if (!currentLesson || !apiKey) return;
+
+      const currentIndex = findLessonIndex(currentLesson.key);
+      if (currentIndex === -1) return;
+
+      const lessonsToPreload = [
+        allLessons[currentIndex + 1],
+        allLessons[currentIndex + 2],
+      ].filter(Boolean); // Filter out undefined if we're at the end of the list
+
+      for (const lesson of lessonsToPreload) {
+        try {
+          // This is a fire-and-forget call to populate the cache.
+          // We don't need to handle the returned content here.
+          const finalPrompt = getLessonPrompt(lesson);
+          await generateLessonContent(apiKey, finalPrompt, `lesson-content-${lesson.key}`);
+        } catch (e) {
+          // Preloading failures should not be user-facing.
+          // We log them to the console for debugging purposes.
+          console.error(`Failed to preload lesson ${lesson.key}:`, e);
+        }
+      }
+    };
+
+    // Delay preloading slightly to ensure the main content load is prioritized.
+    const timer = setTimeout(preloadLessons, 1500);
+    return () => clearTimeout(timer);
+  }, [currentLesson, apiKey]);
 
   // Badge check effect
   useEffect(() => {
@@ -282,7 +341,7 @@ const AppContent: React.FC = () => {
       case 'trading_plan':
         return <TradingPlanView />;
       case 'mentor':
-        return <AIMentorView onSetView={handleSetView} />;
+        return <AIMentorView onSetView={handleSetView} onExecuteTool={handleExecuteTool} />;
       case 'quiz':
         return quizLesson ? (
             <QuizView 
@@ -301,7 +360,7 @@ const AppContent: React.FC = () => {
       case 'economic_calendar':
         return <EconomicCalendarView />;
       case 'backtester':
-        return <AIBacktesterView />;
+        return <AIBacktesterView initialRequest={toolExecutionParams?.params} />;
       case 'settings':
         return <SettingsView />;
       default:
@@ -319,11 +378,11 @@ const AppContent: React.FC = () => {
     }
 
   return (
-    <div className="relative h-screen font-sans overflow-hidden">
+    <div className="relative h-screen font-sans overflow-hidden bg-slate-50 text-slate-800 dark:bg-slate-950 dark:text-slate-200">
       {isTourActive && <WelcomeTour onClose={handleTourComplete} />}
       <ApiKeyModal />
       <FeedbackModal isOpen={isFeedbackModalOpen} onClose={closeFeedbackModal} />
-      {isSidebarOpen && <div onClick={() => setIsSidebarOpen(false)} className="fixed inset-0 bg-gray-900/40 dark:bg-black/60 z-30 md:hidden" aria-hidden="true" />}
+      {isSidebarOpen && <div onClick={() => setIsSidebarOpen(false)} className="fixed inset-0 bg-black/30 dark:bg-black/60 backdrop-blur-sm z-30 md:hidden" aria-hidden="true" />}
       <Sidebar
         modules={MODULES}
         onSelectLesson={handleSelectLesson}

@@ -19,9 +19,9 @@ const NavItem: React.FC<{
     onClick: () => void;
 }> = ({ view, label, icon: Icon, isActive, onClick }) => {
     return (
-        <button onClick={onClick} className="flex-1 flex flex-col items-center justify-center p-2 text-xs transition-colors duration-200 focus:outline-none focus:bg-slate-700/50">
-            <Icon className={`w-6 h-6 mb-0.5 transition-colors ${isActive ? 'text-cyan-400' : 'text-slate-400'}`} />
-            <span className={`transition-colors ${isActive ? 'text-cyan-400' : 'text-slate-400'}`}>{label}</span>
+        <button onClick={onClick} className="flex-1 flex flex-col items-center justify-center p-2 text-xs transition-colors duration-200 focus:outline-none focus:bg-slate-100 dark:focus:bg-slate-700/50">
+            <Icon className={`w-6 h-6 mb-0.5 transition-colors ${isActive ? 'text-blue-600 dark:text-cyan-400' : 'text-slate-500 dark:text-slate-400'}`} />
+            <span className={`transition-colors ${isActive ? 'font-semibold text-blue-600 dark:text-cyan-400' : 'text-slate-500 dark:text-slate-400'}`}>{label}</span>
         </button>
     );
 }
@@ -30,7 +30,7 @@ export const BottomNavBar: React.FC<BottomNavBarProps> = ({ currentView, onSetVi
     const isLessonRelatedView = ['lesson', 'quiz'].includes(currentView);
 
     return (
-        <nav className="fixed bottom-0 left-0 right-0 h-16 bg-slate-800/80 backdrop-blur-lg border-t border-slate-700/60 flex items-center justify-around md:hidden z-30">
+        <nav className="fixed bottom-0 left-0 right-0 h-16 bg-white/95 dark:bg-slate-800/90 backdrop-blur-lg border-t border-slate-200 dark:border-slate-700/60 flex items-center justify-around md:hidden z-30">
             <NavItem view="dashboard" label="Home" icon={HomeIcon} isActive={currentView === 'dashboard'} onClick={() => onSetView('dashboard')} />
             <NavItem view="lesson" label="Lesson" icon={BookOpenIcon} isActive={isLessonRelatedView} onClick={onSelectLesson} />
             <NavItem view="mentor" label="Mentor" icon={SparklesIcon} isActive={currentView === 'mentor'} onClick={() => onSetView('mentor')} />

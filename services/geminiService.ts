@@ -1,4 +1,4 @@
-import { GoogleGenAI, Type, GenerateContentResponse, GenerateImagesResponse, FunctionDeclaration } from "@google/genai";
+import { GoogleGenAI, Type, GenerateContentResponse, GenerateImagesResponse, FunctionDeclaration, Modality } from "@google/genai";
 import { NewsArticle, MarketUpdate, EconomicEvent, MultipleChoiceQuestion, StrategyParams, BacktestResults, AnalysisResult, AppView, OhlcData } from '../types';
 
 // --- Client Management ---
@@ -62,6 +62,17 @@ const withRetry = async <T>(
 
 
 export const generateLessonContent = async (apiKey: string, prompt: string, cacheKey?: string): Promise<string> => {
+  if (cacheKey) {
+    try {
+      const cachedContent = sessionStorage.getItem(cacheKey);
+      if (cachedContent) {
+        return cachedContent;
+      }
+    } catch (error) {
+      console.warn("Could not access sessionStorage:", error);
+    }
+  }
+
   try {
     const ai = getAiClient(apiKey);
     const response = await withRetry<GenerateContentResponse>(() => ai.models.generateContent({
@@ -69,6 +80,15 @@ export const generateLessonContent = async (apiKey: string, prompt: string, cach
         contents: prompt,
     }));
     const textContent = response.text;
+    
+    if (cacheKey) {
+      try {
+        sessionStorage.setItem(cacheKey, textContent);
+      } catch (error) {
+        console.warn("Could not save to sessionStorage:", error);
+      }
+    }
+
     return textContent;
   } catch (error) {
     console.error("Error generating lesson content:", error);
@@ -100,17 +120,20 @@ ${lessonContent}
 export const generateChartImage = async (apiKey: string, prompt: string, cacheKey?: string): Promise<string> => {
   try {
     const ai = getAiClient(apiKey);
-    const response = await withRetry<GenerateImagesResponse>(() => ai.models.generateImages({
-        model: 'imagen-4.0-generate-001',
-        prompt: prompt,
+    const fullPrompt = `${prompt} Generate the chart to fill the entire image canvas. Do not add any extra padding, margins, or borders around the chart. The final image must have a 16:9 aspect ratio.`;
+    
+    const response = await withRetry<GenerateContentResponse>(() => ai.models.generateContent({
+        model: 'gemini-2.5-flash-image',
+        contents: {
+            parts: [{ text: fullPrompt }]
+        },
         config: {
-          numberOfImages: 1,
-          outputMimeType: 'image/png',
-          aspectRatio: '16:9',
+            responseModalities: [Modality.IMAGE, Modality.TEXT],
         },
     }));
     
-    const base64ImageBytes = response.generatedImages?.[0]?.image?.imageBytes;
+    const imagePart = response.candidates?.[0]?.content?.parts.find(part => part.inlineData);
+    const base64ImageBytes = imagePart?.inlineData?.data;
 
     if (base64ImageBytes) {
         const imageUrl = `data:image/png;base64,${base64ImageBytes}`;
@@ -265,21 +288,31 @@ For each question, provide 4 options in total (one correct, three plausible dist
     }
 };
 
-const navigateToToolFunctionDeclaration: FunctionDeclaration = {
-  name: 'navigateToTool',
-  description: 'Navigates the user to a specific tool or practice area within the application based on their request. Use this when the user asks to practice something or wants to see a specific tool.',
+const executeToolFunctionDeclaration: FunctionDeclaration = {
+  name: 'executeTool',
+  description: 'Navigates the user to a specific tool and can optionally pre-fill parameters or execute an action. Use this to make the app feel agentic and responsive to user commands.',
   parameters: {
     type: Type.OBJECT,
     properties: {
       toolName: {
         type: Type.STRING,
-        description: "The name of the tool to navigate to. Must be one of the available tool views.",
+        description: "The name of the tool to navigate to or execute.",
         enum: [
             'simulator', 'live_simulator', 'backtester', 'pattern', 'timed', 
             'canvas', 'market_pulse', 'news_feed', 'market_analyzer', 
             'economic_calendar', 'trading_plan', 'achievements'
         ]
       },
+      params: {
+          type: Type.OBJECT,
+          description: "Optional parameters to pass to the tool. For 'backtester', this should include 'pair', 'timeframe', 'period', and 'strategyDescription' based on the user's natural language request.",
+          properties: {
+              pair: { type: Type.STRING, description: "e.g., 'EUR/USD'" },
+              timeframe: { type: Type.STRING, description: "e.g., '15M' or '1H'" },
+              period: { type: Type.STRING, description: "e.g., 'Last 6 Months'" },
+              strategyDescription: { type: Type.STRING, description: "The user's strategy in their own words."}
+          }
+      }
     },
     required: ['toolName'],
   },
@@ -288,50 +321,73 @@ const navigateToToolFunctionDeclaration: FunctionDeclaration = {
 export const generateMentorResponse = async (
     apiKey: string, 
     prompt: string, 
+    completedLessonTitles: string[],
     file?: { data: string; mimeType: string }
-): Promise<{ text: string; groundingChunks: any[]; functionCalls?: any[] }> => {
-    const systemInstruction = `You are an expert forex trading mentor. Your primary expertise is in Smart Money Concepts (SMC) and Inner Circle Trader (ICT) methodologies. You can also identify classical technical analysis patterns and explain how they relate to SMC principles.
-
-You have been upgraded with new agentic capabilities:
-1.  **Real-Time Search:** You have access to Google Search. Use it for any questions about recent market news, economic data, or any topic where up-to-date information is crucial. When you use search, your answer will be grounded in the sources you find.
-2.  **File Analysis:** Users can upload files (images, text, CSV, PDF). Analyze the content provided in these files in your response. For charts, identify patterns. For data files (like CSV), summarize the data or answer questions about it. For documents, analyze the text.
-3.  **In-App Navigation:** You can navigate the user to any of the practice or market analysis tools within the app. Be proactive! If a user's request can be best fulfilled by one of the tools, you should suggest it and navigate them there.
-    - **When to use:** If a user asks to practice a concept (e.g., "I want to practice finding order blocks"), wants to see a specific tool (e.g., "show me the economic calendar"), or describes a task that a tool can perform (e.g., "backtest a strategy for me"), use the \`navigateToTool\` function.
-    - **How to use:** First, respond with a brief, conversational confirmation message. Then, immediately call the function. For example, if the user says "Let's practice identifying fair value gaps", your response should be a text part like "Great idea, the Pattern Recognition tool is perfect for that. Let's go." followed by a function call to \`navigateToTool({ toolName: 'pattern' })\`.
-
-Provide clear, concise, and actionable feedback. Be encouraging and helpful. Use markdown for formatting.
-
-When a visual explanation would be helpful, embed a chart generation request in your response using the format [CHART: a detailed, descriptive prompt for an image generation model].`;
+): Promise<{ text: string; image?: string; groundingChunks: any[]; functionCalls?: any[] }> => {
     
+    const useImageModel = file?.mimeType.startsWith('image/');
+
+    const completedLessonsText = completedLessonTitles.length > 0
+        ? `The user has already completed the following lessons: ${completedLessonTitles.join(', ')}. Use this knowledge to tailor your explanations. If they ask about an advanced topic but are missing a prerequisite, gently guide them to the prerequisite lesson first.`
+        : "The user is a beginner and has not completed any lessons yet.";
+
+    const systemInstruction = useImageModel
+    ? `You are an expert forex trading mentor specializing in Smart Money Concepts (SMC). The user has uploaded a chart and is asking a question. Your task is to provide a text answer AND an edited version of the chart that visually explains your answer.
+On the returned image, you MUST draw annotations like rectangles around order blocks, arrows for market direction, and text labels for key concepts like "Liquidity Sweep" or "BOS".
+Return both your text explanation and the fully annotated image.`
+    : `You are an expert forex trading mentor and application assistant. Your primary expertise is in Smart Money Concepts (SMC) and Inner Circle Trader (ICT) methodologies.
+${completedLessonsText}
+
+You have agentic capabilities to control the app:
+1.  **Real-Time Search:** Use Google Search for questions about recent market news, economic data, or any up-to-date information.
+2.  **Tool Execution:** You can navigate the user to any tool or even run analyses for them using the \`executeTool\` function. Be proactive!
+    - **When to use:** If a user asks to practice a concept (e.g., "I want to practice finding order blocks"), use \`executeTool({ toolName: 'pattern' })\`.
+    - **Backtester:** If a user asks you to backtest a strategy (e.g., "backtest a strategy for me on EUR/USD 15M..."), you MUST use the \`executeTool\` function with the 'backtester' toolName and fully populate the 'params' object with the pair, timeframe, period, and the user's full strategyDescription. You should then respond with a confirmation like "Of course. Running that backtest for you now..." and the app will handle the rest. DO NOT try to perform the backtest yourself.
+    - **Navigation:** For other tools, provide a confirmation message and then call the function, e.g., "Let's check the economic calendar." followed by \`executeTool({ toolName: 'economic_calendar' })\`.
+
+Provide clear, concise, and actionable feedback. Use markdown for formatting.
+When a visual explanation is needed, embed a chart generation request in your response using the format [CHART: a detailed, descriptive prompt for an image generation model].`;
+
     try {
         const ai = getAiClient(apiKey);
-        
         const contents: any = { parts: [{ text: prompt }] };
-
         if (file) {
             contents.parts.unshift({
-                inlineData: {
-                    mimeType: file.mimeType,
-                    data: file.data,
-                },
+                inlineData: { mimeType: file.mimeType, data: file.data },
             });
         }
         
+        const modelName = useImageModel ? 'gemini-2.5-flash-image' : 'gemini-2.5-flash';
+        
         const response = await withRetry<GenerateContentResponse>(() => ai.models.generateContent({
-            model: 'gemini-2.5-flash',
+            model: modelName,
             contents: contents,
             config: {
                 systemInstruction: systemInstruction,
-                tools: [{ functionDeclarations: [navigateToToolFunctionDeclaration] }],
+                ...(useImageModel 
+                    ? { responseModalities: [Modality.IMAGE, Modality.TEXT] }
+                    : { tools: [{ functionDeclarations: [executeToolFunctionDeclaration] }] }
+                ),
             },
         }));
-        
-        return {
-            text: response.text,
-            groundingChunks: response.candidates?.[0]?.groundingMetadata?.groundingChunks || [],
-            functionCalls: response.functionCalls,
-        };
 
+        if (useImageModel) {
+            const textPart = response.candidates?.[0]?.content?.parts.find(p => p.text);
+            const imagePart = response.candidates?.[0]?.content?.parts.find(p => p.inlineData);
+            const base64ImageBytes = imagePart?.inlineData?.data;
+            return {
+                text: textPart?.text || "Here is the annotated chart.",
+                image: base64ImageBytes ? `data:image/png;base64,${base64ImageBytes}` : undefined,
+                groundingChunks: [],
+                functionCalls: [],
+            };
+        } else {
+             return {
+                text: response.text,
+                groundingChunks: response.candidates?.[0]?.groundingMetadata?.groundingChunks || [],
+                functionCalls: response.functionCalls,
+            };
+        }
     } catch (error) {
         console.error("Error generating mentor response:", error);
         throw error;
@@ -587,9 +643,7 @@ const parseStrategyFunctionDeclaration: FunctionDeclaration = {
 };
 
 export const parseStrategyFromText = async (apiKey: string, userText: string, pair: string, timeframe: string): Promise<StrategyParams> => {
-    const prompt = `Parse the following trading strategy description into its structured components. The user is trading ${pair} on the ${timeframe} timeframe.
-
-Strategy: "${userText}"`;
+    const prompt = `The user is trading ${pair} on the ${timeframe} timeframe. Here is their strategy: "${userText}"`;
 
     try {
         const ai = getAiClient(apiKey);
@@ -597,12 +651,13 @@ Strategy: "${userText}"`;
             model: 'gemini-2.5-flash',
             contents: prompt,
             config: {
+                systemInstruction: "You are a specialized system for parsing trading strategies. When given a user's strategy, you MUST use the 'parse_strategy' tool to extract its components. Your sole purpose is to call the provided tool. Do not respond with conversational text or any other content.",
                 tools: [{ functionDeclarations: [parseStrategyFunctionDeclaration] }],
             },
         }));
 
         const functionCall = response.functionCalls?.[0];
-        if (functionCall?.name === 'parse_strategy' && functionCall.args) {
+        if (functionCall?.name === 'parse_strategy' && functionCall.args && Array.isArray(functionCall.args.entryCriteria) && functionCall.args.stopLoss && functionCall.args.takeProfit) {
             return {
                 pair,
                 timeframe,
@@ -611,11 +666,18 @@ Strategy: "${userText}"`;
                 takeProfit: functionCall.args.takeProfit,
             };
         } else {
+            console.error("Failed to get a valid 'parse_strategy' tool call. Model may have returned text instead. Response:", JSON.stringify(response, null, 2));
             throw new Error("AI could not parse the strategy. Please try describing it more clearly.");
         }
 
     } catch (error) {
         console.error("Error parsing strategy from text:", error);
+        // The withRetry helper already throws user-friendly messages for rate limits, etc.
+        // We only want to re-throw our specific parsing error if it happens.
+        if (error instanceof Error && error.message.startsWith("AI could not parse")) {
+             throw error;
+        }
+        // For other errors from the SDK or network, we can pass them along.
         throw error;
     }
 };

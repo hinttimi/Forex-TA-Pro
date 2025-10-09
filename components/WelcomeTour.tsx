@@ -116,13 +116,13 @@ const WelcomeTour: React.FC<{ onClose: () => void }> = ({ onClose }) => {
         <div style={{ opacity: isVisible ? 1 : 0, transition: 'opacity 0.3s' }}>
             <div className="tour-highlight" style={highlightStyle}></div>
             <div className="tour-tooltip" style={tooltipStyle}>
-                <h3 className="text-lg font-bold text-white mb-2">{currentStep.title}</h3>
-                <p className="text-sm text-slate-300 mb-4">{currentStep.content}</p>
+                <h3 className="text-lg font-bold text-slate-900 dark:text-white mb-2">{currentStep.title}</h3>
+                <p className="text-sm text-slate-600 dark:text-slate-300 mb-4">{currentStep.content}</p>
                 <div className="flex justify-between items-center">
                     <span className="text-xs text-slate-500">{stepIndex + 1} / {TOUR_STEPS.length}</span>
                     <div>
-                        <button onClick={handleSkip} className="text-sm text-slate-400 hover:text-white mr-4">Skip</button>
-                        <button onClick={handleNext} className="px-4 py-1.5 bg-cyan-500 text-slate-900 text-sm font-semibold rounded-md">
+                        <button onClick={handleSkip} className="text-sm text-slate-500 hover:text-slate-800 dark:hover:text-white mr-4">Skip</button>
+                        <button onClick={handleNext} className="px-4 py-1.5 bg-blue-600 text-white dark:bg-cyan-500 dark:text-slate-900 text-sm font-semibold rounded-md">
                             {stepIndex === TOUR_STEPS.length - 1 ? 'Finish' : 'Next'}
                         </button>
                     </div>

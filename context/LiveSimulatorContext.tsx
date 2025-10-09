@@ -2,6 +2,7 @@ import React, { createContext, useState, useCallback, useMemo, ReactNode, useRef
 import { useInterval } from '../hooks/useInterval';
 import { getRealtimePriceWithSearch } from '../services/geminiService';
 import { useApiKey } from '../hooks/useApiKey';
+import { MarketDataManager } from '../services/marketDataService';
 
 const MAX_DATA_POINTS = 100;
 
@@ -78,18 +79,28 @@ export const LiveSimulatorProvider: React.FC<{ children: ReactNode }> = ({ child
         setIsSimulating(false);
         setCurrentPair(pair);
         if ((!simulationData[pair] || simulationData[pair].length === 0)) {
-            if (!apiKey) {
-                setError(`A valid Gemini API key is required to fetch the live price and start the simulation.`);
-                return;
-            }
             setIsLoadingInitialPrice(true);
             setError(null);
             try {
-                const price = await getRealtimePriceWithSearch(apiKey, pair);
+                let price: number;
+                try {
+                    // Prioritize user-provided market data keys
+                    const priceData = await MarketDataManager.getRealtimeForexPrice(pair);
+                    price = priceData.price;
+                    console.log(`Fetched initial price for ${pair} using a user-provided market data key.`);
+                } catch (e) {
+                    console.warn("Could not fetch price with user-provided keys, falling back to Gemini search.", e);
+                    // Fallback to Gemini search if user keys fail or are not present
+                    if (!apiKey) {
+                        throw new Error(`A valid Gemini API key is required to fetch the live price and start the simulation.`);
+                    }
+                    price = await getRealtimePriceWithSearch(apiKey, pair);
+                }
                 generateInitialData(pair, price);
             } catch (e) {
                 console.error(`Could not fetch real-time price for ${pair}.`, e);
-                setError(`Could not fetch live price for ${pair}. Please check your Gemini API key and network connection.`);
+                const errorMessage = e instanceof Error ? e.message : 'An unknown error occurred.';
+                setError(`Could not fetch live price for ${pair}. ${errorMessage}`);
             } finally {
                 setIsLoadingInitialPrice(false);
             }
