@@ -1,3 +1,4 @@
+
 import React from 'react';
 import { Badge } from '../types';
 import { 
@@ -9,7 +10,9 @@ import {
     BeatTheClockIcon,
     SimulatorApprenticeIcon,
     ArchivistIcon,
-    QuizMasterIcon
+    QuizMasterIcon,
+    JournalStarterIcon,
+    ConsistentLoggerIcon,
 } from '../components/icons/badges/icons';
 
 export const ALL_BADGES: Badge[] = [
@@ -42,6 +45,18 @@ export const ALL_BADGES: Badge[] = [
     title: 'Quiz Master',
     description: 'Score 80% or higher on a lesson quiz.',
     icon: QuizMasterIcon,
+  },
+  {
+    id: 'journal-starter',
+    title: 'Journal Starter',
+    description: 'Log your first trade in the Trading Journal.',
+    icon: JournalStarterIcon,
+  },
+  {
+    id: 'consistent-logger',
+    title: 'Consistent Logger',
+    description: 'Log 10 trades in your Trading Journal.',
+    icon: ConsistentLoggerIcon,
   },
   {
     id: 'sharp-eye',

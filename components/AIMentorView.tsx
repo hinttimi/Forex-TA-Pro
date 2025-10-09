@@ -21,6 +21,8 @@ import { RocketLaunchIcon } from './icons/RocketLaunchIcon';
 import { MagnifyingGlassIcon } from './icons/MagnifyingGlassIcon';
 import { useCompletion } from '../hooks/useCompletion';
 import { MODULES } from '../constants';
+import { useMentorSettings } from '../hooks/useMentorSettings';
+import { MENTOR_PERSONAS } from '../constants/mentorSettings';
 
 // --- Types ---
 interface UploadedFile {
@@ -187,6 +189,7 @@ export const AIMentorView: React.FC<AIMentorViewProps> = ({ onSetView, onExecute
     const [error, setError] = useState<string | null>(null);
     const { apiKey, openKeyModal } = useApiKey();
     const { getCompletedLessons } = useCompletion();
+    const { personaId, setPersonaId } = useMentorSettings();
     
     // Voice state
     const [voiceState, setVoiceState] = useState<VoiceState>('idle');
@@ -303,7 +306,7 @@ export const AIMentorView: React.FC<AIMentorViewProps> = ({ onSetView, onExecute
                 .filter(l => completedLessons.has(l.key))
                 .map(l => l.title);
 
-            const { text: responseText, image: responseImage, groundingChunks, functionCalls } = await generateMentorResponse(apiKey, userMessage.text, completedLessonTitles, userMessage.file);
+            const { text: responseText, image: responseImage, groundingChunks, functionCalls } = await generateMentorResponse(apiKey, userMessage.text, completedLessonTitles, personaId, userMessage.file);
             
             const modelMessageId = Date.now() + 1;
             
@@ -572,6 +575,25 @@ export const AIMentorView: React.FC<AIMentorViewProps> = ({ onSetView, onExecute
 
     return (
         <div className="h-full flex flex-col max-w-4xl mx-auto">
+            <div className="flex-shrink-0 mb-4 flex justify-between items-center">
+                {messages.length > 0 ? (
+                    <h1 className="text-2xl font-bold text-white">AI Mentor</h1>
+                ) : (
+                    <div></div> // Spacer
+                )}
+                <div>
+                    <label htmlFor="persona-select" className="text-sm font-medium text-slate-400 mr-2">Persona:</label>
+                    <select
+                        id="persona-select"
+                        value={personaId}
+                        onChange={(e) => setPersonaId(e.target.value)}
+                        className="bg-slate-700 border border-slate-600 rounded-md py-1 px-2 text-sm text-white font-semibold focus:ring-2 focus:ring-cyan-500"
+                    >
+                        {MENTOR_PERSONAS.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
+                    </select>
+                </div>
+            </div>
+
             <div ref={chatContainerRef} className="flex-1 overflow-y-auto pr-4 -mr-4 space-y-6 pb-4">
                 {messages.length === 0 && voiceState === 'idle' && <WelcomeScreen />}
                 {messages.map((msg) => (

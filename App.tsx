@@ -39,6 +39,10 @@ import { FloatingActionButton } from './components/FloatingActionButton';
 import { WelcomeTour } from './components/WelcomeTour';
 import { LiveSimulatorProvider } from './context/LiveSimulatorContext';
 import { ThemeProvider } from './context/ThemeContext';
+import { TradingJournalView } from './components/TradingJournalView';
+import { MentorSettingsProvider } from './context/MentorSettingsContext';
+import { MarketDynamicsDashboard } from './components/MarketDynamicsDashboard';
+import { MarketDynamicsProvider } from './context/MarketDynamicsContext';
 
 const allLessons = MODULES.flatMap(module => module.lessons);
 
@@ -83,7 +87,7 @@ ${lesson.contentPrompt}
   const debouncedLessonKey = useDebounce(lessonToLoadKey, 500);
 
   const { apiKey, isKeyModalOpen, wasKeyJustSet, setApiKey } = useApiKey();
-  const { logLessonCompleted, getCompletedLessons } = useCompletion();
+  const { logLessonCompleted, getCompletedLessons, getCompletionCount } = useCompletion();
   const { unlockBadge } = useBadges();
   const completedLessons = getCompletedLessons();
   
@@ -227,7 +231,7 @@ ${lesson.contentPrompt}
     return () => clearTimeout(timer);
   }, [currentLesson, apiKey]);
 
-  // Badge check effect
+  // Badge check effect for lesson completions
   useEffect(() => {
     const completed = getCompletedLessons();
     const firstLessonKey = MODULES[0].lessons[0].key;
@@ -251,6 +255,17 @@ ${lesson.contentPrompt}
         unlockBadge('liquidity-hunter');
     }
   }, [lessonContent, unlockBadge, getCompletedLessons, currentLesson]);
+
+  // Badge check for journal entries (listens for view change)
+  useEffect(() => {
+      const loggedTradesCount = getCompletionCount('loggedTrades');
+      if (loggedTradesCount >= 1) {
+          unlockBadge('journal-starter');
+      }
+      if (loggedTradesCount >= 10) {
+          unlockBadge('consistent-logger');
+      }
+  }, [currentView, unlockBadge, getCompletionCount]);
 
   // Effect for market update toasts
   useEffect(() => {
@@ -340,6 +355,8 @@ ${lesson.contentPrompt}
         return <AchievementsView />;
       case 'trading_plan':
         return <TradingPlanView />;
+      case 'trading_journal':
+        return <TradingJournalView />;
       case 'mentor':
         return <AIMentorView onSetView={handleSetView} onExecuteTool={handleExecuteTool} />;
       case 'quiz':
@@ -356,7 +373,9 @@ ${lesson.contentPrompt}
       case 'news_feed':
         return <NewsFeedView />;
       case 'market_analyzer':
-        return <WhyIsItMovingView />;
+        return <WhyIsItMovingView initialPair={toolExecutionParams?.params?.pair} />;
+       case 'market_dynamics':
+        return <MarketDynamicsDashboard />;
       case 'economic_calendar':
         return <EconomicCalendarView />;
       case 'backtester':
@@ -373,6 +392,10 @@ ${lesson.contentPrompt}
         viewTitle = currentLesson.title;
     } else if (currentView === 'backtester') {
         viewTitle = 'AI Strategy Lab';
+    } else if (currentView === 'trading_journal') {
+        viewTitle = 'Trading Journal';
+    } else if (currentView === 'market_dynamics') {
+        viewTitle = 'Market Dynamics Dashboard';
     } else if (currentView !== 'dashboard') {
         viewTitle = currentView.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase());
     }
@@ -416,11 +439,15 @@ ${lesson.contentPrompt}
 const App: React.FC = () => (
   <ThemeProvider>
     <ApiKeyProvider>
-      <BadgesProvider>
-          <LiveSimulatorProvider>
-              <AppContent />
-          </LiveSimulatorProvider>
-      </BadgesProvider>
+        <BadgesProvider>
+            <MentorSettingsProvider>
+                <LiveSimulatorProvider>
+                    <MarketDynamicsProvider>
+                        <AppContent />
+                    </MarketDynamicsProvider>
+                </LiveSimulatorProvider>
+            </MentorSettingsProvider>
+        </BadgesProvider>
     </ApiKeyProvider>
   </ThemeProvider>
 );

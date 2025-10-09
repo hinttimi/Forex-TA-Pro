@@ -2,8 +2,8 @@ import React from 'react';
 import { AppView } from '../types';
 import { HomeIcon } from './icons/HomeIcon';
 import { SparklesIcon } from './icons/SparklesIcon';
-import { TrophyIcon } from './icons/TrophyIcon';
 import { BookOpenIcon } from './icons/BookOpenIcon';
+import { ClipboardDocumentListIcon } from './icons/ClipboardDocumentListIcon';
 
 interface BottomNavBarProps {
     currentView: AppView;
@@ -34,7 +34,7 @@ export const BottomNavBar: React.FC<BottomNavBarProps> = ({ currentView, onSetVi
             <NavItem view="dashboard" label="Home" icon={HomeIcon} isActive={currentView === 'dashboard'} onClick={() => onSetView('dashboard')} />
             <NavItem view="lesson" label="Lesson" icon={BookOpenIcon} isActive={isLessonRelatedView} onClick={onSelectLesson} />
             <NavItem view="mentor" label="Mentor" icon={SparklesIcon} isActive={currentView === 'mentor'} onClick={() => onSetView('mentor')} />
-            <NavItem view="achievements" label="Badges" icon={TrophyIcon} isActive={currentView === 'achievements'} onClick={() => onSetView('achievements')} />
+            <NavItem view="trading_journal" label="Journal" icon={ClipboardDocumentListIcon} isActive={currentView === 'trading_journal'} onClick={() => onSetView('trading_journal')} />
         </nav>
     );
 };

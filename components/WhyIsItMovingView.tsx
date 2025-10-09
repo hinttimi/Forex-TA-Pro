@@ -74,9 +74,12 @@ const FormattedContent: React.FC<{ text: string }> = ({ text }) => {
     );
 };
 
+interface WhyIsItMovingViewProps {
+    initialPair?: string;
+}
 
-export const WhyIsItMovingView: React.FC = () => {
-    const [selectedPair, setSelectedPair] = useState<string | null>(null);
+export const WhyIsItMovingView: React.FC<WhyIsItMovingViewProps> = ({ initialPair }) => {
+    const [selectedPair, setSelectedPair] = useState<string | null>(initialPair || null);
     const [analysis, setAnalysis] = useState<string>('');
     const [sources, setSources] = useState<any[]>([]);
     const [isLoading, setIsLoading] = useState<boolean>(false);
@@ -106,6 +109,12 @@ export const WhyIsItMovingView: React.FC = () => {
             setIsLoading(false);
         }
     }, [apiKey, openKeyModal]);
+
+    useEffect(() => {
+        if (initialPair) {
+            setSelectedPair(initialPair);
+        }
+    }, [initialPair]);
 
     useEffect(() => {
         if (debouncedSelectedPair) {

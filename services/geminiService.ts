@@ -1,5 +1,7 @@
 import { GoogleGenAI, Type, GenerateContentResponse, GenerateImagesResponse, FunctionDeclaration, Modality } from "@google/genai";
-import { NewsArticle, MarketUpdate, EconomicEvent, MultipleChoiceQuestion, StrategyParams, BacktestResults, AnalysisResult, AppView, OhlcData } from '../types';
+// FIX: Add missing type imports
+import { NewsArticle, MarketUpdate, EconomicEvent, MultipleChoiceQuestion, StrategyParams, BacktestResults, AnalysisResult, AppView, OhlcData, CurrencyStrengthData, VolatilityData, CorrelationData, MarketSentimentData } from '../types';
+import { MENTOR_PERSONAS } from "../constants/mentorSettings";
 
 // --- Client Management ---
 /**
@@ -298,19 +300,19 @@ const executeToolFunctionDeclaration: FunctionDeclaration = {
         type: Type.STRING,
         description: "The name of the tool to navigate to or execute.",
         enum: [
-            'simulator', 'live_simulator', 'backtester', 'pattern', 'timed', 
-            'canvas', 'market_pulse', 'news_feed', 'market_analyzer', 
-            'economic_calendar', 'trading_plan', 'achievements'
+            'dashboard', 'simulator', 'live_simulator', 'backtester', 'pattern', 'timed', 
+            'canvas', 'market_dynamics', 'market_pulse', 'news_feed', 'market_analyzer', 
+            'economic_calendar', 'trading_journal', 'trading_plan', 'saved', 'achievements', 'settings'
         ]
       },
       params: {
           type: Type.OBJECT,
-          description: "Optional parameters to pass to the tool. For 'backtester', this should include 'pair', 'timeframe', 'period', and 'strategyDescription' based on the user's natural language request.",
+          description: "Optional parameters to pass to the tool. For 'backtester', include 'pair', 'timeframe', 'period', and 'strategyDescription'. For 'market_analyzer', include 'pair'.",
           properties: {
-              pair: { type: Type.STRING, description: "e.g., 'EUR/USD'" },
-              timeframe: { type: Type.STRING, description: "e.g., '15M' or '1H'" },
-              period: { type: Type.STRING, description: "e.g., 'Last 6 Months'" },
-              strategyDescription: { type: Type.STRING, description: "The user's strategy in their own words."}
+              pair: { type: Type.STRING, description: "The currency pair for the tool, e.g., 'EUR/USD'" },
+              timeframe: { type: Type.STRING, description: "The timeframe for the backtester, e.g., '15M' or '1H'" },
+              period: { type: Type.STRING, description: "The historical period for the backtester, e.g., 'Last 6 Months'" },
+              strategyDescription: { type: Type.STRING, description: "The user's strategy in their own words for the backtester."}
           }
       }
     },
@@ -322,6 +324,7 @@ export const generateMentorResponse = async (
     apiKey: string, 
     prompt: string, 
     completedLessonTitles: string[],
+    personaId: string,
     file?: { data: string; mimeType: string }
 ): Promise<{ text: string; image?: string; groundingChunks: any[]; functionCalls?: any[] }> => {
     
@@ -330,23 +333,17 @@ export const generateMentorResponse = async (
     const completedLessonsText = completedLessonTitles.length > 0
         ? `The user has already completed the following lessons: ${completedLessonTitles.join(', ')}. Use this knowledge to tailor your explanations. If they ask about an advanced topic but are missing a prerequisite, gently guide them to the prerequisite lesson first.`
         : "The user is a beginner and has not completed any lessons yet.";
+    
+    const selectedPersona = MENTOR_PERSONAS.find(p => p.id === personaId) || MENTOR_PERSONAS[0];
 
-    const systemInstruction = useImageModel
-    ? `You are an expert forex trading mentor specializing in Smart Money Concepts (SMC). The user has uploaded a chart and is asking a question. Your task is to provide a text answer AND an edited version of the chart that visually explains your answer.
+    const systemInstructionForImageModel = `You are an expert forex trading mentor specializing in Smart Money Concepts (SMC). The user has uploaded a chart and is asking a question. Your task is to provide a text answer AND an edited version of the chart that visually explains your answer.
 On the returned image, you MUST draw annotations like rectangles around order blocks, arrows for market direction, and text labels for key concepts like "Liquidity Sweep" or "BOS".
-Return both your text explanation and the fully annotated image.`
-    : `You are an expert forex trading mentor and application assistant. Your primary expertise is in Smart Money Concepts (SMC) and Inner Circle Trader (ICT) methodologies.
-${completedLessonsText}
+Return both your text explanation and the fully annotated image.`;
+    
+    const systemInstructionForTextModel = `${selectedPersona.systemInstruction}\n\n${completedLessonsText}`;
 
-You have agentic capabilities to control the app:
-1.  **Real-Time Search:** Use Google Search for questions about recent market news, economic data, or any up-to-date information.
-2.  **Tool Execution:** You can navigate the user to any tool or even run analyses for them using the \`executeTool\` function. Be proactive!
-    - **When to use:** If a user asks to practice a concept (e.g., "I want to practice finding order blocks"), use \`executeTool({ toolName: 'pattern' })\`.
-    - **Backtester:** If a user asks you to backtest a strategy (e.g., "backtest a strategy for me on EUR/USD 15M..."), you MUST use the \`executeTool\` function with the 'backtester' toolName and fully populate the 'params' object with the pair, timeframe, period, and the user's full strategyDescription. You should then respond with a confirmation like "Of course. Running that backtest for you now..." and the app will handle the rest. DO NOT try to perform the backtest yourself.
-    - **Navigation:** For other tools, provide a confirmation message and then call the function, e.g., "Let's check the economic calendar." followed by \`executeTool({ toolName: 'economic_calendar' })\`.
+    const systemInstruction = useImageModel ? systemInstructionForImageModel : systemInstructionForTextModel;
 
-Provide clear, concise, and actionable feedback. Use markdown for formatting.
-When a visual explanation is needed, embed a chart generation request in your response using the format [CHART: a detailed, descriptive prompt for an image generation model].`;
 
     try {
         const ai = getAiClient(apiKey);
@@ -366,7 +363,7 @@ When a visual explanation is needed, embed a chart generation request in your re
                 systemInstruction: systemInstruction,
                 ...(useImageModel 
                     ? { responseModalities: [Modality.IMAGE, Modality.TEXT] }
-                    : { tools: [{ functionDeclarations: [executeToolFunctionDeclaration] }] }
+                    : { tools: [{ functionDeclarations: [executeToolFunctionDeclaration] }, {googleSearch: {}}] }
                 ),
             },
         }));
@@ -415,6 +412,9 @@ export const generateMarketPulse = async (apiKey: string): Promise<string> => {
         const response = await withRetry<GenerateContentResponse>(() => ai.models.generateContent({
             model: 'gemini-2.5-flash',
             contents: prompt,
+            config: {
+                tools: [{googleSearch: {}}],
+            }
         }));
         return response.text;
     } catch (error) {
@@ -425,10 +425,7 @@ export const generateMarketPulse = async (apiKey: string): Promise<string> => {
 
 export const getForexNews = async (apiKey: string): Promise<{ articles: NewsArticle[], groundingChunks: any[] }> => {
     const prompt = `You are a financial news aggregator. Using your search tool, find the top 5 most recent and impactful news articles related to the Forex market (major currency pairs like EUR/USD, GBP/USD, USD/JPY, etc.).
-Return the result as a single, clean JSON array string. Each object in the array should have the keys: "headline", "summary", "sourceUrl", and "sourceTitle".
-For the "summary", provide a concise 2-3 sentence overview.
-Do not include any other text, explanations, or markdown formatting outside of the JSON string.
-The entire response should be only the JSON array. Example: [{"headline": "...", "summary": "...", "sourceUrl": "...", "sourceTitle": "..."}]`;
+Return ONLY a valid JSON object with a single key "articles", which is an array of objects. Each object should have the keys: "headline", "summary", "sourceUrl", and "sourceTitle". For the "summary", provide a concise 2-3 sentence overview. Do not include any other text, explanations, or markdown formatting.`;
 
     try {
         const ai = getAiClient(apiKey);
@@ -441,26 +438,18 @@ The entire response should be only the JSON array. Example: [{"headline": "...",
         }));
         
         const groundingChunks = response.candidates?.[0]?.groundingMetadata?.groundingChunks || [];
+
+        const jsonMatch = response.text.match(/\{[\s\S]*\}/);
+        if (!jsonMatch) {
+            throw new Error("No valid JSON object found in the AI's response.");
+        }
         
-        let articles: NewsArticle[] = [];
-        const text = response.text.trim();
-        
-        const startIndex = text.indexOf('[');
-        const endIndex = text.lastIndexOf(']');
-        
-        if (startIndex !== -1 && endIndex !== -1) {
-            const jsonString = text.substring(startIndex, endIndex + 1);
-            try {
-                articles = JSON.parse(jsonString);
-            } catch (jsonError) {
-                console.error("Failed to parse JSON from Gemini response:", jsonError, "Raw text:", text);
-                throw new Error("The AI returned a malformed news feed. Please try again.");
-            }
-        } else {
-             throw new Error("The AI did not return a valid news feed format. Please try again.");
+        const parsed: { articles: NewsArticle[] } = JSON.parse(jsonMatch[0]);
+        if (!parsed.articles || !Array.isArray(parsed.articles)) {
+            throw new Error("The AI did not return a valid JSON array for the news feed.");
         }
 
-        return { articles, groundingChunks };
+        return { articles: parsed.articles, groundingChunks };
 
     } catch (error) {
         console.error("Error fetching forex news:", error);
@@ -478,6 +467,9 @@ export const generateMarketUpdateSnippet = async (apiKey: string): Promise<Marke
             const response = await withRetry<GenerateContentResponse>(() => ai.models.generateContent({
                 model: 'gemini-2.5-flash',
                 contents: prompt,
+                 config: {
+                    tools: [{googleSearch: {}}],
+                }
             }));
             return {
                 type: 'pulse',
@@ -485,7 +477,7 @@ export const generateMarketUpdateSnippet = async (apiKey: string): Promise<Marke
                 content: response.text,
             };
         } else { // 'news'
-            const prompt = `You are a financial news aggregator. Using your search tool, find the single most recent and impactful news headline related to the Forex market. Return the result as a single, clean JSON object string with keys: "headline" and "summary". The summary should be a single, concise sentence. Do not include any other text or markdown. Example: {"headline": "...", "summary": "..."}`;
+            const prompt = `You are a financial news aggregator. Using your search tool, find the single most recent and impactful news headline related to the Forex market. Return ONLY a valid JSON object with keys: "headline" and "summary". The summary should be a single, concise sentence. Do not include any other text, explanations, or markdown formatting.`;
             const response = await withRetry<GenerateContentResponse>(() => ai.models.generateContent({
                 model: "gemini-2.5-flash",
                 contents: prompt,
@@ -494,22 +486,11 @@ export const generateMarketUpdateSnippet = async (apiKey: string): Promise<Marke
                 },
             }));
 
-            let parsed: { headline: string; summary: string };
-            const text = response.text.trim();
-            const startIndex = text.indexOf('{');
-            const endIndex = text.lastIndexOf('}');
-
-            if (startIndex !== -1 && endIndex !== -1) {
-                const jsonString = text.substring(startIndex, endIndex + 1);
-                try {
-                    parsed = JSON.parse(jsonString);
-                } catch (jsonError) {
-                    console.error("Failed to parse JSON for news snippet:", jsonError, "Raw text:", text);
-                    throw new Error("AI returned malformed JSON for news snippet.");
-                }
-            } else {
-                throw new Error("AI did not return valid JSON for news snippet.");
+            const jsonMatch = response.text.match(/\{[\s\S]*\}/);
+            if (!jsonMatch) {
+                throw new Error("No valid JSON object found in the AI's response for news snippet.");
             }
+            const parsed = JSON.parse(jsonMatch[0]);
 
             if (parsed.headline && parsed.summary) {
                 return {
@@ -617,6 +598,184 @@ export const generatePostEventSummary = async (apiKey: string, event: EconomicEv
         throw error;
     }
 };
+
+export const generateCurrencyStrengthData = async (apiKey: string): Promise<CurrencyStrengthData> => {
+    const prompt = `You are a forex market data provider. It is currently ${new Date().toUTCString()}. Using your real-time search tool, find the relative strength of the 8 major currencies (USD, EUR, JPY, GBP, AUD, CAD, CHF, NZD).
+Return ONLY a valid JSON object containing a single key "strengths", which is an array of objects. Each object must have a "currency" (string) and a "strength" (numerical score from 0 to 10). Do not include any other text, explanations, or markdown formatting.`;
+
+    try {
+        const ai = getAiClient(apiKey);
+        const response = await withRetry<GenerateContentResponse>(() => ai.models.generateContent({
+            model: 'gemini-2.5-flash',
+            contents: prompt,
+            config: {
+                tools: [{googleSearch: {}}],
+            },
+        }));
+        
+        const jsonMatch = response.text.match(/\{[\s\S]*\}/);
+        if (!jsonMatch) {
+            throw new Error("No valid JSON object found in the AI's response.");
+        }
+        const parsed: { strengths: Array<{ currency: string, strength: number }> } = JSON.parse(jsonMatch[0]);
+
+        if (!parsed.strengths || !Array.isArray(parsed.strengths)) {
+            throw new Error("AI returned malformed currency strength data.");
+        }
+        
+        const strengthData: CurrencyStrengthData = {};
+        for (const item of parsed.strengths) {
+            if (item.currency && typeof item.strength === 'number') {
+                strengthData[item.currency] = item.strength;
+            }
+        }
+        
+        return strengthData;
+
+    } catch (error) {
+        console.error("Error generating currency strength data:", error);
+        throw new Error(`The AI failed to provide currency strength data. Please try again.`);
+    }
+};
+
+export const generateVolatilityData = async (apiKey: string): Promise<VolatilityData[]> => {
+    const prompt = `You are a forex market data provider. It is currently ${new Date().toUTCString()}. Using your real-time search tool, identify the 5 most volatile major forex pairs based on recent price action.
+Return ONLY a valid JSON object with a single key "volatilityData", which is an array of objects. Each object must have a 'pair' (e.g., "GBP/JPY") and a 'volatility' score (a relative number from 1-10 where 10 is most volatile). Do not include any other text, explanations, or markdown formatting.`;
+
+    try {
+        const ai = getAiClient(apiKey);
+        const response = await withRetry<GenerateContentResponse>(() => ai.models.generateContent({
+            model: 'gemini-2.5-flash',
+            contents: prompt,
+            config: {
+                tools: [{googleSearch: {}}],
+            },
+        }));
+
+        const jsonMatch = response.text.match(/\{[\s\S]*\}/);
+        if (!jsonMatch) {
+            throw new Error("No valid JSON object found in the AI's response.");
+        }
+        const parsed: { volatilityData: VolatilityData[] } = JSON.parse(jsonMatch[0]);
+
+        if (parsed.volatilityData && Array.isArray(parsed.volatilityData)) {
+            return parsed.volatilityData;
+        }
+        throw new Error("AI returned malformed volatility data.");
+    } catch (error) {
+        console.error("Error generating volatility data:", error);
+        throw new Error(`The AI failed to provide volatility data. Please try again.`);
+    }
+};
+
+export const generateCorrelationData = async (apiKey: string): Promise<CorrelationData> => {
+    const pairs = ["EUR/USD", "GBP/USD", "AUD/USD", "USD/JPY", "USD/CAD", "USD/CHF"];
+    const prompt = `You are a forex market data provider. It is currently ${new Date().toUTCString()}. Using your real-time search tool, generate a correlation matrix for the following pairs: ${pairs.join(', ')}.
+Return ONLY a valid JSON object with a single key "matrix", which is an array of objects. Each object should represent a currency pair and its correlations with the other pairs. Do not include any other text, explanations, or markdown formatting.
+Example structure:
+{
+  "matrix": [
+    {
+      "pair": "EUR/USD",
+      "correlations": [
+        { "pair": "GBP/USD", "value": 0.85 },
+        { "pair": "AUD/USD", "value": 0.76 }
+      ]
+    },
+    ...
+  ]
+}`;
+    
+    try {
+        const ai = getAiClient(apiKey);
+        const response = await withRetry<GenerateContentResponse>(() => ai.models.generateContent({
+            model: 'gemini-2.5-flash',
+            contents: prompt,
+            config: {
+                tools: [{googleSearch: {}}],
+            },
+        }));
+
+        const jsonMatch = response.text.match(/\{[\s\S]*\}/);
+        if (!jsonMatch) {
+            throw new Error("No valid JSON object or array found in the AI's response.");
+        }
+        const parsed: { matrix: Array<{pair: string, correlations: Array<{pair: string, value: number}>}> } = JSON.parse(jsonMatch[0]);
+        
+        if (!parsed.matrix || !Array.isArray(parsed.matrix)) {
+            throw new Error("AI returned malformed correlation data (not an array).");
+        }
+
+        const matrix: CorrelationData = {};
+        for (const row of parsed.matrix) {
+            if (row.pair && Array.isArray(row.correlations)) {
+                matrix[row.pair] = {};
+                for (const corr of row.correlations) {
+                     if (corr.pair && typeof corr.value === 'number') {
+                        matrix[row.pair][corr.pair] = corr.value;
+                    }
+                }
+            }
+        }
+        return matrix;
+
+    } catch (error) {
+        console.error("Error generating correlation data:", error);
+        throw new Error(`The AI failed to provide correlation data. Please try again.`);
+    }
+};
+
+export const generateMarketNarrative = async (apiKey: string, marketDataJson: string): Promise<string> => {
+    const prompt = `You are a senior forex market analyst. Based on the following real-time market data, provide a concise, high-level narrative of what is happening in the market. Explain which currencies are strong or weak and why, identify any highly volatile pairs, and point out significant correlations that might be driving price action.
+
+Market Data:
+---
+${marketDataJson}
+---
+`;
+    try {
+        const ai = getAiClient(apiKey);
+        const response = await withRetry<GenerateContentResponse>(() => ai.models.generateContent({
+            model: 'gemini-2.5-flash',
+            contents: prompt,
+        }));
+        return response.text;
+    } catch (error) {
+        console.error("Error generating market narrative:", error);
+        throw error;
+    }
+};
+
+export const generateMarketSentimentData = async (apiKey: string): Promise<MarketSentimentData> => {
+    const prompt = `You are a forex market data provider. It is currently ${new Date().toUTCString()}. Using your real-time search tool, analyze the current overall market sentiment for forex trading. Consider major indices (like S&P 500), the VIX, commodity prices (like Gold and Oil), and recent news.
+Return ONLY a valid JSON object with the keys "sentiment" (string enum: 'Risk On', 'Risk Off', 'Neutral', 'Mixed'), "score" (number from 0 to 10), and "reasoning" (string). Do not include any other text, explanations, or markdown formatting.`;
+
+    try {
+        const ai = getAiClient(apiKey);
+        const response = await withRetry<GenerateContentResponse>(() => ai.models.generateContent({
+            model: 'gemini-2.5-flash',
+            contents: prompt,
+            config: {
+                tools: [{googleSearch: {}}],
+            },
+        }));
+        
+        const jsonMatch = response.text.match(/\{[\s\S]*\}/);
+        if (!jsonMatch) {
+            throw new Error("No valid JSON object found in the AI's response.");
+        }
+        const parsed = JSON.parse(jsonMatch[0]);
+
+        if (parsed.sentiment && typeof parsed.score === 'number' && parsed.reasoning) {
+            return parsed;
+        }
+        throw new Error("AI returned malformed market sentiment data.");
+    } catch (error) {
+        console.error("Error generating market sentiment data:", error);
+        throw new Error(`The AI failed to provide market sentiment data. Please try again.`);
+    }
+};
+
 
 const parseStrategyFunctionDeclaration: FunctionDeclaration = {
     name: 'parse_strategy',

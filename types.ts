@@ -1,5 +1,3 @@
-
-
 import React from 'react';
 
 export interface Lesson {
@@ -14,7 +12,7 @@ export interface Module {
   lessons: Lesson[];
 }
 
-export type AppView = 'dashboard' | 'lesson' | 'pattern' | 'timed' | 'canvas' | 'simulator' | 'live_simulator' | 'saved' | 'achievements' | 'trading_plan' | 'mentor' | 'quiz' | 'market_pulse' | 'news_feed' | 'market_analyzer' | 'economic_calendar' | 'backtester' | 'settings';
+export type AppView = 'dashboard' | 'lesson' | 'pattern' | 'timed' | 'canvas' | 'simulator' | 'live_simulator' | 'saved' | 'achievements' | 'trading_plan' | 'mentor' | 'quiz' | 'market_pulse' | 'news_feed' | 'market_analyzer' | 'economic_calendar' | 'backtester' | 'settings' | 'trading_journal' | 'market_dynamics';
 
 export interface MultipleChoiceQuestion {
     question: string;
@@ -89,4 +87,53 @@ export interface BacktestResults {
 export interface AnalysisResult {
   text: string;
   sources: any[];
+}
+
+export type TradeOutcome = 'Win' | 'Loss' | 'Break-Even';
+export type EmotionalState = 'Patient' | 'Confident' | 'Anxious' | 'FOMO' | 'Greedy' | 'Hesitant' | 'Revenge Trading';
+
+export interface TradeLog {
+    id: number;
+    date: string;
+    pair: string;
+    direction: 'Buy' | 'Sell';
+    outcome: TradeOutcome;
+    rr: number;
+    setup: string;
+    emotion: EmotionalState;
+    notes?: string;
+}
+
+export interface MentorPersona {
+    id: string;
+    name: string;
+    description: string;
+    systemInstruction: string;
+}
+
+export interface MentorVoice {
+    id: string;
+    name: string;
+    description: string;
+}
+
+export interface CurrencyStrengthData {
+    [key: string]: number; // e.g., { "USD": 8.5, "EUR": 6.2 }
+}
+
+export interface VolatilityData {
+    pair: string;
+    volatility: number; // A numeric score or rank
+}
+
+export interface CorrelationData {
+    [key: string]: {
+        [key: string]: number; // e.g., { "EUR/USD": { "GBP/USD": 0.85 } }
+    };
+}
+
+export interface MarketSentimentData {
+    sentiment: 'Risk On' | 'Risk Off' | 'Neutral' | 'Mixed';
+    score: number; // A numeric score from 0 (extreme risk-off) to 10 (extreme risk-on)
+    reasoning: string;
 }

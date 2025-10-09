@@ -126,7 +126,6 @@ const getHistoricalFromTwelveData = async (symbol: string, timeframe: string, st
     })).sort((a, b) => a.timestamp - b.timestamp);
 };
 
-
 // --- Public Market Data Manager ---
 
 const realtimeProviderChain = [

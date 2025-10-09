@@ -4,7 +4,7 @@ import { useCallback } from 'react';
 const LESSONS_KEY = 'completedLessons';
 const COMPLETION_COUNTS_KEY = 'completionCounts';
 
-type CountableEvent = 'correctPatterns' | 'simulatorRuns' | 'savedAnalyses';
+type CountableEvent = 'correctPatterns' | 'simulatorRuns' | 'savedAnalyses' | 'loggedTrades';
 
 export const useCompletion = () => {
   const getCompletedLessons = useCallback((): Set<string> => {
@@ -26,11 +26,11 @@ export const useCompletion = () => {
   const getCompletionCounts = useCallback((): Record<CountableEvent, number> => {
     try {
         const counts = localStorage.getItem(COMPLETION_COUNTS_KEY);
-        const defaultCounts = { correctPatterns: 0, simulatorRuns: 0, savedAnalyses: 0 };
+        const defaultCounts = { correctPatterns: 0, simulatorRuns: 0, savedAnalyses: 0, loggedTrades: 0 };
         return counts ? { ...defaultCounts, ...JSON.parse(counts) } : defaultCounts;
     } catch (error) {
         console.error('Could not parse completion counts from localStorage', error);
-        return { correctPatterns: 0, simulatorRuns: 0, savedAnalyses: 0 };
+        return { correctPatterns: 0, simulatorRuns: 0, savedAnalyses: 0, loggedTrades: 0 };
     }
   }, []);
 
@@ -47,6 +47,7 @@ export const useCompletion = () => {
   const logCorrectPattern = useCallback(() => incrementCount('correctPatterns'), [incrementCount]);
   const logSimulatorCompletion = useCallback(() => incrementCount('simulatorRuns'), [incrementCount]);
   const logSavedAnalysis = useCallback(() => incrementCount('savedAnalyses'), [incrementCount]);
+  const logTradeLogged = useCallback(() => incrementCount('loggedTrades'), [incrementCount]);
 
   return { 
     logLessonCompleted, 
@@ -55,5 +56,6 @@ export const useCompletion = () => {
     logSimulatorCompletion,
     logSavedAnalysis,
     getCompletionCount,
+    logTradeLogged,
   };
 };

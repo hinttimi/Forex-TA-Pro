@@ -361,7 +361,11 @@ export const AIBacktesterView: React.FC<AIBacktesterViewProps> = ({ initialReque
                                 <div>
                                     <h3 className="text-xl font-bold text-white mb-3">Performance Report</h3>
                                     <div className="grid grid-cols-2 md:grid-cols-3 gap-3 text-center">
-                                        <MetricCard label="Win Rate" value={`${backtestResults.winRate.toFixed(1)}%`} /><MetricCard label="Profit Factor" value={backtestResults.profitFactor.toFixed(2)} /><MetricCard label="Avg. R:R" value={`1:${backtestResults.avgRR.toFixed(2)}`} /><MetricCard label="Total Trades" value={String(backtestResults.totalTrades)} /><MetricCard label="Max Drawdown" value={`${backtestResults.maxDrawdown.toFixed(1)}%`} />
+                                        <MetricCard label="Win Rate" value={`${(backtestResults.winRate ?? 0).toFixed(1)}%`} />
+                                        <MetricCard label="Profit Factor" value={(backtestResults.profitFactor ?? 0).toFixed(2)} />
+                                        <MetricCard label="Avg. R:R" value={`1:${(backtestResults.avgRR ?? 0).toFixed(2)}`} />
+                                        <MetricCard label="Total Trades" value={String(backtestResults.totalTrades ?? 0)} />
+                                        <MetricCard label="Max Drawdown" value={`${(backtestResults.maxDrawdown ?? 0).toFixed(1)}%`} />
                                     </div>
                                 </div>
                                 <div className="pt-6 border-t border-gray-700"><h3 className="text-xl font-bold text-white mb-3">AI Coaching Analysis</h3><div className="prose prose-invert prose-sm max-w-none text-gray-300"><FormattedContent text={coachingAnalysis} /></div></div>

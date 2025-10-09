@@ -1,4 +1,5 @@
 
+
 import React from 'react';
 import { BadgeShell } from './BadgeShell';
 
@@ -65,5 +66,20 @@ export const SimulatorApprenticeIcon: React.FC<{ className?: string }> = ({ clas
 export const ArchivistIcon: React.FC<{ className?: string }> = ({ className }) => (
     <IconWrapper className={className}>
         <path d="M20,10 H80 V90 H20 Z M30,20 H70 M30,35 H70 M30,50 H70 M30,65 H70" />
+    </IconWrapper>
+);
+
+export const JournalStarterIcon: React.FC<{ className?: string }> = ({ className }) => (
+    <IconWrapper className={className}>
+        <path d="M25,10 H75 V90 H25 Z M35,25 H65 M35,40 H65" />
+        <path d="M45,65 H55 M50,60 V70" />
+    </IconWrapper>
+);
+
+export const ConsistentLoggerIcon: React.FC<{ className?: string }> = ({ className }) => (
+    <IconWrapper className={className}>
+        <path d="M20,20 H65 V80 H20 Z M30,30 H55" />
+        <path d="M30,15 H75 V75 H30" fill="none" />
+        <path d="M40,10 H85 V70 H40" fill="none" />
     </IconWrapper>
 );

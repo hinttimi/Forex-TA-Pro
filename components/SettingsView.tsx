@@ -4,6 +4,9 @@ import { KeyIcon } from './icons/KeyIcon';
 import { CheckCircleIcon } from './icons/CheckCircleIcon';
 import { TrashIcon } from './icons/TrashIcon';
 import { ServerStackIcon } from './icons/ServerStackIcon';
+import { SparklesIcon } from './icons/SparklesIcon';
+import { MENTOR_PERSONAS, MENTOR_VOICES } from '../constants/mentorSettings';
+import { useMentorSettings } from '../hooks/useMentorSettings';
 
 const maskApiKey = (key: string | null): string => {
     if (!key || key.length < 8) {
@@ -71,6 +74,7 @@ const ApiKeyInputRow: React.FC<ApiKeyInputRowProps> = ({ label, storageKey }) =>
 
 export const SettingsView: React.FC = () => {
     const { apiKey, setApiKey } = useApiKey();
+    const { personaId, setPersonaId, voiceId, setVoiceId } = useMentorSettings();
     const [keyInput, setKeyInput] = useState('');
     const [isSaved, setIsSaved] = useState(false);
 
@@ -103,6 +107,7 @@ export const SettingsView: React.FC = () => {
                     'user_twelve_data_api_key',
                     'aiMentorChatHistory',
                     'forex_ta_pro_tour_seen',
+                    'mentorSettings',
                 ];
 
                 keysToRemove.forEach(key => {
@@ -160,6 +165,42 @@ export const SettingsView: React.FC = () => {
                         </div>
                     </div>
                 </div>
+
+                {/* Mentor Customization */}
+                <div className="bg-gray-800/50 border border-gray-700 rounded-lg p-6">
+                    <h2 className="text-xl font-bold text-white mb-4 flex items-center">
+                        <SparklesIcon className="w-6 h-6 mr-3 text-cyan-400" />
+                        AI Mentor Customization
+                    </h2>
+                    <div className="space-y-4">
+                        <div>
+                            <h3 className="text-base font-semibold text-white mb-2">Mentor Persona</h3>
+                            <div className="space-y-2">
+                                {MENTOR_PERSONAS.map(p => (
+                                    <label key={p.id} className="flex items-start p-3 bg-gray-900/50 border border-gray-700 rounded-md cursor-pointer hover:bg-gray-700/50 transition-colors">
+                                        <input type="radio" name="persona" value={p.id} checked={personaId === p.id} onChange={(e) => setPersonaId(e.target.value)} className="mt-1 h-4 w-4 text-cyan-500 bg-gray-700 border-gray-600 focus:ring-cyan-600 focus:ring-offset-gray-800" />
+                                        <span className="ml-3 text-sm">
+                                            <span className="font-medium text-gray-200">{p.name}</span>
+                                            <span className="block text-gray-400">{p.description}</span>
+                                        </span>
+                                    </label>
+                                ))}
+                            </div>
+                        </div>
+                        <div>
+                            <h3 className="text-base font-semibold text-white mb-2">Voice (for Live Chat)</h3>
+                            <div className="grid grid-cols-2 gap-2">
+                                {MENTOR_VOICES.map(v => (
+                                     <label key={v.id} className="flex items-center p-2 bg-gray-900/50 border border-gray-700 rounded-md cursor-pointer hover:bg-gray-700/50 transition-colors">
+                                        <input type="radio" name="voice" value={v.id} checked={voiceId === v.id} onChange={(e) => setVoiceId(e.target.value)} className="h-4 w-4 text-cyan-500 bg-gray-700 border-gray-600 focus:ring-cyan-600 focus:ring-offset-gray-800"/>
+                                        <span className="ml-2 text-sm text-gray-300">{v.name}</span>
+                                     </label>
+                                ))}
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
 
                  {/* Market Data API Keys */}
                 <div className="bg-gray-800/50 border border-gray-700 rounded-lg p-6">

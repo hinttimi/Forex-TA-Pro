@@ -23,6 +23,8 @@ import { CalendarDaysIcon } from './icons/CalendarDaysIcon';
 import { DocumentTextIcon } from './icons/DocumentTextIcon';
 import { BookmarkSquareIcon } from './icons/BookmarkSquareIcon';
 import { BeakerIcon } from './icons/BeakerIcon';
+import { ClipboardDocumentListIcon } from './icons/ClipboardDocumentListIcon';
+import { GlobeAltIcon } from './icons/GlobeAltIcon';
 
 interface SidebarProps {
   modules: Module[];
@@ -102,6 +104,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ modules, onSelectLesson, selec
   ];
 
   const marketTools = [
+      { label: 'Market Dynamics', view: 'market_dynamics', icon: GlobeAltIcon },
       { label: 'Market Pulse', view: 'market_pulse', icon: SignalIcon },
       { label: 'News Feed', view: 'news_feed', icon: NewspaperIcon },
       { label: 'Market Analyzer', view: 'market_analyzer', icon: MagnifyingGlassChartIcon },
@@ -208,9 +211,10 @@ export const Sidebar: React.FC<SidebarProps> = ({ modules, onSelectLesson, selec
              <div>
                 <h3 className="px-3 py-2 text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase">Profile</h3>
                 <ul className="space-y-1 mt-1">
-                    <NavLink label="Achievements" view="achievements" icon={TrophyIcon} currentView={currentView} onClick={onSetView} />
+                    <NavLink label="Trading Journal" view="trading_journal" icon={ClipboardDocumentListIcon} currentView={currentView} onClick={onSetView} />
                     <NavLink label="My Trading Plan" view="trading_plan" icon={DocumentTextIcon} currentView={currentView} onClick={onSetView} />
                     <NavLink label="Saved Analysis" view="saved" icon={BookmarkSquareIcon} currentView={currentView} onClick={onSetView} />
+                    <NavLink label="Achievements" view="achievements" icon={TrophyIcon} currentView={currentView} onClick={onSetView} />
                 </ul>
             </div>
           </>
