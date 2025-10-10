@@ -16,11 +16,10 @@ import { DocumentTextIcon } from './icons/DocumentTextIcon';
 import { LinkIcon } from './icons/LinkIcon';
 import { AppView, Lesson } from '../types';
 import { LightBulbIcon } from './icons/LightBulbIcon';
-import { ChartBarIcon } from './icons/ChartBarIcon';
 import { RocketLaunchIcon } from './icons/RocketLaunchIcon';
 import { MagnifyingGlassIcon } from './icons/MagnifyingGlassIcon';
 import { useCompletion } from '../hooks/useCompletion';
-import { MODULES } from '../constants';
+import { LEARNING_PATHS } from '../constants';
 import { useMentorSettings } from '../hooks/useMentorSettings';
 import { MENTOR_PERSONAS } from '../constants/mentorSettings';
 import { BeakerIcon } from './icons/BeakerIcon';
@@ -50,7 +49,7 @@ interface AIMentorViewProps {
 
 // --- Constants ---
 const CHAT_HISTORY_KEY = 'aiMentorChatHistory';
-const allLessons = MODULES.flatMap(module => module.lessons);
+const allLessons = LEARNING_PATHS.flatMap(path => path.modules.flatMap(module => module.lessons));
 
 // --- Helper Functions ---
 const readFileAndConvertToBase64 = (file: File): Promise<UploadedFile> =>

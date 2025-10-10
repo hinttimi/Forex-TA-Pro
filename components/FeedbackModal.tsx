@@ -1,3 +1,5 @@
+
+
 import React, { useState } from 'react';
 import { XMarkIcon } from './icons/XMarkIcon';
 import { CheckCircleIcon } from './icons/CheckCircleIcon';
@@ -78,42 +80,42 @@ export const FeedbackModal: React.FC<FeedbackModalProps> = ({ isOpen, onClose })
             aria-modal="true"
         >
             <div 
-                className="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl shadow-2xl p-8 w-full max-w-lg mx-4 transform transition-all"
+                className="bg-[--color-dark-matter] border border-[--color-border] rounded-xl shadow-2xl p-8 w-full max-w-lg mx-4 transform transition-all"
                 onClick={e => e.stopPropagation()}
             >
                 {isSubmitted ? (
                     <div className="text-center">
-                        <CheckCircleIcon className="w-16 h-16 mx-auto text-green-500 dark:text-green-400 mb-4" />
-                        <h2 className="text-2xl font-bold text-slate-900 dark:text-white">Thank You!</h2>
-                        <p className="mt-2 text-slate-600 dark:text-slate-400">Your feedback has been received. We appreciate you helping us improve.</p>
+                        <CheckCircleIcon className="w-16 h-16 mx-auto text-[--color-signal-green] mb-4" />
+                        <h2 className="text-2xl font-bold text-[--color-ghost-white]">Thank You!</h2>
+                        <p className="mt-2 text-[--color-muted-grey]">Your feedback has been received. We appreciate you helping us improve.</p>
                     </div>
                 ) : (
                     <>
                         <div className="flex justify-between items-center mb-4">
-                            <h2 id="feedback-modal-title" className="text-2xl font-bold text-slate-900 dark:text-white flex items-center">
-                                <ChatBubbleBottomCenterTextIcon className="w-8 h-8 mr-3 text-blue-500 dark:text-cyan-400" />
+                            <h2 id="feedback-modal-title" className="text-2xl font-bold text-[--color-ghost-white] flex items-center">
+                                <ChatBubbleBottomCenterTextIcon className="w-8 h-8 mr-3 text-[--color-neural-blue]" />
                                 Share Your Feedback
                             </h2>
-                            <button onClick={onClose} className="p-1 rounded-full text-slate-500 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-700" aria-label="Close">
+                            <button onClick={onClose} className="p-1 rounded-full text-[--color-muted-grey] hover:bg-[--color-obsidian-slate]" aria-label="Close">
                                 <XMarkIcon className="w-6 h-6" />
                             </button>
                         </div>
 
-                        <p className="text-slate-600 dark:text-slate-400 mb-6">
+                        <p className="text-[--color-muted-grey] mb-6">
                             We're constantly working to improve Forex TA Pro. Let us know what you think!
                         </p>
                         
                         <form onSubmit={handleSubmit}>
                             <div className="space-y-4">
                                 <div>
-                                    <label htmlFor="category" className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">
+                                    <label htmlFor="category" className="block text-sm font-medium text-[--color-ghost-white]/80 mb-1">
                                         Feedback Category
                                     </label>
                                     <select
                                         id="category"
                                         value={category}
                                         onChange={(e) => setCategory(e.target.value as FeedbackCategory)}
-                                        className="w-full bg-slate-100 dark:bg-slate-900 border border-slate-300 dark:border-slate-600 rounded-md py-2 px-3 text-slate-900 dark:text-white focus:ring-2 focus:ring-blue-500 dark:focus:ring-cyan-500"
+                                        className="w-full bg-[--color-obsidian-slate] border border-[--color-border] rounded-md py-2 px-3 text-[--color-ghost-white] focus:ring-2 focus:ring-[--color-neural-blue]"
                                     >
                                         <option value="general">General Feedback</option>
                                         <option value="bug">Bug Report</option>
@@ -123,7 +125,7 @@ export const FeedbackModal: React.FC<FeedbackModalProps> = ({ isOpen, onClose })
                                     </select>
                                 </div>
                                 <div>
-                                    <label htmlFor="message" className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">
+                                    <label htmlFor="message" className="block text-sm font-medium text-[--color-ghost-white]/80 mb-1">
                                         Your Message
                                     </label>
                                     <textarea
@@ -132,13 +134,13 @@ export const FeedbackModal: React.FC<FeedbackModalProps> = ({ isOpen, onClose })
                                         onChange={(e) => setMessage(e.target.value)}
                                         rows={5}
                                         placeholder="Please be as detailed as possible..."
-                                        className="w-full bg-slate-100 dark:bg-slate-900 border border-slate-300 dark:border-slate-600 rounded-md py-2 px-3 text-slate-900 dark:text-white focus:ring-2 focus:ring-blue-500 dark:focus:ring-cyan-500"
+                                        className="w-full bg-[--color-obsidian-slate] border border-[--color-border] rounded-md py-2 px-3 text-[--color-ghost-white] focus:ring-2 focus:ring-[--color-neural-blue]"
                                         required
                                     />
                                 </div>
                             </div>
                             {error && (
-                                <div className="mt-4 p-3 bg-red-100 dark:bg-red-500/10 border border-red-200 dark:border-red-500/30 rounded-lg text-sm text-red-700 dark:text-red-300 flex items-center">
+                                <div className="mt-4 p-3 bg-[--color-warning-red]/10 border border-[--color-warning-red]/30 rounded-lg text-sm text-[--color-warning-red] flex items-center">
                                     <ExclamationTriangleIcon className="w-5 h-5 mr-3 flex-shrink-0" />
                                     {error}
                                 </div>
@@ -147,7 +149,7 @@ export const FeedbackModal: React.FC<FeedbackModalProps> = ({ isOpen, onClose })
                                 <button
                                     type="submit"
                                     disabled={isSubmitting || !message.trim()}
-                                    className="w-full sm:w-auto inline-flex justify-center items-center px-6 py-2.5 bg-blue-600 text-white dark:bg-cyan-500 dark:text-slate-900 font-semibold rounded-md shadow-sm hover:bg-blue-700 dark:hover:bg-cyan-400 disabled:bg-slate-400 dark:disabled:bg-slate-600 disabled:cursor-not-allowed"
+                                    className="w-full sm:w-auto inline-flex justify-center items-center px-6 py-2.5 bg-[--color-neural-blue] text-[--color-obsidian-slate] font-semibold rounded-md shadow-sm hover:bg-[--color-neural-blue]/80 disabled:bg-[--color-border] disabled:cursor-not-allowed"
                                 >
                                     {isSubmitting ? <LoadingSpinner /> : 'Submit Feedback'}
                                 </button>

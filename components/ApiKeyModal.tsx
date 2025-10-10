@@ -38,14 +38,14 @@ export const ApiKeyModal: React.FC = () => {
             aria-modal="true"
         >
             <div 
-                className="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl shadow-2xl p-8 w-full max-w-lg mx-4 text-center transform transition-all"
+                className="bg-[--color-dark-matter] border border-[--color-border] rounded-xl shadow-2xl p-8 w-full max-w-lg mx-4 text-center transform transition-all"
                 onClick={e => e.stopPropagation()}
             >
-                <KeyIcon className="w-16 h-16 mx-auto text-blue-500 dark:text-cyan-400 mb-4" />
-                <h2 id="api-key-modal-title" className="text-2xl font-bold text-slate-900 dark:text-white">
+                <KeyIcon className="w-16 h-16 mx-auto text-[--color-neural-blue] mb-4" />
+                <h2 id="api-key-modal-title" className="text-2xl font-bold text-[--color-ghost-white]">
                     {apiKey ? 'Update' : 'Set'} Your Gemini API Key
                 </h2>
-                <p className="mt-2 text-slate-600 dark:text-slate-400">
+                <p className="mt-2 text-[--color-muted-grey]">
                     Your Gemini API key is required to power the AI features of the app.
                 </p>
                 <div className="mt-6">
@@ -54,7 +54,7 @@ export const ApiKeyModal: React.FC = () => {
                         value={currentKey}
                         onChange={(e) => setCurrentKey(e.target.value)}
                         placeholder="Paste your API key here"
-                        className="w-full bg-slate-100 dark:bg-slate-900 border border-slate-300 dark:border-slate-600 rounded-md py-3 px-4 text-slate-900 dark:text-white placeholder-slate-500 focus:ring-2 focus:ring-blue-500 dark:focus:ring-cyan-500 focus:border-blue-500 dark:focus:border-cyan-500"
+                        className="w-full bg-[--color-obsidian-slate] border border-[--color-border] rounded-md py-3 px-4 text-[--color-ghost-white] placeholder-[--color-muted-grey] focus:ring-2 focus:ring-[--color-neural-blue] focus:border-[--color-neural-blue]"
                         aria-label="Gemini API Key Input"
                     />
                 </div>
@@ -62,7 +62,7 @@ export const ApiKeyModal: React.FC = () => {
                      <button
                         onClick={handleSave}
                         disabled={!currentKey.trim() || isSaved}
-                        className="w-full inline-flex justify-center items-center px-4 py-3 border border-transparent text-base font-medium rounded-md shadow-sm text-white bg-blue-600 hover:bg-blue-700 dark:text-slate-900 dark:bg-cyan-500 dark:hover:bg-cyan-400 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-offset-white dark:focus:ring-offset-slate-800 focus:ring-blue-500 dark:focus:ring-cyan-500 disabled:bg-slate-300 dark:disabled:bg-slate-600 disabled:cursor-not-allowed"
+                        className="w-full inline-flex justify-center items-center px-4 py-3 border border-transparent text-base font-medium rounded-md shadow-sm text-[--color-obsidian-slate] bg-[--color-neural-blue] hover:bg-[--color-neural-blue]/80 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-offset-[--color-dark-matter] focus:ring-[--color-neural-blue] disabled:bg-[--color-border] disabled:cursor-not-allowed"
                     >
                         {isSaved ? <CheckCircleIcon className="w-5 h-5 mr-2"/> : null}
                         {isSaved ? 'Key Saved!' : 'Save Key'}
@@ -70,14 +70,14 @@ export const ApiKeyModal: React.FC = () => {
                     <button
                         type="button"
                         onClick={closeKeyModal}
-                        className="w-full inline-flex justify-center rounded-md border border-slate-300 dark:border-slate-600 shadow-sm px-4 py-3 bg-white dark:bg-slate-700 text-base font-medium text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-600 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-offset-white dark:focus:ring-offset-slate-800 focus:ring-blue-500 dark:focus:ring-cyan-600 sm:mt-0"
+                        className="w-full inline-flex justify-center rounded-md border border-[--color-border] shadow-sm px-4 py-3 bg-[--color-dark-matter] text-base font-medium text-[--color-ghost-white] hover:bg-[--color-border] focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-offset-[--color-dark-matter] focus:ring-[--color-neural-blue] sm:mt-0"
                     >
                         Cancel
                     </button>
                 </div>
-                 <p className="mt-6 text-xs text-slate-500">
+                 <p className="mt-6 text-xs text-[--color-muted-grey]/80">
                     Get your free API key from{' '}
-                    <a href="https://aistudio.google.com/app/apikey" target="_blank" rel="noopener noreferrer" className="text-blue-600 dark:text-cyan-400 underline hover:text-blue-500 dark:hover:text-cyan-300">
+                    <a href="https://aistudio.google.com/app/apikey" target="_blank" rel="noopener noreferrer" className="text-[--color-neural-blue] underline hover:opacity-80">
                         Google AI Studio
                     </a>.
                 </p>

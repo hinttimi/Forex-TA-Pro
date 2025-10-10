@@ -61,7 +61,6 @@ const ChartSVG = forwardRef<SVGSVGElement, ChartSVGProps>(({ data, shapes, tempS
             {/* Render saved shapes */}
             {shapes.map((shape) => renderShape(shape, shape.id))}
             {/* Render temporary drawing shape */}
-            {/* FIX: Removed the 'id' property from the temporary shape object literal to fix TypeScript error. */}
             {tempShapePoints.length > 0 && renderShape({type: activeTool as Exclude<Tool, 'pan'>, points: tempShapePoints}, 'temp')}
         </svg>
     );
@@ -210,7 +209,7 @@ export const LiveChartSimulatorView: React.FC = () => {
     return (
         <div className="max-w-4xl mx-auto">
             <h1 className="text-4xl font-extrabold text-white mb-2 tracking-tight">Live Chart Simulator</h1>
-            <p className="text-slate-400 mb-8">Watch a simulated real-time price feed and practice your analysis as the chart unfolds.</p>
+            <p className="text-[--color-muted-grey] mb-8">Watch a simulated real-time price feed and practice your analysis as the chart unfolds.</p>
             
             <div className="p-4 bg-slate-800/50 border border-slate-700 rounded-lg mb-6 space-y-4">
                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 items-end">
@@ -235,9 +234,9 @@ export const LiveChartSimulatorView: React.FC = () => {
                 <div className="flex justify-between items-start mb-4">
                     <div>
                         <h2 className="text-3xl font-bold text-white">{currentPair}</h2>
-                        <span className="text-sm text-slate-400">Timeframe: {timeframe.toUpperCase()}</span>
+                        <span className="text-sm text-[--color-muted-grey]">Timeframe: {timeframe.toUpperCase()}</span>
                     </div>
-                    {isLoadingInitialPrice ? <div className="flex items-center gap-2"><LoadingSpinner /><span className="text-slate-400">Fetching live price...</span></div> : <div className={`text-4xl font-mono font-bold transition-colors duration-300 ${priceColorClass}`}>{currentPrice.toFixed(decimalPlaces)}</div>}
+                    {isLoadingInitialPrice ? <div className="flex items-center gap-2"><LoadingSpinner /><span className="text-[--color-muted-grey]">Fetching live price...</span></div> : <div className={`text-4xl font-mono font-bold transition-colors duration-300 ${priceColorClass}`}>{currentPrice.toFixed(decimalPlaces)}</div>}
                 </div>
                  <div className="flex gap-4">
                     {/* Drawing Toolbar */}

@@ -1,564 +1,425 @@
-import { Module } from './types';
+import { Module, LearningPath } from './types';
 
-export const MODULES: Module[] = [
+// The full course content is now organized into Learning Paths.
+export const LEARNING_PATHS: LearningPath[] = [
   {
-    title: 'Level 1: Foundation',
-    lessons: [
-       {
-        key: 'l1-forex-basics',
-        title: 'Forex Basics & Participants',
-        contentPrompt: `You are an expert forex trading mentor. Explain what the Forex market is to a complete beginner. Use markdown for **bold** emphasis.
-
-1.  **What is Forex?**: Describe it as a global, decentralized marketplace for exchanging national currencies. Explain that it's the largest financial market in the world.
-2.  **Why Currencies Move**: Briefly explain that currency values fluctuate based on factors like interest rates, economic health, and geopolitical events.
-3.  **The Participants**: Describe who the major participants are and why they trade.
-
-    *   **Central Banks**: Explain their role in managing their country's currency and setting monetary policy.
-    *   **Major Banks (Interbank Market)**: Describe this as the core of the forex market where large banks trade with each other.
-    *   **Institutional Investors & Corporations**: Mention hedge funds, investment managers, and multinational corporations who trade for speculation or for business needs (e.g., hedging against currency risk).
-    *   **Retail Traders**: Explain this is where individual traders participate.
-
-[CHART: A simple, clean infographic for a dark theme, illustrating the hierarchy of the forex market. At the top, show a "Central Bank" icon, then a "Major Banks (Interbank Market)" icon, followed by "Hedge Funds & Corporations" icon, and at the bottom, a "Retail Traders" icon. Use arrows to show the flow of volume downwards.]`,
-        chartPrompt: 'A simple, clean infographic for a dark theme, illustrating the hierarchy of the forex market. At the top, show "Central Banks," then "Major Banks (Interbank Market)," then "Hedge Funds & Corporations," and at the bottom, "Retail Traders." Use simple icons for each.',
-      },
-      {
-        key: 'l1-candlestick-anatomy',
-        title: 'Candlestick Anatomy',
-        contentPrompt: `You are an expert forex trading mentor. Explain Japanese candlesticks to a complete beginner. Use markdown for **bold** emphasis.
-
-### The Anatomy of a Candle
-First, describe the basic components of a single candlestick. Explain that it represents price movement over a specific time period (e.g., 5 minutes, 1 hour). The main parts are:
-*   **The Body**: Represents the range between the opening and closing price.
-*   **The Wicks (or Shadows)**: Show the highest and lowest prices reached during the period.
-
-A **bullish** candle (usually green) forms when the closing price is higher than the opening price. A **bearish** candle (usually red) forms when the closing price is lower than the opening price.
-
-[CHART: A clear, educational image showing two Japanese candlesticks side-by-side on a dark background. One is a green bullish candle, the other a red bearish candle. Label the "Open", "High", "Low", and "Close" for each, as well as the "Body" and "Wick" (or "Shadow"). The style should be minimalist and professional.]
-
-### The Story of a Candle
-Explain that each candle tells a story of the battle between buyers ("bulls") and sellers ("bears"). A long green body shows buyers were in strong control. A long red body shows sellers were in control. Long wicks indicate significant volatility and indecision.
-
-### Introduction to Key Patterns
-Explain that single or small groups of candles can form patterns that hint at future price moves. Here are a few essential patterns to start with:
-
-*   **Doji**: This candle has a very small body, with the open and close prices being nearly the same. It signals **indecision** in the market and can indicate a potential reversal.
-[CHART: A dark-themed chart showing a clear Doji candle at the top of an uptrend, with an arrow pointing to it and the label "Doji: Indecision".]
-
-*   **Hammer**: A bullish reversal pattern that forms after a decline. It has a short body, little to no upper wick, and a long lower wick (at least twice the size of the body). It shows that sellers pushed the price down, but buyers stepped in aggressively to push it back up.
-[CHART: A dark-themed chart showing a clear Hammer candle at the bottom of a downtrend, with an arrow pointing to it and the label "Hammer: Bullish Reversal Signal".]
-
-*   **Bullish Engulfing**: A powerful two-candle reversal pattern. It consists of a small bearish candle followed by a larger bullish candle whose body completely "engulfs" the body of the previous bearish candle. It signals a strong shift in momentum to the upside.
-[CHART: A dark-themed chart showing a Bullish Engulfing pattern at the end of a downtrend. Highlight the two candles involved.]
-
-*   **Bearish Engulfing**: The opposite of the bullish engulfing. A small bullish candle is followed by a larger bearish candle that completely engulfs the prior candle's body. It signals a strong shift in momentum to the downside.
-[CHART: A dark-themed chart showing a Bearish Engulfing pattern at the end of an uptrend. Highlight the two candles involved.]`,
-        chartPrompt: 'A clear, educational image showing two Japanese candlesticks side-by-side on a dark background. One is a green bullish candle, the other a red bearish candle. Label the "Open", "High", "Low", and "Close" for each, as well as the "Body" and "Wick" (or "Shadow"). The style should be minimalist and professional for the main lesson.',
-      },
-      {
-        key: 'l1-support-resistance',
-        title: 'Basic Support & Resistance',
-        contentPrompt: `You are an expert forex trading mentor. Explain the concepts of Support and Resistance to a beginner. Use markdown for **bold** emphasis.
-
-### What are Support and Resistance?
-Think of **Support** as a price "floor" and **Resistance** as a price "ceiling".
-*   **Support** is a price level where a downtrend can be expected to pause due to a concentration of demand or buying interest. As the price drops towards support, it becomes cheaper, and buyers are more inclined to buy, which can push the price back up.
-*   **Resistance** is a price level where an uptrend can be expected to pause due to a concentration of supply or selling interest. As the price rises towards resistance, sellers are more inclined to sell, which can push the price back down.
-
-### How are They Formed?
-These levels are formed by previous swing highs and swing lows on the chart. The more times the price has respected a level, the stronger that level is considered to be.
-
-[CHART: A clean, dark-themed candlestick chart showing price bouncing off a clear horizontal "Support" level multiple times. The support level is drawn as a horizontal line connecting several previous lows. Also, show price getting rejected from a clear horizontal "Resistance" level multiple times, with a line connecting previous highs.]
-
-### The Role Swap
-A key concept is the "role reversal." When a resistance level is broken, it can become a new support level. Conversely, when a support level is broken, it can become a new resistance level.
-
-[CHART: A dark-themed candlestick chart showing price breaking through a resistance level. Then, show price coming back down to retest that same level, which now acts as support, before continuing to move higher. Label the "Resistance," "Breakout," and "New Support".]`,
-        chartPrompt: 'A clean, dark-themed candlestick chart showing price bouncing off a clear horizontal "Support" level multiple times. Also, show price getting rejected from a clear horizontal "Resistance" level multiple times. The levels should be clearly labeled.',
-      },
-    ],
-  },
-  {
-    title: 'Level 2: Market Structure',
-    lessons: [
-      {
-        key: 'l2-market-structure',
-        title: 'Bullish & Bearish Structure',
-        contentPrompt: `You are an expert forex trading mentor. Explain market structure in detail. Use markdown for **bold** emphasis.
-
-### The Foundation of Trend
-Market structure is the sequence of highs and lows that price action creates. It's the most fundamental way to determine the market's current direction, or trend.
-
-### Bullish Structure (Uptrend)
-An uptrend is characterized by price making a series of **Higher Highs (HH)** and **Higher Lows (HL)**.
-The sequence is as follows:
-1.  Price creates a low.
-2.  It pushes up to create a high (the first HH).
-3.  It pulls back, creating a low that is *higher* than the previous low (the first HL).
-4.  It then pushes up again, breaking above the previous high to create a *new* Higher High.
-This HH-HL pattern confirms that buyers are in control. The trend remains bullish as long as this pattern continues.
-
-[CHART: A clean, dark-themed line chart illustrating a clear uptrend. Use arrows to show the direction. Clearly label at least two "Higher High" (HH) points and two "Higher Low" (HL) points in sequence.]
-
-### Bearish Structure (Downtrend)
-A downtrend is the opposite, characterized by a series of **Lower Lows (LL)** and **Lower Highs (LH)**.
-The sequence is:
-1.  Price creates a high.
-2.  It pushes down to create a low (the first LL).
-3.  It pulls back, creating a high that is *lower* than the previous high (the first LH).
-4.  It then pushes down again, breaking below the previous low to create a *new* Lower Low.
-This LL-LH pattern confirms that sellers are in control. The trend remains bearish as long as this pattern continues.
-
-[CHART: A clean, dark-themed line chart illustrating a clear downtrend. Use arrows to show the direction. Clearly label at least two "Lower Low" (LL) points and two "Lower High" (LH) points in sequence.]`,
-        chartPrompt: 'A clean, dark-themed line chart illustrating a clear uptrend with labels for "Higher High" (HH) and "Higher Low" (HL). Next to it, show a clear downtrend with labels for "Lower Low" (LL) and "Lower High" (LH). Use arrows to show the direction of the trend.',
-      },
-      {
-        key: 'l2-bos',
-        title: 'Break of Structure (BOS)',
-        contentPrompt: `You are a professional trading mentor specializing in Smart Money Concepts. Explain what a **Break of Structure (BOS)** is. Use markdown for emphasis.
-
-### Confirming the Trend
-A **Break of Structure (BOS)** is a key event in price action that signals a **continuation** of the current trend. It's the moment the market shows its hand and confirms its intention to keep moving in the same direction.
-
-*   **In an Uptrend**: A BOS occurs when price breaks **above** a previous **Higher High (HH)**. This creates a new HH and confirms that the bullish trend is still intact.
-*   **In a Downtrend**: A BOS occurs when price breaks **below** a previous **Lower Low (LL)**. This creates a new LL and confirms that the bearish trend is still intact.
-
-Looking for a BOS helps traders align themselves with the dominant market flow.
-
-[CHART: A dark-themed forex candlestick chart showing an uptrend. Clearly label a "Higher High". Then show price pushing up and closing a candle body clearly above that high. Label this event as "BOS" (Break of Structure) with an arrow showing the continuation.]
-[CHART: A second dark-themed forex candlestick chart showing a downtrend. Clearly label a "Lower Low". Then show price pushing down and closing a candle body clearly below that low. Label this event as "BOS" (Break of Structure) with an arrow showing the continuation.]`,
-        chartPrompt: 'A dark-themed forex candlestick chart showing an uptrend. Clearly label a "Higher High". Then show price breaking above that high and label the candle that breaks it as "BOS" (Break of Structure). Do a similar illustration for a downtrend breaking a "Lower Low".',
-      },
-       {
-        key: 'l2-choch',
-        title: 'Change of Character (CHoCH)',
-        contentPrompt: `You are a professional trading mentor specializing in Smart Money Concepts. Explain what a **Change of Character (CHoCH)** is and contrast it with a BOS. Use markdown for emphasis.
-
-### The First Sign of a Reversal
-While a BOS signals trend *continuation*, a **Change of Character (CHoCH)** is the *first significant sign* of a potential trend **reversal**. It indicates that the market's internal structure is starting to shift.
-
-*   **From Uptrend to Downtrend**: In a clear uptrend, the market is making Higher Highs and Higher Lows. A CHoCH occurs when price **fails to make a new Higher High** and instead breaks **below the most recent Higher Low (HL)**. This is the first signal that sellers may be taking control.
-
-[CHART: A dark-themed forex candlestick chart showing a clear uptrend with several Higher Highs and Higher Lows labeled. Then, show the price failing to break the last HH and instead breaking decisively below the last labeled Higher Low. Label this break clearly as "CHoCH" (Change of Character) with an arrow indicating a potential new downtrend.]
-
-*   **From Downtrend to Uptrend**: In a clear downtrend, the market is making Lower Lows and Lower Highs. A CHoCH occurs when price **fails to make a new Lower Low** and instead breaks **above the most recent Lower High (LH)**. This is the first clue that buyers may be stepping in.
-
-[CHART: A dark-themed forex candlestick chart showing a clear downtrend with several Lower Lows and Lower Highs labeled. Then, show the price failing to break the last LL and instead breaking decisively above the last labeled Lower High. Label this break clearly as "CHoCH" (Change of Character) with an arrow indicating a potential new uptrend.]
-
-A CHoCH is not a guarantee of a reversal, but it's a critical warning that the previous trend is losing momentum and that traders should become cautious or start looking for opportunities in the new direction.`,
-        chartPrompt: 'A dark-themed forex candlestick chart showing an uptrend with several Higher Highs and Higher Lows. Then, show the price failing to make a new Higher High and instead breaking the last Higher Low. Label this event clearly as "Change of Character" (CHoCH) with an arrow indicating a potential new downtrend.',
-      },
-    ],
-  },
-  {
-    title: 'Level 3: Smart Money Liquidity',
-    lessons: [
-      {
-        key: 'l3-what-is-liquidity',
-        title: 'What is Liquidity?',
-        contentPrompt: `You are a professional trading mentor specializing in Smart Money Concepts. Explain what **liquidity** is in forex trading in simple terms. Use markdown for emphasis.
-
-### The Fuel of the Market
-In the context of trading, **liquidity** refers to the ability to buy or sell an asset without causing a significant change in its price. For practical purposes, you can think of liquidity as **pools of pending orders** resting in the market.
-
-The most common types of orders that create liquidity are:
-*   **Stop-Loss Orders**: These are orders placed by traders to exit a losing trade at a specific price.
-*   **Buy-Stop and Sell-Stop Orders**: These are orders placed by breakout traders to enter a trade when price breaks a certain level.
-
-### Why is it Important for "Smart Money"?
-"Smart Money" refers to large institutional players like banks and hedge funds. They trade with enormous position sizes that cannot be filled instantly without moving the market against them.
-
-To fill their large orders, they need to find a large number of opposing orders. These pools of stop-loss and breakout orders provide the massive liquidity they need. Therefore, smart money will often engineer price moves towards these liquidity zones to fill their positions before starting the real market move. Understanding where liquidity is resting is key to anticipating where the market might go next.
-
-[CHART: An abstract, dark-themed diagram. On one side, show a large "Institution" icon with a text bubble saying "Need to Buy 1 Billion EUR". On the other side, show many small "Retail Trader" icons with stop-loss orders (sell orders) placed just above a resistance level. Draw a large arrow from the Institution to the retail stop-losses, labeled "Targeting Liquidity to Fill Orders".]`,
-        chartPrompt: 'An abstract, dark-themed diagram. On one side, show a large "Institution" icon with a big order book. On the other, show many small "Retail Trader" icons with stop-loss orders. Draw arrows showing the institution needing to absorb the retail orders to execute their trade.',
-      },
-       {
-        key: 'l3-liquidity-pools',
-        title: 'Buy-side & Sell-side Pools',
-        contentPrompt: `You are a professional trading mentor specializing in Smart Money Concepts. Explain **buy-side liquidity** and **sell-side liquidity**. Use markdown for emphasis.
-
-### Where is the Liquidity?
-Liquidity pools are not random; they form at obvious technical levels where many traders are likely to place their orders.
-
-### Buy-Side Liquidity
-**Buy-side liquidity** rests **above old highs** or key resistance levels. It is made up of:
-1.  **Stop-Losses** from traders who are in short (sell) positions. Their stop-loss is a buy order.
-2.  **Buy-Stop Orders** from breakout traders who want to buy as soon as the price breaks above the high.
-
-Smart money may push the price above an old high to trigger all these buy orders, allowing them to sell their own large positions into that buying frenzy.
-
-[CHART: A dark-themed forex candlestick chart showing a clear resistance level with several highs touching it. Use a cluster of dollar sign icons ($) above this level and label it "Buy-Side Liquidity (Stop Losses & Buy Stops)".]
-
-### Sell-Side Liquidity
-**Sell-side liquidity** rests **below old lows** or key support levels. It is made up of:
-1.  **Stop-Losses** from traders who are in long (buy) positions. Their stop-loss is a sell order.
-2.  **Sell-Stop Orders** from breakout traders who want to sell as soon as the price breaks below the low.
-
-Smart money may push the price below an old low to trigger these sell orders, allowing them to fill their own large buy positions at a better price.
-
-[CHART: A dark-themed forex candlestick chart showing a clear support level with several lows touching it. Use a cluster of dollar sign icons ($) below this level and label it "Sell-Side Liquidity (Stop Losses & Sell Stops)".]`,
-        chartPrompt: 'A dark-themed forex candlestick chart showing a clear price range. Use a dollar sign icon ($) to label the "Buy-side Liquidity" resting above a cluster of previous highs (resistance) and "Sell-side Liquidity" resting below a cluster of previous lows (support).',
-      },
-      {
-        key: 'l3-liquidity-sweeps',
-        title: 'Liquidity Sweeps (Stop Hunts)',
-        contentPrompt: `You are a professional trading mentor specializing in Smart Money Concepts. Explain a **liquidity sweep** or "stop hunt". Use markdown for emphasis.
-
-### The Smart Money Signature Move
-A **liquidity sweep**, also known as a "stop hunt" or "Judas swing," is a classic smart money tactic. It is a sharp, rapid price move that spikes just past a key high or low, only to quickly reverse.
-
-The purpose of this move is to:
-1.  **Trigger Stop-Losses**: Hit the cluster of stop-loss orders resting just beyond the level.
-2.  **Induce Breakout Traders**: Trick breakout traders into thinking a new trend is starting, making them enter in the wrong direction.
-3.  **Fill Institutional Orders**: The surge in orders from the first two groups provides the liquidity for smart money to enter their large positions *against* the crowd.
-
-After the liquidity has been "swept," the market often reverses aggressively, leaving the trapped traders behind. Recognizing a liquidity sweep can provide a powerful entry signal for trading in the direction of the smart money.
-
-[CHART: A dark-themed forex candlestick chart. Show a clear previous high. Illustrate price moving up, with a single candle wick piercing just above that high, and then the candle body closing back below the high. Label the wick above the high as "Liquidity Sweep" or "Stop Hunt". Use an arrow to show the aggressive reversal that follows.]
-[CHART: A dark-themed forex candlestick chart. Show a clear previous low. Illustrate a single candle with a long lower wick that pierces just below that low, and then closes back above the low. Label this "Sell-Side Liquidity Sweep" and show the subsequent bullish reversal.]`,
-        chartPrompt: 'A dark-themed forex candlestick chart. Show a clear previous low. Illustrate a single candle with a long wick that pierces just below that low (label this "Liquidity Sweep" or "Stop Hunt") and then closes back above the low, indicating a reversal.',
-      },
-    ],
-  },
-  {
-    title: 'Level 4: Order Blocks',
-    lessons: [
-       {
-        key: 'l4-what-are-order-blocks',
-        title: 'What are Order Blocks?',
-        contentPrompt: `You are a professional trading mentor specializing in Smart Money Concepts. Explain what an **Order Block** is. Use markdown for emphasis.
-
-### The Footprint of Smart Money
-An **Order Block (OB)** is a specific candlestick that represents a significant area of institutional buying or selling. It is often seen as the "last footprint" of smart money before a large, impulsive move in the market.
-
-Essentially, an Order Block is the **last opposing candle before a strong move that breaks market structure (BOS)**.
-
-*   A **Bullish Order Block** is the last **down candle** (bearish) before a strong upward move that causes a BOS.
-*   A **Bearish Order Block** is the last **up candle** (bullish) before a strong downward move that causes a BOS.
-
-The theory is that smart money used this candle to accumulate their position before launching the price in the intended direction. This leaves behind a trail of unfilled orders at that price level. The market will often return to this Order Block in the future to mitigate these orders, providing a high-probability area to enter a trade.
-
-[CHART: A dark-themed chart showing a strong upward move that breaks a previous high (a BOS). Highlight the last red down-candle right before that explosive move and label it "Bullish Order Block".]
-[CHART: A dark-themed chart showing a strong downward move that breaks a previous low (a BOS). Highlight the last green up-candle right before that explosive move and label it "Bearish Order Block".]`,
-        chartPrompt: 'A dark-themed chart showing a strong upward move that breaks structure (a BOS). Highlight the last down-candle right before that explosive move and label it "Bullish Order Block".',
-      },
-       {
-        key: 'l4-bullish-bearish-ob',
-        title: 'Bullish vs Bearish Order Blocks',
-        contentPrompt: `You are a professional trading mentor specializing in Smart Money Concepts. Clearly define and illustrate Bullish and Bearish Order Blocks. Use markdown for emphasis.
-
-### Bullish Order Blocks (Demand Zone)
-A **Bullish Order Block** is the **last down-candle** (red/bearish) before a strong, impulsive **up-move** that results in a Break of Structure (BOS).
-
-*   **Identification**: Look for a downtrend or consolidation, find the last red candle, and then confirm that the following move up is powerful and breaks a recent high.
-*   **Significance**: This area represents a point where large institutions bought heavily, absorbing all selling pressure before driving the price higher. It is considered a **demand zone**. Traders will look to enter **long (buy)** positions when the price returns to test this level.
-
-[CHART: A close-up, dark-themed chart highlighting a "Bullish Order Block". Show a red candle, followed by several large green candles that break a nearby high (labeled BOS). Draw a rectangle around the body of the red candle and extend it to the right, labeling it "Demand Zone / Bullish OB".]
-
-### Bearish Order Blocks (Supply Zone)
-A **Bearish Order Block** is the **last up-candle** (green/bullish) before a strong, impulsive **down-move** that results in a Break of Structure (BOS).
-
-*   **Identification**: Look for an uptrend or consolidation, find the last green candle, and then confirm that the following move down is powerful and breaks a recent low.
-*   **Significance**: This area represents a point where institutions sold heavily, absorbing all buying pressure before driving the price lower. It is considered a **supply zone**. Traders will look to enter **short (sell)** positions when the price returns to test this level.
-
-[CHART: A close-up, dark-themed chart highlighting a "Bearish Order Block". Show a green candle, followed by several large red candles that break a nearby low (labeled BOS). Draw a rectangle around the body of the green candle and extend it to the right, labeling it "Supply Zone / Bearish OB".]`,
-        chartPrompt: 'Two mini-charts on a dark background. The first highlights a "Bearish Order Block" - the last up-candle before a strong downward move that causes a BOS. The second highlights a "Bullish Order Block" - the last down-candle before a strong upward move that causes a BOS.',
-      },
-      {
-        key: 'l4-ob-mitigation',
-        title: 'Order Block Mitigation',
-        contentPrompt: `You are a professional trading mentor specializing in Smart Money Concepts. Explain the concept of **mitigation** and how it provides entry opportunities. Use markdown for emphasis.
-
-### Returning to the Scene
-**Mitigation** is the process of price returning to a previously created Order Block. The term implies that institutions are returning to this level to "mitigate" their initial position—either to close out parts of their original trade, to clear any remaining orders, or to add to their position before continuing the move.
-
-For retail traders, this is the golden opportunity.
-
-When price retraces back to an unmitigated (meaning, not yet revisited) Order Block, it provides a high-probability **Point of Interest (POI)** to enter a trade in the direction of the original impulsive move.
-
-### The Entry Model
-1.  Identify a valid Order Block (the last opposing candle before a BOS).
-2.  Wait for price to pull back and trade into the zone of the Order Block.
-3.  Look for a reaction as price touches the OB (e.g., a sharp rejection, or a lower timeframe confirmation pattern).
-4.  Enter the trade with a stop loss placed just on the other side of the Order Block zone.
-
-This process allows you to join the institutional flow with a defined risk.
-
-[CHART: A dark-themed forex candlestick chart. First, show a "Bearish Order Block" being formed (last up-candle before a down-move BOS). Draw a rectangle around this OB and extend it to the right. Then, show price action moving away and later returning to this rectangular zone. Highlight the candle that touches the zone and is aggressively rejected downwards. Label this touch point as "Mitigation Entry".]
-[CHART: A second dark-themed chart showing the same concept for a "Bullish Order Block". Price returns to the Bullish OB zone, touches it, and then reverses strongly to the upside. Label the entry point.]`,
-        chartPrompt: 'A dark-themed forex candlestick chart. Highlight a "Bearish Order Block" and draw a rectangle around it, extending it to the right. Then show price returning to this zone later, touching the rectangle, and getting aggressively rejected downwards. Label the touch point as "Mitigation Entry".',
-      },
+    id: 'foundation',
+    title: 'Universal Foundation',
+    description: 'The mandatory prerequisite course covering the essential language of technical analysis.',
+    isFoundation: true,
+    modules: [
+        {
+            title: 'Foundation 1: The Trading Chart',
+            lessons: [
+              { 
+                key: 'uf-m1-l1', 
+                title: 'What is a Price Chart?', 
+                content: `### Your Window into the Market's Mind
+
+Welcome to the first step of your trading journey. Before we dive into complex strategies, we must learn to read the language of the market. The most fundamental tool for this is the **price chart**.
+
+Think of a price chart as a battlefield map, recording the ongoing conflict between two forces: the **buyers (Bulls)**, who want to push the price higher, and the **sellers (Bears)**, who want to push it lower. Every line, every bar, and every candle is a footprint left behind from this battle. Our job as technical analysts is to interpret these footprints to understand who is winning and where the battle might go next.
+
+A chart plots one simple thing: **price** against **time**. Let's break down its two core components.
+
+#### 1. The Vertical Axis (Y-Axis): The "What" - Price
+
+The vertical axis on the right side of your chart always represents **price**.
+
+-   As you move **up** the chart, the price is increasing.
+-   As you move **down** the chart, the price is decreasing.
+
+But what does this price mean? For a currency pair like **EUR/USD**, the price (e.g., 1.0750) tells you how many US Dollars (the **quote currency**) it takes to buy one Euro (the **base currency**).
+
+-   **If EUR/USD is rising**, it means the Euro is getting stronger, or the US Dollar is getting weaker (or both!). It takes more dollars to buy one Euro.
+-   **If EUR/USD is falling**, it means the Euro is weakening, or the US Dollar is strengthening.
+
+This axis is the scoreboard of the battle. It tells you the value of the asset at every single moment.
+
+[CHART: A clean, educational infographic on a dark background showing a blank chart grid. Clearly label the vertical axis as 'Price (e.g., EUR/USD)' and the horizontal axis as 'Time'. Use a green arrow pointing up the price axis labeled 'Price Increasing (EUR Getting Stronger)' and a red arrow pointing down labeled 'Price Decreasing (EUR Getting Weaker)'. Use a blue arrow pointing right along the time axis labeled 'Time Moving Forward'.]
+
+#### 2. The Horizontal Axis (X-Axis): The "When" - Time
+
+The horizontal axis at the bottom of your chart represents **time**.
+
+-   The chart always moves from **left to right**, from the past to the present.
+-   The data on the far left is the oldest (historical price), and the data on the far right is the most recent.
+
+This axis can be divided into different units, known as **timeframes**. You might look at a chart where each data point represents 1 minute, 1 hour, 1 day, or even 1 week. Think of timeframes like different zoom levels on a map:
+
+-   **Higher Timeframes (e.g., Daily, Weekly):** These are like looking at a country from space. You see the major mountain ranges and rivers (the long-term trends) but miss the small towns.
+-   **Lower Timeframes (e.g., 15-Minute, 1-Minute):** These are like a street-level view. You see every small turn and alleyway (the short-term fluctuations) but can easily lose sight of the bigger picture.
+
+Mastering the use of different timeframes is a critical skill we'll develop later.
+
+### The Story of the Chart
+
+By combining price and time, a chart becomes a powerful historical document. It doesn't just show random lines; it tells a story of market psychology. By looking at a chart, you can begin to answer critical questions:
+
+*   **Who is in control?** Are buyers or sellers dominating the market?
+*   **How volatile is the market?** Are the price swings wild and unpredictable, or calm and orderly?
+*   **Are there "memory" areas?** Are there specific price levels where the market has reacted strongly in the past? These are the clues that form the basis of support and resistance.
+
+### A Professional's Secret
+
+Beginners see a price chart as a squiggly line. Professionals see it as a **record of decisions**. Every rise is a collective decision by traders to buy, fueled by greed or opportunity. Every fall is a collective decision to sell, fueled by fear or profit-taking. Your goal is to stop seeing lines and start seeing the story of human emotion and decision-making on a massive scale.
+
+Mastering these two simple axes is the most important step you will ever take. Every advanced concept, from "Order Blocks" to "Liquidity Sweeps," is built on this simple foundation of price and time.`
+              },
+              { 
+                key: 'uf-m1-l2', 
+                title: 'The Three Main Chart Types', 
+                content: `### Different Ways to Tell the Same Story
+
+Now that we understand the canvas of price and time, let's look at how the story of that battle between buyers and sellers is actually drawn. There are three primary ways to visualize price movement, each offering a different level of detail. Think of them as different ways to tell a story: a simple summary, a detailed outline, or the full, unabridged novel.
+
+#### 1. The Line Chart: The Simplest Narrative
+
+The simplest and most familiar chart type is the **line chart**. It's created by connecting a series of data points with a line. In trading, those data points are almost always the **closing price** for each period.
+
+- **What it shows:** The general trend and flow of the market over time.
+- **Analogy:** A line chart is like reading the back cover of a book. It gives you the main plot points and the overall direction of the story without any of the nuanced details, dialogue, or character struggles within each chapter.
+- **Best Use:** Identifying long-term trends and major support and resistance levels without the "noise" of intra-period price swings.
+
+#### 2. The Bar Chart (OHLC): Adding Key Details
+
+The bar chart provides significantly more information. For each time period, it displays four key pieces of data, known as **OHLC**:
+
+-   **O**pen: The price at the beginning of the period.
+-   **H**igh: The highest price reached during the period.
+-   **L**ow: The lowest price reached during the period.
+-   **C**lose: The price at the end of the period.
+
+Each period is represented by a vertical line, with a small horizontal tick on the left for the open price and a small horizontal tick on the right for the close price.
+
+- **What it shows:** The full trading range of the period, plus the opening and closing prices.
+- **Analogy:** A bar chart is like a detailed, chapter-by-chapter summary of the book. You know where each chapter started and ended, and the highest and lowest points of the drama within it, but you still have to look closely to understand the emotional tone.
+
+[CHART: A clean, educational infographic on a dark background showing three mini-charts side-by-side, all displaying the same simple up-and-down price movement. Clearly label them '1. Line Chart (Closing Prices)', '2. Bar Chart (OHLC)', and '3. Candlestick Chart (OHLC with Body)'. Use arrows on the Bar and Candlestick charts to point out the Open, High, Low, and Close.]
+
+#### 3. The Candlestick Chart: The Visual Masterpiece
+
+The candlestick chart displays the exact same OHLC data as a bar chart, but in a far more intuitive and visually powerful way.
+
+- The wide part of the candle is called the **"real body."** It represents the range between the open and close price.
+- The thin lines above and below the body are the **"wicks"** or **"shadows,"** representing the high and low.
+- The **color** of the body instantly tells you if the price closed higher than it opened (bullish, usually green) or lower than it opened (bearish, usually red).
+
+- **What it shows:** The full OHLC data, with an immediate visual representation of momentum and direction.
+- **Analogy:** The candlestick chart is the full, unabridged novel, complete with emotional cues. The color and size of the body tell you the tone of the chapter—was it a triumphant victory for the heroes (a big green candle) or a crushing defeat (a big red candle)?
+
+We will focus almost exclusively on candlestick charts because they provide the most information in the most easily digestible format.
+
+### A Professional's Secret
+
+While 95% of analysis is done on candlestick charts, professionals still use line charts for one specific purpose: **identifying the true, underlying structure of the market.** By plotting only the closing prices on a high timeframe (like Daily or Weekly), a trader can cut through the "noise" of volatile wicks and see the most important price levels where the market has definitively closed. This provides a cleaner, more objective view of the long-term trend. `
+              },
+              { 
+                key: 'uf-m1-l3', 
+                title: 'Why Candlesticks Reign Supreme', 
+                content: `### Reading the Psychology of the Market
+
+If a price chart is a story, then candlesticks are the words that give it emotion, drama, and intent. While a bar chart gives you the facts (Open, High, Low, Close), a candlestick chart tells you the *story* of the battle within that period. This is why they are the preferred tool of nearly every professional price action trader.
+
+Learning to read candlesticks is like learning to read the facial expressions and body language of the market. Let's explore why they are so powerful.
+
+#### 1. The Power of Color: Instantaneous Insight
+
+The most immediate advantage of a candlestick chart is its use of color.
+
+-   A **green (bullish) candle** forms when the closing price is *higher* than the opening price.
+-   A **red (bearish) candle** forms when the closing price is *lower* than the opening price.
+
+This simple visual cue is incredibly powerful. At a single glance, you can see who won the battle for that period: the buyers or the sellers. A sea of green candles tells a story of overwhelming buying pressure, while a block of red candles shows dominant selling. This instant feedback is something a bar chart simply cannot provide.
+
+#### 2. The Story of the Body: Gauging Momentum
+
+The "real body" of the candle (the thick part) tells you about the force and conviction behind the price move.
+
+-   **A long body** signifies a decisive victory. A long green body shows that buyers were in control from start to finish. A long red body shows that sellers dominated. It's a sign of strong **momentum**.
+-   **A short body** signifies indecision or a weak push. It shows that despite the highs and lows, the price closed very near to where it opened. This represents a stalemate in the battle.
+
+[CHART: A visually compelling, dark-theme chart split down the middle. On the left side, show complex price action using bar charts, labeled 'Bar Chart: Factual but Unintuitive'. On the right side, show the exact same price action using candlestick charts, labeled 'Candlestick Chart: Visual & Emotional Story'. Use glowing highlights on the candlestick side to emphasize a long green candle ('Strong Momentum') and a candle with a long upper wick ('Selling Pressure').]
+
+#### 3. Wicks Tell Tales of Rejection
+
+The wicks (or shadows) are the footprints of the battles that were fought but lost. They show us where the price *tried* to go but was ultimately rejected.
+
+-   **A long upper wick** on a candle tells you that buyers tried to push the price much higher, but sellers overwhelmed them and forced the price back down before the period closed. It's a sign of **selling pressure**.
+-   **A long lower wick** tells the opposite story. Sellers tried to force the price down, but buyers stepped in with strength, pushing the price back up. It's a sign of **buying pressure**.
+
+By combining the story of the body with the story of the wicks, you get a complete psychological profile of each trading session. A small body with long wicks on both sides, for example, paints a clear picture of intense conflict and massive indecision.
+
+### A Professional's Secret
+
+Beginners often get lost trying to memorize dozens of named candlestick patterns like "Three White Soldiers" or "Dark Cloud Cover." Professionals don't memorize patterns; they **read the story**. Instead of asking "What is this pattern called?", they ask "What does this candle tell me about the fight between buyers and sellers?".
+
+A long red candle with no lower wick tells a story of absolute seller dominance. A candle with a tiny body and a huge lower wick tells a story of sellers trying to take control but being powerfully rejected by a flood of buyers. Learn to read the story of each candle, and you will understand the market's intentions without needing to memorize a single pattern name.` 
+              },
+              { 
+                key: 'uf-m1-l4', 
+                title: 'Demystifying Timeframes', 
+                content: `### The Art of Zooming In and Out
+
+Every trading decision you make will be influenced by your chosen **timeframe**. Think of a trading chart as a map. You can't navigate a city using a map of the entire country, and you can't plan a cross-country trip using a street map of a single neighborhood. A trader must become skilled at using the right map for the right job.
+
+#### 1. What Exactly is a Timeframe?
+
+A timeframe simply defines the period of time that each individual candle or bar on your chart represents.
+
+- On a **Daily (D1)** timeframe, each candle represents one full day of trading activity (Open, High, Low, Close).
+- On a **1-Hour (H1)** timeframe, each candle represents 60 minutes of trading.
+- On a **5-Minute (M5)** timeframe, each candle represents 5 minutes.
+
+The same overall price movement exists on all timeframes, but the level of detail you see changes dramatically.
+
+#### 2. The Hierarchy: Higher vs. Lower Timeframes
+
+Timeframes are generally grouped into a hierarchy, and understanding their relationship is crucial for successful analysis.
+
+-   **Higher Timeframes (HTF):** Weekly (W1), Daily (D1), 4-Hour (H4). These are your "macro" views. They are used to identify the **overall trend, bias, and major structural levels.** They show the big picture but are too slow for precise trade entries.
+    
+-   **Lower Timeframes (LTF):** 1-Hour (H1), 15-Minute (M15), 5-Minute (M5), 1-Minute (M1). These are your "micro" views. They are used for **timing your entries and exits with precision.** Trading on these timeframes alone is like navigating in a fog; you can easily lose sight of the bigger market direction.
+
+**Analogy:** Imagine planning a military campaign. The **General** uses the **Higher Timeframes** (a map of the whole country) to decide the overall strategy: "We are advancing north." The **Sergeant** on the ground uses the **Lower Timeframes** (a street-level map) to execute that strategy: "We will take cover behind this building and advance to the next street corner." The Sergeant's actions are always in service of the General's plan.
+
+[CHART: A clean, educational infographic on a dark background. On the left, show a single, large, bullish (green) Daily candlestick. Clearly label its Open, High, Low, and Close. An arrow points from this candle to the right side of the image. On the right, show a series of 24 smaller 1-Hour candlesticks that represent the price action within that single day. Use annotations to show that the Open of the first H1 candle matches the Daily Open, the Close of the last H1 candle matches the Daily Close, and the highest and lowest points of the H1 sequence match the High and Low of the Daily candle. Label the left 'The Daily Candle (The Story)' and the right 'The 24 Hourly Candles (The Details)'.]
+
+#### 3. The Fractal Nature of the Market
+
+The most mind-bending and powerful concept related to timeframes is that markets are **fractal**. This means the patterns and structures you see on a high timeframe repeat on lower timeframes.
+
+A downtrend on a Daily chart is made of smaller swings. If you zoom into one of those downward swings on an H1 chart, you will see it is itself a mini-trend, with its own series of lower lows and lower highs.
+
+This is why the skills you learn are universal. The ability to spot a pattern on a 15-minute chart is the same skill used to spot it on a Weekly chart. The market's behavior is consistent across all scales.
+
+### A Professional's Secret
+
+The number one mistake beginners make with timeframes is "analysis paralysis." They flip between 10 different timeframes, get conflicting signals, and become confused.
+
+Professionals simplify. They use a **3-timeframe system** for what's called **Top-Down Analysis**:
+
+1.  **HTF (e.g., Daily):** "What is the overall market direction? Are we bullish or bearish?" This sets the **BIAS**.
+2.  **MTF (e.g., H4 or H1):** "Where are the key price levels (zones) within that trend that I should be interested in?" This identifies the **AREA OF INTEREST**.
+3.  **LTF (e.g., M15):** "Is there a specific entry signal happening at my zone right now?" This is for **EXECUTION**.
+
+They decide their direction on the big map, find their location on the medium map, and time their entry on the small map. They *never* take a 15-minute buy signal if the Daily chart is in a clear downtrend.`
+              },
+              { 
+                key: 'uf-m1-l5', 
+                title: 'The World of Currency Pairs', 
+                content: `### Trading the Global Economy
+
+In the Forex market, you are never just buying or selling a single thing. You are always exchanging one currency for another. This is why they are always quoted in **pairs**. Understanding the structure of these pairs and their different categories is fundamental to knowing what you are trading.
+
+#### 1. Base vs. Quote: The Core of a Pair
+
+Every currency pair has two parts: the **Base Currency** and the **Quote Currency**. Let's use the world's most traded pair, **EUR/USD**, as our example.
+
+**EUR / USD = 1.0750**
+
+-   **Base Currency (EUR):** This is the first currency in the pair. It is the 'basis' for the trade. It always has a value of 1.
+-   **Quote Currency (USD):** This is the second currency. Its value tells you how much of it is needed to buy one unit of the base currency.
+
+So, a price of 1.0750 means it costs **1.0750 US Dollars** to buy **1 Euro**.
+
+-   If the **EUR/USD chart is going UP**, it means the Euro (base) is getting stronger relative to the US Dollar (quote).
+-   If the **EUR/USD chart is going DOWN**, it means the Euro (base) is getting weaker.
+
+When you **BUY** EUR/USD, you are buying Euros and selling US Dollars. When you **SELL** EUR/USD, you are selling Euros and buying US Dollars.
+
+#### 2. The Major Pairs: The Superhighways
+
+The "Majors" are the most traded currency pairs in the world. They all involve the **US Dollar (USD)** on one side of the pair and are known for their extremely high liquidity.
+
+**Analogy:** Think of these as the major interstate highways of the financial world. They have the most traffic, are the most efficient, and have the lowest "tolls" (spreads).
+
+The seven major pairs are:
+-   **EUR/USD** (Euro / US Dollar)
+-   **GBP/USD** (British Pound / US Dollar) - "Cable"
+-   **USD/JPY** (US Dollar / Japanese Yen) - "The Gopher"
+-   **USD/CHF** (US Dollar / Swiss Franc) - "The Swissie"
+-   **AUD/USD** (Australian Dollar / US Dollar) - "The Aussie"
+-   **NZD/USD** (New Zealand Dollar / US Dollar) - "The Kiwi"
+-   **USD/CAD** (US Dollar / Canadian Dollar) - "The Loonie"
+
+[CHART: A sleek, dark-themed world map. Prominently highlight the regions and currency symbols for the USA (USD), Eurozone (EUR), UK (GBP), Japan (JPY), Switzerland (CHF), Australia (AUD), Canada (CAD), and New Zealand (NZD). Draw thick, brightly colored, glowing lines connecting the USD to all the other major currencies, labeling this group 'The Major Pairs (High Liquidity)'.]
+
+#### 3. The Minor Pairs (Crosses): The National Highways
+
+The "Minors" or "Cross-Currency Pairs" are pairs that do **not** involve the US Dollar. They consist of one major currency crossed with another.
+
+**Analogy:** These are the national highways. They are still very busy and important but have slightly less traffic than the international superhighways.
+
+Examples include:
+-   **EUR/GBP** (Euro / British Pound)
+-   **AUD/JPY** (Australian Dollar / Japanese Yen)
+-   **GBP/CHF** (British Pound / Swiss Franc)
+
+#### 4. The Exotic Pairs: The Country Roads
+
+"Exotics" are pairs that consist of one major currency paired with the currency of an emerging or smaller economy.
+
+**Analogy:** These are the winding, unpaved country roads. They can be scenic and offer big moves, but they are also unpredictable, have very high "tolls" (spreads), and can be illiquid, making them risky for new traders.
+
+Examples include:
+-   **USD/MXN** (US Dollar / Mexican Peso)
+-   **EUR/TRY** (Euro / Turkish Lira)
+-   **GBP/ZAR** (British Pound / South African Rand)
+
+Beginners should stick exclusively to the Major pairs.
+
+### A Professional's Secret
+
+Professionals do not try to be a master of all pairs. They are **specialists**. Most successful retail traders focus deeply on just **1 to 3 currency pairs**. Why? Because each pair has its own unique "personality."
+
+For example, **GBP/JPY** is known for being extremely volatile and fast-moving, while **EUR/CHF** is often much slower and tends to range more. By focusing on just a few pairs, a trader learns their specific behaviors, their typical reaction to news events, and their rhythm during different trading sessions. This specialization provides a significant edge over the trader who is randomly jumping between dozens of different markets they don't truly understand.`
+              },
+              { 
+                key: 'uf-m1-l6', 
+                title: 'Hands-On Chart Navigation', 
+                // FIX: Replaced backticks ` with single quotes ' to prevent syntax errors.
+                content: `### Your Cockpit: Mastering the Trading Platform
+
+A trading platform is a trader's command center. It's where all analysis and execution happens. While platforms can seem intimidating at first with all their buttons and windows, the core functions you'll use every day are actually very simple.
+
+This lesson is a basic orientation. The goal isn't to learn every feature, but to become comfortable with the essential controls for navigating a chart.
+
+#### 1. The Instrument Selector: Choosing Your Market
+
+Every platform has a place to select which asset you want to view. This is often a search bar or a "Market Watch" window. To view the chart for the Euro vs. US Dollar, you would type in its symbol: **EURUSD**.
+
+- **Tip:** Most platforms use the currency codes without the slash. "EUR/USD" becomes "EURUSD", "GBP/JPY" becomes "GBPJPY".
+
+#### 2. The Timeframe Selector: Changing Your View
+
+Usually located at the top of the chart window, you will see a series of buttons for changing the timeframe. These are typically labeled:
+
+- **M1, M5, M15, M30:** Minute timeframes.
+- **H1, H4:** Hour timeframes.
+- **D1:** Daily timeframe.
+- **W1:** Weekly timeframe.
+- **MN:** Monthly timeframe.
+
+Clicking these buttons will instantly change your chart's perspective, with each candle representing the selected time period.
+
+[CHART: An image of a generic, clean trading chart user interface on a dark theme. Use bright, numbered, glowing arrows and labels to point to the five key areas. 1 -> The top-left corner where a currency pair like 'EURUSD' is displayed, label it '1. Instrument Selector'. 2 -> A toolbar at the top with buttons for 'M15', 'H1', 'H4', 'D1', label it '2. Timeframe Selector'. 3 -> The main chart area, with a large transparent arrow showing a click-and-drag motion, label it '3. Scroll (Click & Drag Left/Right)'. 4 -> The price axis on the right, with a mouse scroll wheel icon, label it '4. Zoom (Scroll Mouse Wheel)'. 5 -> A simple toolbar on the far left with icons for a line, horizontal ray, etc., label it '5. Drawing Toolbar'.]
+
+#### 3. Manipulating the Chart: Zooming and Scrolling
+
+Getting a feel for the chart is essential. The two most common actions are:
+
+-   **Scrolling Through Time:** Click and hold your mouse button on the main chart area and drag it to the **left**. This will move you back in time, revealing historical price data. Dragging to the right brings you back toward the most recent price.
+-   **Zooming In and Out:** Use your mouse's **scroll wheel**. Scrolling up typically zooms in, showing you more detail on recent candles. Scrolling down zooms out, giving you a wider historical perspective. You can also use the zoom buttons (+/-) often found at the bottom of the chart.
+
+Practice this! Scroll back a few years, then zoom in on a specific day. Comfort with chart navigation is key to efficient analysis.
+
+#### 4. The Drawing Toolbar: Your Analytical Tools
+
+Somewhere on your platform, usually on the left-hand side, is the drawing toolbar. This contains all the tools you will use to mark up your charts, such as:
+
+-   Trendlines
+-   Horizontal lines (for support and resistance)
+-   Fibonacci retracement tools
+-   Text notes and arrows
+
+We will cover how to use these tools in great detail in later modules. For now, just know where to find them. Try selecting the trendline tool and drawing a simple line on your chart.
+
+### A Professional's Secret
+
+Every professional trader customizes their charting platform to create a clean, efficient, and distraction-free workspace. The very first things they do are:
+
+1.  **Set a Clean Chart Theme:** They almost universally use a dark background (black or dark grey), with simple green/red or blue/red candles. They turn off any distracting grids or backgrounds. A clean chart leads to clear thinking.
+2.  **Remove Clutter:** They remove any default indicators or panels they don't use. The goal is to maximize the space for what matters most: price.
+3.  **Learn Hotkeys:** They learn the keyboard shortcuts for their most-used tools. Instead of clicking the trendline button every time, they might press 'Alt+T'. This dramatically speeds up the process of analyzing multiple charts and timeframes.
+
+Your charting platform is your primary tool. Spend some time in the settings and personalize it to your liking.`
+              },
+            ],
+          },
+          {
+            title: 'Foundation 2: The Language of Candlesticks',
+            lessons: [
+              { key: 'uf-m2-l1', title: 'Anatomy of a Candlestick', content: "Generate a detailed lesson on the anatomy of a single candlestick, explaining the meaning of the Open, High, Low, and Close (OHLC). [CHART: A clear, educational image showing two Japanese candlesticks side-by-side on a dark background. One is a green bullish candle, the other a red bearish candle. For each candle, use clear labels to point out the 'Open', 'High', 'Low', and 'Close'.]" },
+              { key: 'uf-m2-l2', title: 'The Body and Wicks', content: "Generate a lesson focusing on interpreting the body and wicks (shadows) of a candlestick to decode market momentum and price rejection. [CHART: An image showing four candles: 1. Long body, short wicks (labeled 'Strong Momentum'). 2. Small body, long wicks (labeled 'Indecision/Volatility'). 3. Long upper wick (labeled 'Selling Pressure'). 4. Long lower wick (labeled 'Buying Pressure').]" },
+              { key: 'uf-m2-l3', title: 'Bullish vs. Bearish Candles', content: "Generate a lesson explaining the clear difference between a bullish (close > open) and bearish (close < open) candle and what each signifies about buyer/seller control. [CHART: A simple side-by-side comparison of a green bullish candle and a red bearish candle, with arrows showing the direction of price movement from open to close for each.]" },
+              { key: 'uf-m2-l4', title: 'Doji Candles', content: "Generate a lesson dedicated to the Doji candlestick pattern, explaining how it represents indecision and can signal a potential reversal or pause in a trend. [CHART: A forex chart showing a strong uptrend, followed by a clear Doji candle at the peak. An arrow points to the Doji with the text 'Indecision at the high'.]" },
+              { key: 'uf-m2-l5', title: 'Hammer and Shooting Star', content: "Generate a lesson on the Hammer (bullish reversal) and Shooting Star (bearish reversal) single-candle patterns, explaining their formation and psychological meaning. [CHART: Two mini-charts. The first shows a downtrend ending in a Hammer. The second shows an uptrend ending in a Shooting Star. Both patterns should be clearly labeled.]" },
+              { key: 'uf-m2-l6', title: 'Engulfing Patterns', content: "Generate a lesson on the powerful two-candle Bullish and Bearish Engulfing patterns, highlighting how they signify a strong and sudden shift in market momentum. [CHART: Two mini-charts. One showing a Bullish Engulfing pattern at a low. The other showing a Bearish Engulfing pattern at a high. The engulfing candle should be visually prominent.]" },
+            ],
+          },
+          {
+            title: 'Foundation 3: The Basics of Market Structure',
+            lessons: [
+               { key: 'uf-m3-l1', title: 'Defining Trends: Uptrends', content: "Generate a lesson explaining a bullish market structure, defined by a series of Higher Highs (HH) and Higher Lows (HL). [CHART: A clean line chart illustrating a clear uptrend. Use text labels to mark at least two 'Higher Highs' and two 'Higher Lows' in sequence.]" },
+               { key: 'uf-m3-l2', title: 'Defining Trends: Downtrends', content: "Generate a lesson explaining a bearish market structure, defined by a series of Lower Lows (LL) and Lower Highs (LH). [CHART: A clean line chart illustrating a clear downtrend. Use text labels to mark at least two 'Lower Lows' and two 'Lower Highs' in sequence.]" },
+               { key: 'uf-m3-l3', title: 'Ranging Markets', content: "Generate a lesson on identifying ranging (sideways) markets, explaining consolidation and how price moves between a defined support and resistance. [CHART: A candlestick chart showing price bouncing clearly between an upper resistance zone and a lower support zone. The zones should be drawn as rectangles.]" },
+               { key: 'uf-m3-l4', title: 'Visual Guide to Drawing Trendlines', content: "Generate a practical lesson on how to draw valid trendlines to map out market structure, connecting the swing lows in an uptrend and swing highs in a downtrend. [CHART: An image showing an uptrend with a correctly drawn trendline connecting three swing lows. Also show an incorrectly drawn trendline cutting through candles, labeled 'Incorrect'.]" },
+               { key: 'uf-m3-l5', title: 'Break of Structure (BOS)', content: "Generate a lesson introducing the concept of a Break of Structure (BOS), explaining how a new Higher High in an uptrend or Lower Low in a downtrend confirms trend continuation. [CHART: A candlestick chart of an uptrend. Label a 'Higher High', then show a later candle breaking and closing above it. Label this event 'Break of Structure (BOS)'.]" },
+            ]
+          },
+          {
+            title: 'Foundation 4: Support & Resistance',
+            lessons: [
+                { key: 'uf-m4-l1', title: 'Support as the Market\'s Floor', content: "Generate a lesson explaining the core definition and psychology of a support level, describing it as a zone of potential buying interest or demand. [CHART: A chart showing price falling to a specific level and bouncing off it multiple times. Draw a horizontal rectangle (zone) at this level and label it 'Support Zone (Demand)'.]" },
+                { key: 'uf-m4-l2', title: 'Resistance as the Ceiling', content: "Generate a lesson explaining a resistance level, describing it as a price ceiling with selling interest or supply. [CHART: A chart showing price rising to a specific level and being rejected from it multiple times. Draw a horizontal rectangle (zone) and label it 'Resistance Zone (Supply)'.]" },
+                { key: 'uf-m4-l3', title: 'Drawing Horizontal S&R Zones', content: "Generate a practical guide on how to draw support and resistance zones effectively, emphasizing using candle wicks and bodies and thinking in terms of zones, not thin lines. [CHART: An image showing a messy price chart area. A correctly drawn S&R zone is shown as a rectangle covering the wicks and bodies of the turning points, labeled 'Correct Zone'. A single thin line cutting through is labeled 'Incorrect Line'.]" },
+                { key: 'uf-m4-l4', title: 'The Role Reversal Principle', content: "Generate a lesson on the critical concept of role reversal, where a broken resistance level becomes new support, and broken support becomes new resistance. [CHART: A chart showing a clear resistance level being broken. Price then pulls back to retest this level, which now acts as support before price moves higher. Label the 'Breakout', 'Retest', and 'New Support'.]" },
+                { key: 'uf-m4-l5', title: 'Introducing Trendlines: Dynamic S&R', content: "Generate a lesson that introduces trendlines as a form of dynamic support (in an uptrend) and dynamic resistance (in a downtrend). [CHART: A chart showing a clear uptrend with a rising trendline connecting the lows, with price bouncing off it. Label the trendline 'Dynamic Support'.]" },
+            ]
+          },
+          {
+            title: 'Foundation 5: Introducing Volume',
+            lessons: [
+                { key: 'uf-m5-l1', title: 'What Volume Represents', content: "Generate a lesson explaining what the volume indicator represents: the amount of buying and selling commitment, and the fuel behind price moves. [CHART: An image of a candlestick chart with a volume indicator below it. An arrow connects a large green candle to a high green volume bar, labeled 'Strong Buying Commitment'.]" },
+                { key: 'uf-m5-l2', title: 'Reading Volume Bars', content: "Generate a lesson on how to read volume bars, covering volume spikes (high activity), volume declines (waning interest), and average volume. [CHART: A chart with a volume indicator showing three distinct phases: 1. High volume spikes during a volatile move. 2. Low, declining volume during a correction. 3. Average volume during a steady trend.]" },
+                { key: 'uf-m5-l3', title: 'Confluence of Volume and Price', content: "Generate a lesson explaining the confirmation rule: how rising volume in the direction of the trend confirms the trend's strength, while declining volume can signal weakness. [CHART: An uptrend chart where impulsive moves up are accompanied by high volume, and pullbacks occur on low volume. Use annotations to highlight this relationship.]" },
+                { key: 'uf-m5-l4', title: 'High-Volume Breakouts', content: "Generate a lesson on how to use high volume to confirm a valid breakout of a support or resistance level, and how low-volume breakouts can be traps. [CHART: Two mini-charts. The first shows a resistance breakout on high volume, leading to a continued move up ('Valid Breakout'). The second shows a breakout on low volume, which quickly fails and reverses ('False Breakout/Trap').]" },
+                { key: 'uf-m5-l5', title: 'Climax Volume', content: "Generate a lesson on identifying 'climax volume' - an extremely high volume spike at the end of a long trend, often signaling trend exhaustion and a potential reversal. [CHART: A chart showing a long downtrend that ends with a massive red candle on an enormous volume spike. Label this event 'Selling Climax Volume (Trend Exhaustion)'.]" },
+            ]
+          },
+           {
+            title: 'Foundation 6: Assembling Your Basic Trading Plan',
+            lessons: [
+                { key: 'uf-m6-l1', title: 'Top-Down Analysis', content: "Generate a step-by-step lesson on performing a basic top-down analysis, starting from a Daily chart to find the trend, and moving to a 1-Hour chart to find an area of interest. [CHART: An infographic with two connected chart images. Left: A Daily chart showing a clear uptrend. Right: A 1-Hour chart zooming in on a pullback within that uptrend, highlighting a support zone.]" },
+                { key: 'uf-m6-l2', title: 'Risk Management Essentials', content: "Generate a lesson on the absolute basics of risk management, focusing on the 1-2% rule and the concept of position sizing. [CHART: A simple infographic showing a pie chart of a trading account. A tiny 1% slice is colored red and labeled 'Max Risk per Trade'. The rest is green and labeled 'Capital Preserved'.]" },
+                { key: 'uf-m6-l3', title: 'Setting Stop Loss and Take Profit', content: "Generate a practical lesson with rules for setting a logical Stop Loss (e.g., below a swing low) and a basic Take Profit (e.g., at the next resistance level). [CHART: A chart showing a long trade entry. A red line is placed below the recent swing low, labeled 'Logical Stop Loss'. A green line is placed at the next swing high, labeled 'Logical Take Profit'.]" },
+                { key: 'uf-m6-l4', title: 'The Trading Journal', content: "Generate a lesson explaining the critical importance of a trading journal and provide a simple template for how to log a trade (Date, Pair, Direction, Reason, Outcome). [CHART: An image of a clean, simple digital trading journal entry form with fields for 'Pair', 'Setup', 'Outcome', and 'Notes'.]" },
+                { key: 'uf-m6-l5', title: 'Building Your First Checklist', content: "Generate a lesson that helps a user build their first simple trading checklist, combining the concepts from the foundation course. [CHART: A clean infographic checklist with items like: '1. Is HTF Trend Clear?', '2. Is Price at a Valid S&R Zone?', '3. Is there a Candlestick Confirmation?', '4. Is my Risk Defined?']" },
+            ]
+          },
     ]
   },
   {
-    title: 'Level 5: The Professional Framework',
-    lessons: [
-       {
-        key: 'l5-premium-discount',
-        title: 'Premium vs. Discount',
-        contentPrompt: `You are an expert ICT trading mentor. Explain the concept of **Premium vs. Discount** pricing and how to use the Fibonacci tool to identify it. Use markdown for emphasis.
-
-### The Logic of Buying Low and Selling High
-The core of any successful business, including trading, is to **buy low and sell high**. The concepts of Premium and Discount provide a systematic framework for doing just that.
-
-Within any given trading range (from a significant low to a significant high, or vice versa), we can divide the price into two zones:
-*   **Premium**: The upper 50% of the range. This is an expensive or "premium" area. We should only be looking for **sell (short)** setups in this zone.
-*   **Discount**: The lower 50% of the range. This is a cheap or "discounted" area. We should only be looking for **buy (long)** setups in this zone.
-
-The 50% level is known as **Equilibrium**.
-
-### Using the Fibonacci Tool
-The Fibonacci tool is the perfect way to measure these zones.
-1.  **For a bullish range (looking for longs)**: Draw the Fibonacci tool from the **swing low to the swing high**. The area below the 0.5 level is the Discount zone.
-2.  **For a bearish range (looking for shorts)**: Draw the Fibonacci tool from the **swing high to the swing low**. The area above the 0.5 level is the Premium zone.
-
-By waiting for price to enter a Discount zone before buying, or a Premium zone before selling, you dramatically increase the probability of your trades and ensure you are always trading at a logical price.
-
-[CHART: A dark-themed candlestick chart showing a clear swing from a low to a high. A Fibonacci tool is drawn on this range, from the low to the high. The area above the 0.5 level is shaded red and clearly labeled "Premium (Sell Zone)". The area below the 0.5 level is shaded green and clearly labeled "Discount (Buy Zone)". Show price pulling back into the Discount zone and finding support.]
-[CHART: A second dark-themed candlestick chart showing a clear swing from a high to a low. A Fibonacci tool is drawn on this range. The area above the 0.5 level is shaded red and labeled "Premium (Sell Zone)". Show price pulling back into the Premium zone and finding resistance.]`,
-        chartPrompt: 'A dark-themed candlestick chart showing a clear swing from a low to a high. A Fibonacci tool is drawn on this range. The area above the 0.5 level is shaded red and labeled "Premium (Sell Zone)". The area below the 0.5 level is shaded green and labeled "Discount (Buy Zone)".',
-      },
-       {
-        key: 'l5-refining-pois',
-        title: 'Refining Points of Interest (POIs)',
-        contentPrompt: `You are a professional trading mentor specializing in Smart Money Concepts. Explain how to identify a **high-probability Point of Interest (POI)** using a checklist. Use markdown for emphasis.
-
-### Not All POIs Are Created Equal
-As you analyze charts, you will see many Order Blocks and other potential POIs. The key to consistency is learning to filter out the weak ones and focus only on the high-probability setups.
-
-Here is a checklist to qualify a POI:
-
-1.  **Did it cause a Break of Structure (BOS)?**
-    The most important factor. A POI is only valid if the impulsive move originating from it was strong enough to break market structure. This proves the institutional intent at that level.
-
-2.  **Did it cause a Liquidity Sweep?**
-    A POI becomes much stronger if the candle that forms the POI (e.g., the Order Block) also swept liquidity from a nearby high or low. This indicates a "stop hunt" occurred, adding fuel to the subsequent move.
-
-3.  **Is it Unmitigated?**
-    Has price already returned to this POI? If so, it is "mitigated," and most of the institutional orders have likely been filled. The highest probability POIs are fresh and unmitigated.
-
-4.  **Is it in a Premium/Discount Zone?**
-    Does the POI align with the overall market logic? If you are looking to buy, is your Bullish Order Block located in a **Discount** zone of the larger trading range? If you're looking to sell, is your Bearish Order Block in a **Premium** zone?
-
-A POI that checks all these boxes is considered an "A-Grade" setup.
-
-[CHART: A complex, dark-themed candlestick chart showing an uptrend. Price creates a minor high, then pulls back slightly to form a small Bullish Order Block. This pullback does not sweep any lows. Price then continues up, creating a BOS. Later, price pulls back again, this time sweeping below a clear previous low before forming a *second*, more powerful Bullish Order Block. Label the first one "Weak POI (No Liquidity Sweep)" and the second one "Strong POI (Swept Liquidity + in Discount)". Show price ignoring the first POI and reacting strongly to the second one.]`,
-        chartPrompt: 'A complex, dark-themed candlestick chart. Show an uptrend. Price creates a minor high, then pulls back, creating a small "inducement" order block. Price then sweeps the low of that pullback, creating a *second*, more powerful "Bullish Order Block". Label the first one "Weak POI (Inducement)" and the second one "Strong POI (Swept Liquidity)". Show price ignoring the first and reacting strongly to the second.',
-      },
+    id: 'wyckoff',
+    title: 'Wyckoff Method',
+    description: 'Master market cycles and institutional accumulation/distribution for cycle-based trading.',
+    isFoundation: false,
+    // FIX: Changed property from 'lessons' to 'modules' to match the LearningPath type.
+    modules: [
+        {
+            title: 'Wyckoff 1: Core Laws & Cycles',
+            lessons: [
+                { key: 'wy-m1-l1', title: "Law of Supply and Demand", content: "Generate a lesson on Wyckoff's first law, the Law of Supply and Demand, explaining how it governs all price movements. [CHART: An abstract diagram showing a seesaw. On one side, a large 'Demand' block pushes the price up. On the other, a large 'Supply' block pushes it down.]" },
+                { key: 'wy-m1-l2', title: "Law of Cause and Effect", content: "Generate a lesson on Wyckoff's second law, Cause and Effect, explaining how the time spent in a trading range (the cause) determines the extent of the subsequent trend (the effect). [CHART: A chart showing a long trading range (labeled 'Cause') followed by a large, extended trend move (labeled 'Effect'). A second chart shows a short range followed by a short trend.]" },
+                { key: 'wy-m1-l3', title: "Law of Effort vs. Result", content: "Generate a lesson on Wyckoff's third law, Effort vs. Result, focusing on how to spot divergences between volume (effort) and price action (result) to anticipate reversals. [CHART: A chart showing an uptrend where price makes a new high, but the corresponding volume bar is significantly lower than the previous high's volume. Label this 'Effort vs. Result Divergence'.]" },
+                { key: 'wy-m1-l4', title: 'The Four Market Cycles', content: "Generate a lesson introducing the four Wyckoff market cycles: Accumulation, Markup, Distribution, and Markdown. [CHART: A smooth, sinusoidal wave chart illustrating the four market cycles in sequence. Each phase (Accumulation, Markup, Distribution, Markdown) should be clearly labeled.]" },
+            ]
+        }
     ]
   },
-    {
-    title: 'Level 6: Fair Value Gaps',
-    lessons: [
-       {
-        key: 'l6-fvg',
-        title: 'Identifying Fair Value Gaps',
-        contentPrompt: `You are a professional trading mentor specializing in Smart Money Concepts. Explain what a **Fair Value Gap (FVG)** is. Use markdown for emphasis.
-
-### Gaps in the Market
-A **Fair Value Gap (FVG)**, also known as an **imbalance**, is a three-candle pattern that highlights an inefficiency or an imbalance in buying and selling pressure. It occurs when price moves very quickly and aggressively in one direction, leaving a "gap" in the market.
-
-### How to Identify an FVG
-An FVG is identified by looking at a sequence of three consecutive candles:
-*   For a **bullish FVG**: Look for the gap between the **high of the first candle** and the **low of the third candle**. If there is space between them, that space is the FVG. This is created by a large, strong middle (second) candle.
-*   For a **bearish FVG**: Look for the gap between the **low of the first candle** and the **high of the third candle**.
-
-These gaps represent areas where price was delivered inefficiently. The market has a natural tendency to revisit these areas to "rebalance" the price action. Because of this, FVGs act like a **magnet for price** and can be used as high-probability targets or entry points.
-
-[CHART: A dark-themed forex candlestick chart showing a large, impulsive green candle (the second candle). Draw a rectangle highlighting the empty space between the top of the wick of the first candle and the bottom of the wick of the third candle. Label this area clearly as "Fair Value Gap (FVG)" or "Bullish Imbalance".]
-[CHART: A second dark-themed chart showing a large, impulsive red candle. Draw a rectangle highlighting the empty space between the bottom of the wick of the first candle and the top of the wick of the third candle. Label this "Bearish Imbalance".]`,
-        chartPrompt: 'A dark-themed forex candlestick chart showing a large, impulsive green candle. Highlight the gap between the wick of the candle before it and the wick of the candle after it. Label this area clearly as "Fair Value Gap" or "FVG".',
-      },
-       {
-        key: 'l6-fvg-retest',
-        title: 'FVG Retest Strategy',
-        contentPrompt: `You are a professional trading mentor specializing in Smart Money Concepts. Explain how Fair Value Gaps (FVGs) are used for entries. Use markdown for emphasis.
-
-### Using Inefficiency for Entries
-Since FVGs act as a magnet for price, they provide excellent Points of Interest (POIs) for trade entries. The logic is that after an aggressive move creates an FVG, the market will often pull back to "fill" or "rebalance" this gap before continuing in its original direction.
-
-This retracement offers a high-probability entry point.
-
-### The FVG Entry Model
-1.  **Identify an Impulsive Move**: Look for a strong price leg that breaks market structure (BOS) and leaves behind a clear FVG.
-2.  **Wait for the Retracement**: Do not chase the price. Be patient and wait for price to pull back and trade *into* the FVG zone.
-3.  **Enter within the FVG**: An entry can be taken as soon as price touches the FVG. More conservative traders might wait for price to reach the 50% mark (the "consequent encroachment") of the FVG.
-4.  **Set Your Stop**: Place your stop loss on the other side of the FVG, often aligned with the swing point that started the impulsive move.
-
-This strategy allows you to join a strong trend on a pullback to a logical and well-defined level. Combining an FVG with other confluences, like a Premium/Discount zone or an Order Block, creates a very high-probability setup.
-
-[CHART: A dark-themed forex candlestick chart showing a "Fair Value Gap" being created by a strong upward move that causes a BOS. Draw a rectangle around the FVG. Use a dotted arrow to show how price later retraces back down to trade into the FVG. Highlight the entry candle as it touches the top of the FVG and reverses. Label the "Entry Point" and show the stop loss placed below the low of the move.]
-[CHART: A second dark-themed chart showing the same entry model for a bearish FVG. Price creates a bearish FVG on a down-move, retraces up into it, and then continues down.]`,
-        chartPrompt: 'A dark-themed forex candlestick chart showing a "Fair Value Gap" being created. Use a dotted arrow to show how price later returns to trade into the FVG (but not necessarily fill it completely) before continuing its original move. Label the entry point.',
-      },
-    ]
-  },
-  {
-    title: 'Level 7: Advanced Concepts',
-    lessons: [
-      {
-        key: 'l7-ote',
-        title: 'Optimal Trade Entry (OTE)',
-        contentPrompt: `You are an expert ICT trading mentor. Explain the **Optimal Trade Entry (OTE)** pattern. Use markdown for emphasis.
-
-### The Fibonacci "Sweet Spot"
-The **Optimal Trade Entry (OTE)** is a specific entry pattern that uses Fibonacci retracement levels to pinpoint a high-probability entry zone. It's based on the idea that algorithmic trading models often target specific retracement levels after a major price swing.
-
-The OTE is considered the "sweet spot" for an entry, typically found between the **62% (0.62) and 79% (0.79)** retracement levels of a price swing.
-
-### How to Find the OTE
-1.  **Identify a clear price swing**: This could be a swing from a low to a high in an uptrend, or a high to a low in a downtrend. This swing should ideally have taken out some form of liquidity.
-2.  **Draw the Fibonacci Tool**:
-    *   For a **long setup**, draw from the swing low to the swing high.
-    *   For a **short setup**, draw from the swing high to the swing low.
-3.  **Identify the OTE Zone**: The area between the 0.62 and 0.79 levels is your OTE zone.
-
-The power of the OTE comes from combining it with other concepts. A perfect entry setup often occurs when a **Bullish Order Block** or an **FVG** is located directly inside the OTE zone of a bullish swing. This creates a powerful confluence of signals.
-
-[CHART: A dark-themed candlestick chart showing a major swing from a low to a high. A Fibonacci retracement tool is drawn on this swing. The area between the 0.62 and 0.79 levels is highlighted with a colored box and labeled "OTE (Optimal Trade Entry)". Show that within this box, there is also a small Bullish Order Block. Illustrate price pulling back precisely into this zone before reversing strongly upwards.]`,
-        chartPrompt: 'A dark-themed candlestick chart showing a major swing from a low to a high. A Fibonacci retracement tool is drawn on this swing. Highlight the area between the 0.62 and 0.79 levels and label it "OTE". Show price retracing into this zone and then reversing.',
-      },
-      {
-        key: 'l7-inducement',
-        title: 'Inducement (Smart Money Traps)',
-        contentPrompt: `You are an expert ICT trading mentor. Explain the concept of **Inducement**. Use markdown for emphasis.
-
-### The Trap Before the Real Move
-**Inducement** is a smart money trap. It is a small, seemingly obvious price level that is designed to lure in, or "induce," impatient retail traders into entering the market too early.
-
-Typically, inducement is the **first minor pullback** after a Break of Structure (BOS). Early traders see this small pullback and jump in, placing their stop-losses just below its low (in an uptrend).
-
-Smart money knows this. They will often push the price down one more time to **sweep the liquidity** resting below that inducement low. This action serves two purposes:
-1.  It stops out the early entrants.
-2.  It allows smart money to fill their own buy orders at a better price.
-
-After this liquidity sweep, the price will then move to the *true* Point of Interest (like a valid Order Block or FVG, often located just below the inducement level) before starting the real, powerful move.
-
-By learning to spot and wait for inducement to be taken, you can avoid being the liquidity and instead trade alongside the smart money.
-
-[CHART: A dark-themed candlestick chart showing an uptrend with a BOS. After the BOS, price makes a small, shallow pullback, creating a minor swing low. Label this low "Inducement". Show early retail traders buying here with a "BUY" icon. Then, show price dipping down just below this inducement low, sweeping the liquidity (label this "Liquidity Sweep"). Price then taps into a true "Bullish Order Block" located slightly lower down, before the real, explosive move up begins. Show the retail traders being stopped out.]`,
-        chartPrompt: 'A dark-themed candlestick chart showing a downtrend. A minor pullback creates a small high. Label this "Inducement". Show price coming up, breaking this minor high (sweeping liquidity), and *then* tapping into a true "Bearish Order Block" located slightly higher, before the real move down begins.',
-      },
-    ]
-  },
-   {
-    title: 'Level 8: Complete Strategy',
-    lessons: [
-       {
-        key: 'l8-entry-model',
-        title: 'The Full A-Grade Setup',
-        contentPrompt: `You are an expert ICT trading mentor. Outline a complete, high-probability trade setup checklist, combining all the concepts learned so far. Use markdown for emphasis.
-
-### The A-Grade Setup Checklist
-This model provides a systematic way to identify high-probability setups by layering multiple confluences.
-
-1.  **Higher Timeframe (HTF) Direction**:
-    *   Start on a high timeframe (e.g., 4H or Daily). What is the overall market structure? Is it bullish (making HH/HL) or bearish (making LL/LH)? This determines your **bias**. You only want to look for trades that align with this HTF bias.
-
-2.  **HTF Liquidity Grab**:
-    *   Within your HTF bias, wait for price to sweep a major liquidity pool.
-    *   If bullish, wait for price to sweep a significant **sell-side liquidity** pool (an old low).
-    *   If bearish, wait for price to sweep a significant **buy-side liquidity** pool (an old high).
-
-3.  **Lower Timeframe (LTF) Reversal (CHoCH)**:
-    *   After the HTF liquidity grab, drop down to a lower timeframe (e.g., 15M or 5M).
-    *   Wait for a clear **Change of Character (CHoCH)** on the LTF that confirms a reversal against the sweep. For example, after a bearish sweep of a high, you want to see a bearish CHoCH on the 15M chart.
-
-4.  **Identify Entry POI**:
-    *   The CHoCH will leave behind a new Point of Interest. Identify a clean **Order Block** or **Fair Value Gap (FVG)** that was created during the reversal move.
-
-5.  **Refine Entry**:
-    *   Does this POI align with a **Premium/Discount** zone of the LTF swing? Is it within the **OTE**? The more confluences, the better. Wait patiently for price to return to this POI for your entry.
-
-[CHART: A series of two connected dark-themed charts. The first, labeled "4H Chart", shows a clear uptrend. Circle a specific recent higher low. The second chart, labeled "15M Chart (Zoomed in)", shows price first dipping below that 4H low (label this "HTF Sell-Side Liquidity Grab"). Immediately after the grab, show price aggressively moving up, causing a 15M "CHoCH". Highlight a clear "Bullish Order Block" or "FVG" that formed during the CHoCH move and label it "A-Grade Entry Zone".]`,
-        chartPrompt: 'A series of two connected dark-themed charts. The first, labeled "4H Chart", shows a clear uptrend. Circle a specific higher low. The second chart, labeled "15M Chart (Zoomed in)", shows price first dipping below that 4H low (label this "Liquidity Grab"). Then, show price aggressively moving up, causing a "CHoCH". Highlight an "Order Block" that formed and label "Potential Entry Zone".',
-      },
-      {
-        key: 'l8-risk-management',
-        title: 'Risk Management & Sizing',
-        contentPrompt: `You are an expert trading mentor. Explain the vital importance of **Risk Management** and the key components like the 1-2% rule, stop-loss placement, and position sizing. Use markdown for emphasis.
-
-### The Key to Longevity
-Excellent strategy will fail without proper risk management. This is the set of rules that protects your capital and keeps you in the game long enough to be profitable.
-
-### The 1-2% Rule
-This is the golden rule of trading. **Never risk more than 1-2% of your total account balance on a single trade.**
-*   **Example**: If you have a $10,000 account, a 1% risk is $100. This means that if your trade hits its stop-loss, you should only lose $100.
-*   This rule ensures that a string of losses will not wipe out your account, protecting you from emotional decisions and giving your strategy a chance to play out over the long term.
-
-[CHART: A simple, dark-themed infographic. Show a pie chart representing a trading account. A tiny 1% slice is colored red and labeled "Max Risk per Trade ($100)". The remaining 99% is green and labeled "Capital Preserved ($9,900)".]
-
-### Logical Stop-Loss Placement
-A **stop-loss** is a pre-determined order that will automatically close your trade at a specific price to limit your loss. It should not be placed randomly. It must be placed at a **logical level** where your trade idea is proven invalid.
-*   **For a long trade from a Bullish OB**: The stop-loss should go just below the low of the Order Block.
-*   **For a short trade from a Bearish OB**: The stop-loss should go just above the high of the Order Block.
-
-### Position Size Calculation
-Once you know your risk percentage and your stop-loss distance, you can calculate your **position size**.
-1.  **Determine Risk Amount**: Account Size * Risk % (e.g., $10,000 * 1% = $100).
-2.  **Determine Stop-Loss Distance in Pips**: (Entry Price - Stop-Loss Price).
-3.  **Calculate Position Size**: (Risk Amount) / (Stop-Loss Distance in Pips * Pip Value).
-There are many free online calculators to help with this. The key is to adjust your position size for every trade so that the potential loss is always 1-2% of your account, no matter how wide or tight your stop-loss is.`,
-        chartPrompt: 'A simple, dark-themed infographic. Show a pie chart representing a trading account, with a tiny 1% slice colored red and labeled "Max Risk per Trade". Next to it, show a sample trade with a clear "Entry" price, "Stop Loss" price, and "Take Profit" price, with the distance between Entry and Stop Loss labeled "Risk".',
-      },
-    ]
-  },
-  {
-    title: 'Level 9: Mastery',
-    lessons: [
-       {
-        key: 'l9-multi-timeframe',
-        title: 'Multi-Timeframe Analysis',
-        contentPrompt: `You are an expert trading mentor. Explain the concept of **Multi-Timeframe Analysis** using a top-down approach. Use markdown for emphasis.
-
-### Seeing the Full Picture
-The market exists across all timeframes simultaneously. A trend on the 15-minute chart might just be a small pullback on the 4-hour chart. **Multi-Timeframe Analysis (MTF)** is the process of looking at the same currency pair on different timeframes to get a complete picture and build a high-probability trade idea.
-
-A common and effective method is the **Top-Down Approach**.
-
-1.  **High Timeframe (HTF) - The Narrative (e.g., Daily, 4H)**:
-    *   Use the HTF to establish the overall **bias** or direction. Is the market making Higher Highs and Higher Lows (bullish) or Lower Lows and Lower Highs (bearish)?
-    *   Identify major HTF points of interest (Order Blocks, old highs/lows) where you expect price to react.
-
-2.  **Medium Timeframe (MTF) - The Setup (e.g., 1H, 15M)**:
-    *   Once price reaches your HTF POI, zoom into the MTF.
-    *   Here, you look for your trade **setup**. This is where you would spot the Change of Character (CHoCH) that signals a reversal, and identify the resulting Order Block or FVG you want to trade from.
-
-3.  **Low Timeframe (LTF) - The Entry (e.g., 5M, 1M)**:
-    *   As price returns to your MTF POI, you can zoom in further to the LTF for a precision entry.
-    *   You might look for yet another, smaller CHoCH or liquidity sweep on the 1-minute chart as price touches your 15-minute Order Block. This provides tight confirmation and allows for a very small stop-loss.
-
-By aligning all three timeframes, you ensure that you are not only entering on a good setup but also trading in harmony with the larger market flow.
-
-[CHART: An image showing three charts side-by-side for a dark theme, connected by arrows. The first chart, labeled "4-Hour: The Bias", shows a clear uptrend with price pulling back towards a major Bullish Order Block. The second, labeled "15-Minute: The Setup", zooms into the 4H OB and shows a bearish trend reversing with a clear CHoCH. The third, labeled "1-Minute: The Entry", zooms into the 15M POI created by the CHoCH, showing price returning and giving a final small confirmation before taking off.]`,
-        chartPrompt: 'An image showing three charts side-by-side for a dark theme. Labeled "Daily", "1-Hour", and "5-Minute". The Daily chart shows a clear uptrend. The 1-Hour chart zooms in on a pullback to an order block within that uptrend. The 5-Minute chart zooms in further, showing a CHoCH at the order block for a precise entry signal.',
-      },
-       {
-        key: 'l9-psychology',
-        title: 'Trading Psychology',
-        contentPrompt: `You are an expert trading mentor. Discuss the critical role of **Psychology** in trading. Cover the main emotional challenges and the mindset required for success. Use markdown for emphasis.
-
-### The Final Boss of Trading
-You can have the best strategy in the world, but if your mindset is wrong, you will not be profitable. Trading is a game of probabilities, and managing your own emotions is often the hardest part.
-
-### The Main Enemies of a Trader
-*   **Fear**: This manifests in two ways:
-    *   **Fear of Losing**: Causes you to hesitate, miss good setups, or close winning trades too early.
-    *   **Fear of Missing Out (FOMO)**: Causes you to chase price, enter trades late, and ignore your rules because you're afraid of missing a big move.
-*   **Greed**: This causes you to over-leverage (risk too much), widen your take-profit targets illogically, or refuse to take a small loss in the hope that it will turn around. It's the enemy of discipline.
-*   **Impatience/Revenge Trading**: After a loss, feeling the need to "make it back" immediately. This leads to taking unplanned, low-probability setups and often results in even bigger losses.
-
-[CHART: An abstract, dark-themed image. On the left side, show a brain icon with chaotic, red, jagged lines running through it. Label this side "Emotional Trading" with text bubbles for "FOMO!", "It has to reverse!", "I'll get it back!". An arrow points from this brain to a chaotic, losing equity curve. On the right side, show a brain with calm, orderly, blue lines. Label this "Disciplined Trading" with text bubbles for "Follow the Plan", "Accept the Loss", "Wait for the Setup". An arrow points from this brain to a smooth, rising equity curve.]
-
-### The Mindset of a Professional
-*   **Discipline**: The ability to follow your trading plan **without deviation**, no matter how you feel.
-*   **Patience**: The ability to sit and wait for your high-probability setup to form, and to do nothing when there are no good opportunities. Most of trading is waiting.
-*   **Acceptance of Randomness**: Understand that any single trade can be a loser, even with a perfect setup. Your edge plays out over a large series of trades, not on the next one.
-*   **Process over Outcome**: Focus on executing your strategy flawlessly on every trade. Do not judge your performance based on the outcome of one trade, but on how well you followed your process.
-
-Mastering your psychology is a continuous journey, but it is the ultimate key to unlocking consistent profitability.`,
-        chartPrompt: 'An abstract, dark-themed image. On one side, show a brain icon with chaotic lines labeled "Fear, Greed, FOMO, Impatience". An arrow points to a chart showing erratic, losing trades. On the other side, show a brain icon with calm, orderly lines labeled "Discipline, Patience, Strategy". An arrow points to a chart showing consistent, well-executed trades.',
-      },
-    ]
-  }
+  // FIX: Corrected malformed object literals for all placeholder paths and ensured they use 'modules' instead of 'lessons'.
+  // --- Placeholder Advanced Paths ---
+  { id: 'elliott', title: 'Elliott Wave Theory', description: 'Forecast market waves for predictive trading.', isFoundation: false, modules: [] },
+  { id: 'sr', title: 'Support & Resistance', description: 'Master S&R for precise level-based trading.', isFoundation: false, modules: [] },
+  { id: 'fibonacci', title: 'Fibonacci Retracement', description: 'Use Fib levels for predictive price mapping.', isFoundation: false, modules: [] },
+  { id: 'ma', title: 'Moving Average Strategy', description: 'Build moving average systems for trend-following.', isFoundation: false, modules: [] },
+  { id: 'pa', title: 'Price Action Trading', description: 'Trade naked charts with pure price stories.', isFoundation: false, modules: [] },
+  { id: 'volume', title: 'Volume Profile Analysis', description: 'Use volume profiles for data-driven S&R.', isFoundation: false, modules: [] },
+  { id: 'ichimoku', title: 'Ichimoku Cloud', description: 'Master the all-in-one system for trend and signals.', isFoundation: false, modules: [] },
+  { id: 'harmonic', title: 'Harmonic Patterns', description: 'Spot high-probability reversals with precision.', isFoundation: false, modules: [] },
+  { id: 'smc', title: 'Smart Money Concepts', description: 'Expert order flow and institutional insights.', isFoundation: false, modules: [] },
 ];
+
+// For backward compatibility with components that still use the old structure.
+export const MODULES: Module[] = LEARNING_PATHS.flatMap(path => path.modules);

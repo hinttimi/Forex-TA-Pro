@@ -1,3 +1,5 @@
+
+
 import React, { useState, useEffect, useCallback } from 'react';
 import { generateChartImage } from '../../services/geminiService';
 import { MODULES } from '../../constants';
@@ -67,7 +69,13 @@ export const PatternRecognitionView: React.FC = () => {
 
             setOptions(shuffleArray([...distractors, answerLesson]));
 
-            const imageUrl = await generateChartImage(apiKey, answerLesson.chartPrompt, `pattern-recog-${answerLesson.key}`);
+            // FIX: The 'Lesson' type does not have a 'chartPrompt' property.
+            // The chart prompt should be extracted from the lesson's 'content' string.
+            // A regex is used to find a [CHART:...] block, with a fallback to generate a prompt from the lesson title.
+            const chartPromptRegex = /\[CHART:\s*(.*?)\]/s;
+            const match = answerLesson.content.match(chartPromptRegex);
+            const chartPrompt = match ? match[1] : `A dark-theme forex chart that clearly demonstrates the concept of "${answerLesson.title}".`;
+            const imageUrl = await generateChartImage(apiKey, chartPrompt, `pattern-recog-${answerLesson.key}`);
             setChartImageUrl(imageUrl);
 
         } catch (error) {
@@ -103,7 +111,7 @@ export const PatternRecognitionView: React.FC = () => {
 
     const getButtonClass = (lessonKey: string) => {
         if (!selectedAnswer) {
-            return 'bg-gray-700 hover:bg-gray-600';
+            return 'bg-[--color-dark-matter] hover:bg-slate-600';
         }
         if (lessonKey === correctAnswer?.key) {
             return 'bg-green-500/80 ring-2 ring-green-400';
@@ -111,16 +119,16 @@ export const PatternRecognitionView: React.FC = () => {
         if (lessonKey === selectedAnswer && !isCorrect) {
             return 'bg-red-500/80';
         }
-        return 'bg-gray-700 opacity-50';
+        return 'bg-[--color-dark-matter] opacity-50';
     };
     
     const correctPatternsCount = getCompletionCount('correctPatterns');
     
     if (error) {
         return (
-            <div className="text-center p-8 bg-gray-800/50 rounded-lg">
+            <div className="text-center p-8 bg-[--color-dark-matter]/50 rounded-lg">
                 <h2 className="text-2xl font-bold text-red-400">Error</h2>
-                <p className="text-gray-300 mt-2">{error}</p>
+                <p className="text-[--color-ghost-white]/80 mt-2">{error}</p>
                  <button onClick={openKeyModal} className="mt-4 px-5 py-2.5 bg-cyan-500 text-gray-900 font-semibold rounded-lg shadow-md hover:bg-cyan-400">
                     Set API Key
                 </button>
@@ -130,14 +138,14 @@ export const PatternRecognitionView: React.FC = () => {
 
     return (
         <div className="max-w-4xl mx-auto text-center">
-            <h1 className="text-4xl font-extrabold text-white mb-2 tracking-tight">Pattern Recognition</h1>
-            <p className="text-gray-400 mb-6">Identify the key technical analysis pattern on the chart.</p>
+            <h1 className="text-4xl font-extrabold text-[--color-ghost-white] mb-2 tracking-tight">Pattern Recognition</h1>
+            <p className="text-[--color-muted-grey] mb-6">Identify the key technical analysis pattern on the chart.</p>
 
             <ChartDisplay 
                 imageUrl={chartImageUrl}
                 isLoading={isLoading}
                 loadingText="AI is drawing the next challenge..."
-                containerClassName="w-full aspect-video bg-gray-800/50 rounded-lg border border-gray-700 flex items-center justify-center p-4 mb-6"
+                containerClassName="w-full aspect-video bg-[--color-dark-matter]/50 rounded-lg border border-[--color-border] flex items-center justify-center p-4 mb-6"
             />
             
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -146,7 +154,7 @@ export const PatternRecognitionView: React.FC = () => {
                         key={lesson.key}
                         onClick={() => handleAnswer(lesson.key)}
                         disabled={!!selectedAnswer || isLoading}
-                        className={`w-full text-center p-4 rounded-lg font-semibold text-white transition-all duration-300 ${getButtonClass(lesson.key)} disabled:cursor-not-allowed`}
+                        className={`w-full text-center p-4 rounded-lg font-semibold text-[--color-ghost-white] transition-all duration-300 ${getButtonClass(lesson.key)} disabled:cursor-not-allowed`}
                     >
                         {lesson.title}
                     </button>
@@ -158,7 +166,7 @@ export const PatternRecognitionView: React.FC = () => {
                     <p className={`text-2xl font-bold ${isCorrect ? 'text-green-400' : 'text-red-400'}`}>
                         {isCorrect ? 'Correct!' : 'Not quite.'}
                     </p>
-                    {!isCorrect && <p className="text-gray-300 mt-1">The correct pattern was: <strong>{correctAnswer?.title}</strong></p>}
+                    {!isCorrect && <p className="text-[--color-ghost-white]/80 mt-1">The correct pattern was: <strong>{correctAnswer?.title}</strong></p>}
                     
                     <button onClick={loadNewPattern} className="mt-4 inline-flex items-center px-6 py-3 bg-cyan-500 text-gray-900 font-semibold rounded-lg shadow-md hover:bg-cyan-400 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-offset-gray-900 focus:ring-cyan-500 transition-all duration-200">
                         Next Pattern
@@ -167,9 +175,9 @@ export const PatternRecognitionView: React.FC = () => {
                 </div>
             )}
 
-            <div className="mt-8 pt-4 border-t border-gray-700 flex justify-center items-center space-x-8">
-                <p className="text-xl text-gray-300">Session Score: <span className="font-bold text-cyan-400">{score.correct} / {score.total}</span></p>
-                <p className="text-xl text-gray-300">"Sharp Eye" Progress: <span className="font-bold text-cyan-400">{correctPatternsCount} / {SHARP_EYE_GOAL}</span></p>
+            <div className="mt-8 pt-4 border-t border-[--color-border] flex justify-center items-center space-x-8">
+                <p className="text-xl text-[--color-ghost-white]/80">Session Score: <span className="font-bold text-cyan-400">{score.correct} / {score.total}</span></p>
+                <p className="text-xl text-[--color-ghost-white]/80">"Sharp Eye" Progress: <span className="font-bold text-[--color-focus-gold]">{correctPatternsCount} / {SHARP_EYE_GOAL}</span></p>
             </div>
              <style>{`
                 @keyframes fade-in {

@@ -1,4 +1,3 @@
-
 import React from 'react';
 import { Badge } from '../types';
 import { 
@@ -25,20 +24,8 @@ export const ALL_BADGES: Badge[] = [
   {
     id: 'foundation-builder',
     title: 'Foundation Builder',
-    description: 'Complete all lessons in Level 1.',
+    description: 'Complete all lessons in the Universal Foundation.',
     icon: FoundationIcon,
-  },
-  {
-    id: 'structure-expert',
-    title: 'Structure Expert',
-    description: 'Complete all lessons in Level 2.',
-    icon: StructureExpertIcon,
-  },
-  {
-    id: 'liquidity-hunter',
-    title: 'Liquidity Hunter',
-    description: 'Complete all lessons in Level 3.',
-    icon: LiquidityHunterIcon,
   },
   {
     id: 'quiz-master',

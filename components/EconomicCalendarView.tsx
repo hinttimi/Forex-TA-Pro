@@ -1,4 +1,5 @@
 
+
 import React, { useState } from 'react';
 import { EconomicEvent } from '../types';
 import { CALENDAR_EVENTS } from '../constants/calendarEvents';
@@ -67,7 +68,7 @@ const FormattedContent: React.FC<{ text: string }> = ({ text }) => {
 const ImpactIndicator: React.FC<{ impact: 'High' | 'Medium' | 'Low' }> = ({ impact }) => {
     const color = {
         High: 'bg-red-500',
-        Medium: 'bg-yellow-500',
+        Medium: 'bg-[--color-focus-gold]',
         Low: 'bg-gray-500',
     }[impact];
     return <div className={`w-2.5 h-2.5 rounded-full ${color}`} title={`${impact} Impact`}></div>;

@@ -193,7 +193,7 @@ export const WhyIsItMovingView: React.FC<WhyIsItMovingViewProps> = ({ initialPai
 
             {analysis && !isLoading && !error && (
                 <div className="bg-slate-800 border border-slate-700 rounded-lg p-6 shadow-sm animate-[fade-in_0.5s]">
-                    <div className="prose prose-invert max-w-none text-slate-300">
+                    <div className="prose prose-invert prose-lg max-w-none text-slate-300">
                         <FormattedContent text={analysis} />
                     </div>
                     {sources.length > 0 && (

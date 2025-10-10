@@ -17,7 +17,7 @@ const FormattedContent: React.FC<{ text: string }> = ({ text }) => {
             if (match.index > lastIndex) {
                 parts.push(text.substring(lastIndex, match.index));
             }
-            parts.push(<strong key={`strong-${key++}`} className="font-bold text-blue-600 dark:text-cyan-300">{match[1]}</strong>);
+            parts.push(<strong key={`strong-${key++}`} className="font-bold text-cyan-300">{match[1]}</strong>);
             lastIndex = regex.lastIndex;
         }
 
@@ -53,7 +53,7 @@ const FormattedContent: React.FC<{ text: string }> = ({ text }) => {
         
         if (trimmedLine.startsWith('### ')) {
             flushList();
-            elements.push(<h3 key={`h-${index}`} className="text-xl font-semibold text-slate-900 dark:text-white mt-6 mb-3">{trimmedLine.substring(4)}</h3>);
+            elements.push(<h3 key={`h-${index}`} className="text-xl font-semibold text-white mt-6 mb-3">{trimmedLine.substring(4)}</h3>);
         } else if (trimmedLine.startsWith('* ')) {
             const content = trimmedLine.substring(2);
             currentListItems.push(<li key={`li-${index}`}>{renderInlineMarkdown(content)}</li>);
@@ -62,7 +62,7 @@ const FormattedContent: React.FC<{ text: string }> = ({ text }) => {
             // Treat as a heading if it's short, not punctuated, and likely a title.
             const isHeading = trimmedLine.length < 50 && !trimmedLine.endsWith('.') && !trimmedLine.endsWith(':');
             if (isHeading) {
-                 elements.push(<h3 key={`h-${index}`} className="text-xl font-semibold text-slate-900 dark:text-white mt-6 mb-3">{trimmedLine}</h3>);
+                 elements.push(<h3 key={`h-${index}`} className="text-xl font-semibold text-white mt-6 mb-3">{trimmedLine}</h3>);
             } else {
                  elements.push(<p key={`p-${index}`} className="mb-3 leading-relaxed">{renderInlineMarkdown(trimmedLine)}</p>);
             }
@@ -101,14 +101,14 @@ export const MarketPulseView: React.FC = () => {
 
     return (
         <div className="max-w-4xl mx-auto">
-            <h1 className="text-4xl font-extrabold text-slate-900 dark:text-white mb-2 tracking-tight">Market Pulse</h1>
-            <p className="text-slate-600 dark:text-slate-400 mb-8">Get a real-time, AI-powered briefing on the current state of the forex market.</p>
+            <h1 className="text-4xl font-extrabold text-white mb-2 tracking-tight">Market Pulse</h1>
+            <p className="text-slate-400 mb-8">Get a real-time, AI-powered briefing on the current state of the forex market.</p>
 
             {!pulseData && !isLoading && !error && (
                 <div className="text-center py-12">
                     <button 
                         onClick={handleGetPulse}
-                        className="inline-flex items-center px-8 py-4 bg-blue-600 text-white dark:bg-cyan-500 dark:text-slate-900 font-bold text-xl rounded-lg shadow-md hover:bg-blue-700 dark:hover:bg-cyan-400 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-offset-slate-50 dark:focus:ring-offset-slate-900 focus:ring-blue-500 dark:focus:ring-cyan-500 transition-all duration-200"
+                        className="inline-flex items-center px-8 py-4 bg-cyan-500 text-slate-900 font-bold text-xl rounded-lg shadow-md hover:bg-cyan-400 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-offset-slate-900 focus:ring-cyan-500 transition-all duration-200"
                     >
                         <SignalIcon className="w-7 h-7 mr-3" />
                         Get Today's Market Pulse
@@ -119,29 +119,29 @@ export const MarketPulseView: React.FC = () => {
             {isLoading && (
                 <div className="flex flex-col items-center justify-center h-full text-center py-12">
                     <LoadingSpinner />
-                    <p className="mt-4 text-slate-600 dark:text-slate-300">Analyzing the market... this may take a moment.</p>
+                    <p className="mt-4 text-slate-300">Analyzing the market... this may take a moment.</p>
                 </div>
             )}
             
             {error && (
                 <div className="max-w-2xl mx-auto text-center">
-                    <div className="p-6 bg-red-100 dark:bg-red-900/20 border border-red-300 dark:border-red-500/30 rounded-lg">
-                        <ExclamationTriangleIcon className="w-12 h-12 mx-auto text-red-500 dark:text-red-400" />
-                        <h2 className="mt-4 text-2xl font-bold text-slate-900 dark:text-white">Failed to Get Pulse</h2>
-                        <p className="mt-2 text-red-700 dark:text-red-300">{error}</p>
+                    <div className="p-6 bg-red-900/20 border border-red-500/30 rounded-lg">
+                        <ExclamationTriangleIcon className="w-12 h-12 mx-auto text-red-400" />
+                        <h2 className="mt-4 text-2xl font-bold text-white">Failed to Get Pulse</h2>
+                        <p className="mt-2 text-red-300">{error}</p>
                     </div>
-                    <button onClick={handleGetPulse} className="mt-6 px-6 py-2 bg-slate-200 dark:bg-slate-700 text-slate-800 dark:text-slate-200 font-semibold rounded-lg hover:bg-slate-300 dark:hover:bg-slate-600">
+                    <button onClick={handleGetPulse} className="mt-6 px-6 py-2 bg-slate-700 text-slate-200 font-semibold rounded-lg hover:bg-slate-600">
                         Try Again
                     </button>
                 </div>
             )}
 
             {pulseData && (
-                <div className="bg-white dark:bg-slate-800/50 border border-slate-200 dark:border-slate-700 rounded-lg p-6 shadow-sm animate-[fade-in_0.5s]">
-                    <div className="prose dark:prose-invert prose-lg max-w-none text-slate-800 dark:text-slate-300">
+                <div className="bg-slate-800/50 border border-slate-700 rounded-lg p-6 shadow-sm animate-[fade-in_0.5s]">
+                    <div className="prose prose-invert max-w-none text-slate-300">
                         <FormattedContent text={pulseData} />
                     </div>
-                     <button onClick={handleGetPulse} className="mt-8 inline-flex items-center px-6 py-2 bg-slate-200 dark:bg-slate-700 text-slate-800 dark:text-slate-200 font-semibold rounded-lg shadow-sm hover:bg-slate-300 dark:hover:bg-slate-600">
+                     <button onClick={handleGetPulse} className="mt-8 inline-flex items-center px-6 py-2 bg-slate-700 text-slate-200 font-semibold rounded-lg shadow-sm hover:bg-slate-600">
                         <SignalIcon className="w-5 h-5 mr-2" />
                         Refresh Pulse
                     </button>

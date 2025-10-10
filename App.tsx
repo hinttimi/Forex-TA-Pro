@@ -3,8 +3,8 @@ import { Sidebar } from './components/Sidebar';
 import { LessonView } from './components/LessonView';
 import { Header } from './components/Header';
 import { Lesson, AppView, MarketUpdate } from './types';
-import { generateLessonContent, generateMarketUpdateSnippet } from './services/geminiService';
-import { MODULES } from './constants';
+import { generateMarketUpdateSnippet } from './services/geminiService';
+import { LEARNING_PATHS } from './constants';
 import { PatternRecognitionView } from './components/practice/PatternRecognitionView';
 import { TimedChallengeView } from './components/practice/TimedChallengeView';
 import { FreePracticeCanvasView } from './components/practice/FreePracticeCanvasView';
@@ -26,7 +26,6 @@ import { WhyIsItMovingView } from './components/WhyIsItMovingView';
 import { EconomicCalendarView } from './components/EconomicCalendarView';
 import { AIBacktesterView } from './components/AIBacktesterView';
 import { LiveChartSimulatorView } from './components/practice/LiveChartSimulatorView';
-import { useDebounce } from './hooks/useDebounce';
 import { ApiKeyProvider } from './context/ApiKeyContext';
 import { useApiKey } from './hooks/useApiKey';
 import { ApiKeyModal } from './components/ApiKeyModal';
@@ -38,13 +37,12 @@ import { BottomNavBar } from './components/BottomNavBar';
 import { FloatingActionButton } from './components/FloatingActionButton';
 import { WelcomeTour } from './components/WelcomeTour';
 import { LiveSimulatorProvider } from './context/LiveSimulatorContext';
-import { ThemeProvider } from './context/ThemeContext';
 import { TradingJournalView } from './components/TradingJournalView';
 import { MentorSettingsProvider } from './context/MentorSettingsContext';
 import { MarketDynamicsDashboard } from './components/MarketDynamicsDashboard';
 import { MarketDynamicsProvider } from './context/MarketDynamicsContext';
 
-const allLessons = MODULES.flatMap(module => module.lessons);
+const allLessons = LEARNING_PATHS.flatMap(path => path.modules.flatMap(module => module.lessons));
 
 const findLessonIndex = (lessonKey: string) => {
     return allLessons.findIndex(l => l.key === lessonKey);
@@ -55,52 +53,40 @@ const AppContent: React.FC = () => {
   const [isSidebarOpen, setIsSidebarOpen] = useState(true);
   const [currentView, setCurrentView] = useState<AppView>('dashboard');
   const [currentLesson, setCurrentLesson] = useState<Lesson | null>(null);
-  const [lessonContent, setLessonContent] = useState<string>('');
   const [isLoadingContent, setIsLoadingContent] = useState<boolean>(false);
   const [error, setError] = useState<string | null>(null);
   const [quizLesson, setQuizLesson] = useState<Lesson | null>(null);
   const [marketUpdate, setMarketUpdate] = useState<MarketUpdate | null>(null);
   const [isFeedbackModalOpen, setIsFeedbackModalOpen] = useState(false);
   const [isTourActive, setIsTourActive] = useState(false);
-  const [lessonToLoadKey, setLessonToLoadKey] = useState<string | null>(null);
   const [toolExecutionParams, setToolExecutionParams] = useState<{ toolName: AppView, params: any } | null>(null);
 
-  const getLessonPrompt = (lesson: Lesson): string => {
-    // This new prompt instructs the text-generation AI to create a new, detailed image prompt.
-    return `You are an expert forex trading mentor creating a lesson. The user will provide content with placeholders like [CHART: a general description of a chart].
-
-Your task is to rewrite the lesson content for the user. When you encounter a [CHART: ...] placeholder, you MUST replace it with a new, highly detailed, and specific prompt for an image generation AI. This new prompt must be enclosed in [AI_CHART_PROMPT: ...].
-
-This new AI_CHART_PROMPT must:
-1.  Be extremely descriptive and directly correspond to the text you have just written before it.
-2.  Specify the chart type (e.g., candlestick, line), theme (always dark theme), specific patterns, labels, arrows, and any elements needed to perfectly illustrate the concept.
-3.  For example, if you just explained a Bullish Engulfing pattern, the AI_CHART_PROMPT should explicitly describe a small red candle followed by a large green candle that engulfs it at the bottom of a downtrend.
-
-After creating and inserting the [AI_CHART_PROMPT: ...], continue writing the rest of the lesson.
-
-Here is the lesson content you need to process:
----
-${lesson.contentPrompt}
----`;
-  };
-
-  const debouncedLessonKey = useDebounce(lessonToLoadKey, 500);
-
-  const { apiKey, isKeyModalOpen, wasKeyJustSet, setApiKey } = useApiKey();
+  const { apiKey, isKeyModalOpen, wasKeyJustSet } = useApiKey();
   const { logLessonCompleted, getCompletedLessons, getCompletionCount } = useCompletion();
   const { unlockBadge } = useBadges();
   const completedLessons = getCompletedLessons();
   
   const handleSelectLesson = useCallback((lesson: Lesson) => {
+    // If already on lesson view and selecting a new lesson, show loading skeleton briefly
+    if (currentView === 'lesson' && currentLesson?.key !== lesson.key) {
+        setIsLoadingContent(true);
+    }
     setCurrentView('lesson');
     setCurrentLesson(lesson);
     setError(null);
+  }, [currentView, currentLesson]);
 
-    // Always trigger a new load to ensure no stale data.
-    setLessonContent('');
-    setIsLoadingContent(true);
-    setLessonToLoadKey(lesson.key);
-  }, []);
+  // When a lesson is selected, turn off the loading skeleton after a brief moment
+  // to allow the UI to update and render the skeleton before showing content.
+  useEffect(() => {
+      if (currentLesson && isLoadingContent) {
+          const timer = setTimeout(() => {
+              setIsLoadingContent(false);
+              logLessonCompleted(currentLesson.key);
+          }, 100); // A small delay for the skeleton to be visible
+          return () => clearTimeout(timer);
+      }
+  }, [currentLesson, isLoadingContent, logLessonCompleted]);
   
   const handleNextLesson = useCallback(() => {
     if (!currentLesson) return;
@@ -157,104 +143,24 @@ ${lesson.contentPrompt}
     }
   }, [wasKeyJustSet]);
 
-  // Effect for debounced content loading
-  useEffect(() => {
-    const loadContent = async (key: string) => {
-      if (currentLesson?.key !== key) {
-        return;
-      }
-      if (!apiKey) {
-          setError("Please set your Gemini API key to load lesson content.");
-          setIsLoadingContent(false);
-          return;
-      }
-
-      const lesson = allLessons.find(l => l.key === key);
-      if (!lesson) {
-          setIsLoadingContent(false);
-          return;
-      }
-      
-      try {
-        const finalPrompt = getLessonPrompt(lesson);
-        const content = await generateLessonContent(apiKey, finalPrompt, `lesson-content-${lesson.key}`);
-        setLessonContent(content);
-        logLessonCompleted(lesson.key);
-      } catch (e) {
-        console.error(e);
-        const errorMessage = e instanceof Error ? e.message : 'Failed to load lesson content. Please check your API key and try again.';
-        setError(errorMessage);
-        if (errorMessage.includes('not valid')) {
-            setApiKey(null);
-        }
-      } finally {
-        if (currentLesson?.key === key) {
-            setIsLoadingContent(false);
-        }
-      }
-    };
-    
-    if (debouncedLessonKey) {
-      loadContent(debouncedLessonKey);
-    }
-  }, [debouncedLessonKey, currentLesson?.key, logLessonCompleted, apiKey, setApiKey]);
-
-  // Effect for preloading next lessons
-  useEffect(() => {
-    const preloadLessons = async () => {
-      if (!currentLesson || !apiKey) return;
-
-      const currentIndex = findLessonIndex(currentLesson.key);
-      if (currentIndex === -1) return;
-
-      const lessonsToPreload = [
-        allLessons[currentIndex + 1],
-        allLessons[currentIndex + 2],
-      ].filter(Boolean); // Filter out undefined if we're at the end of the list
-
-      for (const lesson of lessonsToPreload) {
-        try {
-          // This is a fire-and-forget call to populate the cache.
-          // We don't need to handle the returned content here.
-          const finalPrompt = getLessonPrompt(lesson);
-          await generateLessonContent(apiKey, finalPrompt, `lesson-content-${lesson.key}`);
-        } catch (e) {
-          // Preloading failures should not be user-facing.
-          // We log them to the console for debugging purposes.
-          console.error(`Failed to preload lesson ${lesson.key}:`, e);
-        }
-      }
-    };
-
-    // Delay preloading slightly to ensure the main content load is prioritized.
-    const timer = setTimeout(preloadLessons, 1500);
-    return () => clearTimeout(timer);
-  }, [currentLesson, apiKey]);
-
   // Badge check effect for lesson completions
   useEffect(() => {
     const completed = getCompletedLessons();
-    const firstLessonKey = MODULES[0].lessons[0].key;
+    if (completed.size === 0) return;
 
-    if (currentLesson?.key !== firstLessonKey && completed.has(firstLessonKey)) {
+    const firstLessonKey = LEARNING_PATHS[0].modules[0].lessons[0].key;
+    if (completed.has(firstLessonKey)) {
       unlockBadge('first-step');
     }
     
-    const level1Keys = MODULES[0].lessons.map(l => l.key);
-    if (level1Keys.every(key => completed.has(key))) {
-        unlockBadge('foundation-builder');
+    const foundationPath = LEARNING_PATHS.find(p => p.isFoundation);
+    if (foundationPath) {
+        const foundationLessonKeys = foundationPath.modules.flatMap(m => m.lessons.map(l => l.key));
+        if (foundationLessonKeys.every(key => completed.has(key))) {
+            unlockBadge('foundation-builder');
+        }
     }
-    
-    const level2Keys = MODULES[1].lessons.map(l => l.key);
-    if (level2Keys.every(key => completed.has(key))) {
-        unlockBadge('structure-expert');
-    }
-
-    const level3Keys = MODULES[2].lessons.map(l => l.key);
-    if (level3Keys.every(key => completed.has(key))) {
-        unlockBadge('liquidity-hunter');
-    }
-  }, [lessonContent, unlockBadge, getCompletedLessons, currentLesson]);
+  }, [getCompletedLessons, unlockBadge]);
 
   // Badge check for journal entries (listens for view change)
   useEffect(() => {
@@ -326,7 +232,7 @@ ${lesson.contentPrompt}
         return currentLesson ? (
           <LessonView
             lesson={currentLesson}
-            content={lessonContent}
+            content={currentLesson.content} // Pass raw content directly
             isLoadingContent={isLoadingContent}
             onStartQuiz={handleStartQuiz}
             error={error}
@@ -334,7 +240,7 @@ ${lesson.contentPrompt}
             onPreviousLesson={handlePreviousLesson}
             hasNextLesson={hasNextLesson}
             hasPreviousLesson={hasPreviousLesson}
-            modules={MODULES}
+            learningPaths={LEARNING_PATHS}
             onSelectLesson={handleSelectLesson}
             completedLessons={completedLessons}
           />
@@ -395,19 +301,19 @@ ${lesson.contentPrompt}
     } else if (currentView === 'trading_journal') {
         viewTitle = 'Trading Journal';
     } else if (currentView === 'market_dynamics') {
-        viewTitle = 'Market Dynamics Dashboard';
+        viewTitle = 'Market Dynamics';
     } else if (currentView !== 'dashboard') {
         viewTitle = currentView.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase());
     }
 
   return (
-    <div className="relative h-screen font-sans overflow-hidden bg-slate-50 text-slate-800 dark:bg-slate-950 dark:text-slate-200">
+    <div className="relative h-screen font-sans overflow-hidden bg-[--color-obsidian-slate] text-[--color-ghost-white]">
       {isTourActive && <WelcomeTour onClose={handleTourComplete} />}
       <ApiKeyModal />
       <FeedbackModal isOpen={isFeedbackModalOpen} onClose={closeFeedbackModal} />
-      {isSidebarOpen && <div onClick={() => setIsSidebarOpen(false)} className="fixed inset-0 bg-black/30 dark:bg-black/60 backdrop-blur-sm z-30 md:hidden" aria-hidden="true" />}
+      {isSidebarOpen && <div onClick={() => setIsSidebarOpen(false)} className="fixed inset-0 bg-black/60 backdrop-blur-sm z-30 md:hidden" aria-hidden="true" />}
       <Sidebar
-        modules={MODULES}
+        learningPaths={LEARNING_PATHS}
         onSelectLesson={handleSelectLesson}
         selectedLessonKey={currentLesson?.key}
         currentView={currentView}
@@ -437,7 +343,6 @@ ${lesson.contentPrompt}
 };
 
 const App: React.FC = () => (
-  <ThemeProvider>
     <ApiKeyProvider>
         <BadgesProvider>
             <MentorSettingsProvider>
@@ -449,7 +354,6 @@ const App: React.FC = () => (
             </MentorSettingsProvider>
         </BadgesProvider>
     </ApiKeyProvider>
-  </ThemeProvider>
 );
 
 

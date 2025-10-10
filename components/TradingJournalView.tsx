@@ -95,7 +95,7 @@ export const TradingJournalView: React.FC = () => {
             <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-6">
                 <div>
                     <h1 className="text-4xl font-extrabold text-white tracking-tight">Trading Journal</h1>
-                    <p className="text-gray-400 mt-1">Log your trades to analyze performance and master your psychology.</p>
+                    <p className="text-[--color-muted-grey] mt-1">Log your trades to analyze performance and master your psychology.</p>
                 </div>
                 <button onClick={() => handleOpenModal()} className="mt-4 sm:mt-0 inline-flex items-center px-4 py-2 bg-cyan-500 text-slate-900 font-semibold rounded-lg shadow-md hover:bg-cyan-400">
                     <PlusIcon className="w-5 h-5 mr-2" />
@@ -105,7 +105,7 @@ export const TradingJournalView: React.FC = () => {
 
             {entries.length > 0 && (
                 <div className="mb-4 flex items-center space-x-2">
-                    <span className="text-sm font-medium text-gray-400">Filter by outcome:</span>
+                    <span className="text-sm font-medium text-[--color-muted-grey]">Filter by outcome:</span>
                     {(['all', ...OUTCOMES] as const).map(f => (
                         <button key={f} onClick={() => setFilter(f)} className={`px-3 py-1 text-xs font-semibold rounded-full ${filter === f ? 'bg-cyan-500 text-slate-900' : 'bg-slate-700 text-slate-300 hover:bg-slate-600'}`}>
                             {f}
@@ -128,7 +128,7 @@ export const TradingJournalView: React.FC = () => {
                                 <div className="flex items-center gap-4">
                                     <span className={`px-3 py-1 rounded-full text-sm font-bold border ${outcomeColorClass(entry.outcome)}`}>{entry.outcome}</span>
                                     <h3 className="text-xl font-bold text-white">{entry.pair} - {entry.direction}</h3>
-                                    <span className="text-sm text-gray-400">{new Date(entry.date).toLocaleDateString()}</span>
+                                    <span className="text-sm text-[--color-muted-grey]">{new Date(entry.date).toLocaleDateString()}</span>
                                 </div>
                                 <div className="flex items-center gap-3 mt-3 sm:mt-0">
                                     <button onClick={() => handleOpenModal(entry)} className="text-sm font-semibold text-cyan-400 hover:underline">Edit</button>
@@ -136,9 +136,9 @@ export const TradingJournalView: React.FC = () => {
                                 </div>
                            </div>
                            <div className="mt-3 pt-3 border-t border-slate-700/50 space-y-2 text-sm">
-                                <p><strong className="text-gray-300">Setup:</strong> <span className="text-gray-400">{entry.setup}</span></p>
-                                <p><strong className="text-gray-300">Emotion:</strong> <span className="text-gray-400">{entry.emotion}</span></p>
-                                {entry.notes && <p><strong className="text-gray-300">Notes:</strong> <span className="text-gray-400">{entry.notes}</span></p>}
+                                <p><strong className="text-gray-300">Setup:</strong> <span className="text-[--color-muted-grey]">{entry.setup}</span></p>
+                                <p><strong className="text-gray-300">Emotion:</strong> <span className="text-[--color-muted-grey]">{entry.emotion}</span></p>
+                                {entry.notes && <p><strong className="text-gray-300">Notes:</strong> <span className="text-[--color-muted-grey]">{entry.notes}</span></p>}
                            </div>
                         </div>
                     ))}

@@ -41,7 +41,7 @@ export const MarketUpdateToast: React.FC<MarketUpdateToastProps> = ({ update, on
   }
 
   const Icon = update.type === 'pulse' ? SignalIcon : NewspaperIcon;
-  const iconColor = update.type === 'pulse' ? 'text-yellow-400' : 'text-cyan-400';
+  const iconColor = update.type === 'pulse' ? 'text-[--color-focus-gold]' : 'text-[--color-neural-blue]';
 
   return (
     <div
@@ -50,20 +50,20 @@ export const MarketUpdateToast: React.FC<MarketUpdateToastProps> = ({ update, on
         visible ? 'opacity-100 transform translate-y-0' : 'opacity-0 transform translate-y-4'
       }`}
     >
-      <div className="bg-gray-800/80 backdrop-blur-md shadow-2xl rounded-xl ring-1 ring-gray-600/50 overflow-hidden">
+      <div className="bg-[--color-dark-matter]/80 backdrop-blur-md shadow-2xl rounded-xl ring-1 ring-[--color-border]/50 overflow-hidden">
         <div className="p-4">
           <div className="flex items-start">
             <div className="flex-shrink-0 pt-0.5">
               <Icon className={`w-6 h-6 ${iconColor}`} />
             </div>
             <div className="ml-3 w-0 flex-1">
-              <p className="text-sm font-semibold text-white truncate">{update.title}</p>
-              <p className="mt-1 text-sm text-gray-300">{update.content}</p>
+              <p className="text-sm font-semibold text-[--color-ghost-white] truncate">{update.title}</p>
+              <p className="mt-1 text-sm text-[--color-muted-grey]">{update.content}</p>
             </div>
             <div className="ml-4 flex-shrink-0 flex">
               <button
                 onClick={handleClose}
-                className="inline-flex text-gray-400 rounded-md hover:text-gray-200 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-offset-gray-800 focus:ring-cyan-500"
+                className="inline-flex text-[--color-muted-grey] rounded-md hover:text-[--color-ghost-white] focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-offset-[--color-dark-matter] focus:ring-[--color-neural-blue]"
               >
                 <span className="sr-only">Close</span>
                 <XMarkIcon className="h-5 w-5" aria-hidden="true" />

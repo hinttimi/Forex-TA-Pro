@@ -53,13 +53,13 @@ export const TradingPlanView: React.FC = () => {
 
     return (
         <div className="max-w-4xl mx-auto">
-            <h1 className="text-4xl font-extrabold text-white mb-2 tracking-tight">My Trading Plan</h1>
-            <p className="text-gray-400 mb-8">A well-defined plan is the cornerstone of disciplined trading. Document your rules here to stay consistent and accountable.</p>
+            <h1 className="text-4xl font-extrabold text-[--color-ghost-white] mb-2 tracking-tight">My Trading Plan</h1>
+            <p className="text-[--color-muted-grey] mb-8">A well-defined plan is the cornerstone of disciplined trading. Document your rules here to stay consistent and accountable.</p>
             
             <div className="space-y-8">
                 {formFields.map(field => (
                     <div key={field.name}>
-                        <label htmlFor={field.name} className="block text-lg font-semibold text-gray-200 mb-2">{field.label}</label>
+                        <label htmlFor={field.name} className="block text-lg font-semibold text-[--color-ghost-white]/90 mb-2">{field.label}</label>
                         <textarea
                             id={field.name}
                             name={field.name}
@@ -67,7 +67,7 @@ export const TradingPlanView: React.FC = () => {
                             onChange={handleInputChange}
                             placeholder={field.placeholder}
                             rows={8}
-                            className="w-full p-4 bg-gray-800/50 border-2 border-gray-700 rounded-lg text-gray-300 focus:ring-2 focus:ring-cyan-500 focus:border-cyan-500 transition-colors duration-200 resize-y"
+                            className="w-full p-4 bg-[--color-dark-matter]/50 border-2 border-[--color-border] rounded-lg text-[--color-ghost-white]/80 focus:ring-2 focus:ring-[--color-neural-blue] focus:border-[--color-neural-blue] transition-colors duration-200 resize-y"
                         />
                     </div>
                 ))}
@@ -75,14 +75,14 @@ export const TradingPlanView: React.FC = () => {
 
             <div className="mt-8 flex justify-end items-center">
                 {isSaved && (
-                    <div className="flex items-center text-green-400 mr-4 animate-[fade-in_0.5s]">
+                    <div className="flex items-center text-[--color-signal-green] mr-4 animate-[fade-in_0.5s]">
                         <CheckCircleIcon className="w-5 h-5 mr-2" />
                         <span>Plan saved successfully!</span>
                     </div>
                 )}
                 <button
                     onClick={handleSavePlan}
-                    className="px-6 py-3 bg-cyan-500 text-gray-900 font-semibold rounded-lg shadow-md hover:bg-cyan-400 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-offset-gray-900 focus:ring-cyan-500 transition-all duration-200"
+                    className="px-6 py-3 bg-[--color-neural-blue] text-[--color-obsidian-slate] font-semibold rounded-lg shadow-md hover:bg-[--color-neural-blue]/80 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-offset-[--color-obsidian-slate] focus:ring-[--color-neural-blue] transition-all duration-200"
                 >
                     Save My Plan
                 </button>

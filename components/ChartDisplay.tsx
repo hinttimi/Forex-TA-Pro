@@ -1,5 +1,6 @@
 
 
+
 import React, { useState, useEffect, useRef } from 'react';
 import { PhotoIcon } from './icons/PhotoIcon';
 import { ArrowsPointingOutIcon } from './icons/ArrowsPointingOutIcon';
@@ -18,7 +19,7 @@ export const ChartDisplay: React.FC<ChartDisplayProps> = ({
   imageUrl, 
   isLoading,
   loadingText = "AI is drawing the chart, please wait...",
-  containerClassName = "mt-6 w-full aspect-video bg-slate-100 dark:bg-slate-800 rounded-lg border border-slate-200 dark:border-slate-700 flex items-center justify-center p-4" 
+  containerClassName = "mt-6 w-full aspect-video bg-[--color-dark-matter] rounded-lg border border-[--color-border] flex items-center justify-center p-4" 
 }) => {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [scale, setScale] = useState(1);
@@ -103,9 +104,9 @@ export const ChartDisplay: React.FC<ChartDisplayProps> = ({
       <div className={containerClassName}>
         {isLoading && <ChartSkeleton loadingText={loadingText} />}
         {!isLoading && !imageUrl && (
-          <div className="text-center text-slate-400 dark:text-slate-500">
+          <div className="text-center text-[--color-muted-grey]">
             <PhotoIcon className="w-16 h-16 mx-auto mb-2" />
-            <p className="text-slate-500 dark:text-slate-400">Your generated chart will appear here.</p>
+            <p>Your generated chart will appear here.</p>
           </div>
         )}
         {!isLoading && imageUrl && (
@@ -120,8 +121,8 @@ export const ChartDisplay: React.FC<ChartDisplayProps> = ({
               className="w-full h-full object-cover rounded-md transition-opacity duration-300 group-hover:opacity-40"
             />
             <div className="absolute inset-0 flex flex-col items-center justify-center bg-black bg-opacity-60 opacity-0 group-hover:opacity-100 transition-opacity duration-300 rounded-md">
-                <ArrowsPointingOutIcon className="w-10 h-10 text-white mb-2" />
-                <p className="text-white font-semibold">Click to enlarge</p>
+                <ArrowsPointingOutIcon className="w-10 h-10 text-[--color-ghost-white] mb-2" />
+                <p className="text-[--color-ghost-white] font-semibold">Click to enlarge</p>
             </div>
           </button>
         )}
@@ -129,7 +130,7 @@ export const ChartDisplay: React.FC<ChartDisplayProps> = ({
 
       {isModalOpen && (
         <div 
-            className="fixed inset-0 z-50 flex items-center justify-center bg-white/80 dark:bg-black/80 backdrop-blur-sm animate-[fade-in_0.2s_ease-out]"
+            className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm animate-[fade-in_0.2s_ease-out]"
             onMouseMove={handleMouseMove}
             onMouseUp={handleMouseUpOrLeave}
             onMouseLeave={handleMouseUpOrLeave}
@@ -156,14 +157,14 @@ export const ChartDisplay: React.FC<ChartDisplayProps> = ({
           <div className="absolute top-4 right-4 flex items-center space-x-2">
             <button
                 onClick={resetTransform}
-                className="text-white bg-black/50 rounded-full p-2 hover:bg-black/70 focus:outline-none focus:ring-2 focus:ring-white"
+                className="text-[--color-ghost-white] bg-black/50 rounded-full p-2 hover:bg-black/70 focus:outline-none focus:ring-2 focus:ring-white"
                 aria-label="Reset zoom and pan"
             >
                 <ArrowPathIcon className="w-6 h-6" />
             </button>
             <button
               onClick={handleCloseModal}
-              className="text-white bg-black/50 rounded-full p-2 hover:bg-black/70 focus:outline-none focus:ring-2 focus:ring-white"
+              className="text-[--color-ghost-white] bg-black/50 rounded-full p-2 hover:bg-black/70 focus:outline-none focus:ring-2 focus:ring-white"
               aria-label="Close image viewer"
             >
               <XMarkIcon className="w-6 h-6" />

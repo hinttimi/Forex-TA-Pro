@@ -618,6 +618,22 @@ export const FreePracticeCanvasView: React.FC = () => {
             return;
         }
 
+        // Handle tool switching with Alt key shortcuts
+        if (e.altKey) {
+            e.preventDefault();
+            switch (e.key.toLowerCase()) {
+                case 's': setActiveTool('select'); break;
+                case 't': setActiveTool('trendline'); break;
+                case 'r': setActiveTool('rectangle'); break;
+                case 'c': setActiveTool('circle'); break;
+                case 'h': setActiveTool('horizontal'); break;
+                case 'f': setActiveTool('fibonacci'); break;
+                case 'a': setActiveTool('angle'); break;
+                case 'x': setActiveTool('text'); break; // Using 'x' for te'x't
+            }
+            return; // Prevent further actions
+        }
+
         if((e.key === 'Delete' || e.key === 'Backspace') && selectedShapeId !== null) {
             const newShapes = shapes.filter(s => s.id !== selectedShapeId);
             setShapes(newShapes);

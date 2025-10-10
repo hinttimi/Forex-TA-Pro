@@ -3,8 +3,7 @@ import React from 'react';
 export interface Lesson {
   key: string;
   title: string;
-  contentPrompt: string;
-  chartPrompt: string;
+  content: string;
 }
 
 export interface Module {
@@ -12,7 +11,22 @@ export interface Module {
   lessons: Lesson[];
 }
 
+export interface LearningPath {
+  id: string;
+  title: string;
+  description: string;
+  isFoundation: boolean;
+  modules: Module[];
+}
+
 export type AppView = 'dashboard' | 'lesson' | 'pattern' | 'timed' | 'canvas' | 'simulator' | 'live_simulator' | 'saved' | 'achievements' | 'trading_plan' | 'mentor' | 'quiz' | 'market_pulse' | 'news_feed' | 'market_analyzer' | 'economic_calendar' | 'backtester' | 'settings' | 'trading_journal' | 'market_dynamics';
+
+export interface DailyMission {
+    title: string;
+    description: string;
+    tool: AppView;
+    completion_criteria: 'simulatorRuns' | 'pattern' | 'timed' | 'canvas' | 'backtester' | 'live_simulator';
+}
 
 export interface MultipleChoiceQuestion {
     question: string;
@@ -126,10 +140,9 @@ export interface VolatilityData {
     volatility: number; // A numeric score or rank
 }
 
-export interface CorrelationData {
-    [key: string]: {
-        [key: string]: number; // e.g., { "EUR/USD": { "GBP/USD": 0.85 } }
-    };
+export interface TopMoverData {
+    pair: string;
+    change_pct: number; // e.g., 0.45 for +0.45%
 }
 
 export interface MarketSentimentData {

@@ -1,5 +1,5 @@
 import React, { useState, useCallback, useEffect } from 'react';
-import { Lesson, Module } from '../types';
+import { Lesson, LearningPath } from '../types';
 import { ChartDisplay } from './ChartDisplay';
 import { ExclamationTriangleIcon } from './icons/ExclamationTriangleIcon';
 import { generateChartImage, generateLessonSummary } from '../services/geminiService';
@@ -23,7 +23,7 @@ interface LessonViewProps {
   onPreviousLesson: () => void;
   hasNextLesson: boolean;
   hasPreviousLesson: boolean;
-  modules: Module[];
+  learningPaths: LearningPath[];
   onSelectLesson: (lesson: Lesson) => void;
   completedLessons: Set<string>;
 }
@@ -42,7 +42,7 @@ const renderInlineMarkdown = (text: string): React.ReactNode => {
             parts.push(text.substring(lastIndex, match.index));
         }
         // The bolded text
-        parts.push(<strong key={`strong-${key++}`} className="font-bold text-blue-600 dark:text-cyan-400">{match[1]}</strong>);
+        parts.push(<strong key={`strong-${key++}`} className="font-bold text-cyan-400">{match[1]}</strong>);
         lastIndex = regex.lastIndex;
     }
 
@@ -84,11 +84,11 @@ const TextSegment: React.FC<{ text: string }> = ({ text }) => {
                 }
 
                 // Handle headings
-                if (trimmedBlock.startsWith('#### ')) return <h4 key={blockIndex} className="text-lg font-semibold text-blue-700 dark:text-cyan-400 mt-6 mb-2">{renderInlineMarkdown(trimmedBlock.substring(5))}</h4>;
-                if (trimmedBlock.startsWith('### ')) return <h3 key={blockIndex} className="text-xl font-semibold text-slate-800 dark:text-white mt-8 mb-3">{renderInlineMarkdown(trimmedBlock.substring(4))}</h3>;
-                if (trimmedBlock.startsWith('## ')) return <h2 key={blockIndex} className="text-2xl font-bold text-slate-900 dark:text-white mt-10 mb-4 border-b border-slate-300 dark:border-slate-700 pb-2">{renderInlineMarkdown(trimmedBlock.substring(3))}</h2>;
-                if (trimmedBlock.startsWith('# ')) return <h1 key={blockIndex} className="text-3xl font-extrabold text-slate-900 dark:text-white mt-12 mb-5 border-b-2 border-blue-500 dark:border-cyan-500 pb-3">{renderInlineMarkdown(trimmedBlock.substring(2))}</h1>;
-                if (trimmedBlock === '---') return <hr key={blockIndex} className="my-8 border-slate-300 dark:border-slate-700" />;
+                if (trimmedBlock.startsWith('#### ')) return <h4 key={blockIndex} className="text-lg font-semibold text-cyan-400 mt-6 mb-2">{renderInlineMarkdown(trimmedBlock.substring(5))}</h4>;
+                if (trimmedBlock.startsWith('### ')) return <h3 key={blockIndex} className="text-xl font-semibold text-white mt-8 mb-3">{renderInlineMarkdown(trimmedBlock.substring(4))}</h3>;
+                if (trimmedBlock.startsWith('## ')) return <h2 key={blockIndex} className="text-2xl font-bold text-white mt-10 mb-4 border-b border-slate-700 pb-2">{renderInlineMarkdown(trimmedBlock.substring(3))}</h2>;
+                if (trimmedBlock.startsWith('# ')) return <h1 key={blockIndex} className="text-3xl font-extrabold text-white mt-12 mb-5 border-b-2 border-cyan-500 pb-3">{renderInlineMarkdown(trimmedBlock.substring(2))}</h1>;
+                if (trimmedBlock === '---') return <hr key={blockIndex} className="my-8 border-slate-700" />;
                 
                 // If it's none of the above, it's a paragraph block.
                 return <p key={blockIndex} className="mb-6 leading-relaxed">{renderInlineMarkdown(block)}</p>;
@@ -136,9 +136,9 @@ const EmbeddedChart: React.FC<{ prompt: string; lessonKey: string }> = ({ prompt
                 imageUrl={imageUrl}
                 isLoading={isLoading}
                 loadingText="AI is drawing the chart..."
-                containerClassName="w-full aspect-video bg-slate-100 dark:bg-slate-800 rounded-lg border border-slate-200 dark:border-slate-700 flex items-center justify-center p-2 shadow-sm"
+                containerClassName="w-full aspect-video bg-slate-800 rounded-lg border border-slate-700 flex items-center justify-center p-2 shadow-sm"
             />
-            {error && <p className="text-xs text-red-500 dark:text-red-400 text-center mt-2">{error}</p>}
+            {error && <p className="text-xs text-red-400 text-center mt-2">{error}</p>}
         </div>
     );
 };
@@ -148,15 +148,14 @@ interface DynamicLessonContentProps {
     lessonKey: string;
 }
 
-// This component parses the full lesson content for [AI_CHART_PROMPT:...] placeholders
+// This component parses the full lesson content for [CHART:...] placeholders
 // and renders either text segments or embedded charts.
 const DynamicLessonContent: React.FC<DynamicLessonContentProps> = ({ text, lessonKey }) => {
-    // This regex now finds the AI-generated chart prompts.
-    const chartPromptRegex = /\[AI_CHART_PROMPT:\s*(.*?)\]/gs;
+    const chartPromptRegex = /\[CHART:\s*(.*?)\]/gs;
     const parts = text.split(chartPromptRegex);
 
     return (
-        <div className="prose dark:prose-invert prose-lg max-w-none text-slate-700 dark:text-slate-300">
+        <div className="prose prose-invert max-w-none text-slate-300">
             {parts.map((part, index) => {
                 // Even-indexed parts are text, odd-indexed parts are chart prompts.
                 if (index % 2 === 0) {
@@ -187,7 +186,7 @@ export const LessonView: React.FC<LessonViewProps> = (props) => {
         onPreviousLesson,
         hasNextLesson,
         hasPreviousLesson,
-        modules,
+        learningPaths,
         onSelectLesson,
         completedLessons,
     } = props;
@@ -256,7 +255,7 @@ export const LessonView: React.FC<LessonViewProps> = (props) => {
                         <LessonSkeleton />
                      ) : (
                         <>
-                            <h1 className="text-4xl font-extrabold text-slate-900 dark:text-slate-100 mb-6 tracking-tight">{lesson.title}</h1>
+                            <h1 className="text-4xl font-extrabold text-slate-100 mb-6 tracking-tight">{lesson.title}</h1>
                             <DynamicLessonContent 
                                 text={content} 
                                 lessonKey={lesson.key}
@@ -265,30 +264,30 @@ export const LessonView: React.FC<LessonViewProps> = (props) => {
                      )}
 
                     {error && (
-                        <div className="mt-6 bg-red-100 border border-red-300 text-red-700 dark:bg-red-500/10 dark:border-red-500/30 dark:text-red-300 px-4 py-3 rounded-lg flex items-center">
+                        <div className="mt-6 bg-red-500/10 border border-red-500/30 text-red-300 px-4 py-3 rounded-lg flex items-center">
                             <ExclamationTriangleIcon className="w-5 h-5 mr-3" />
                             <span>{error}</span>
                         </div>
                     )}
 
                     {!isLoadingContent && content && (
-                        <div className="mt-12 border-t border-slate-200 dark:border-slate-700 pt-8" id="tour-step-4-visualize">
+                        <div className="mt-12 border-t border-slate-700 pt-8" id="tour-step-4-visualize">
                              <div className="flex items-start">
-                                <DocumentTextIcon className="w-8 h-8 text-blue-500 dark:text-cyan-400 mr-4 mt-1 flex-shrink-0" />
+                                <DocumentTextIcon className="w-8 h-8 text-cyan-400 mr-4 mt-1 flex-shrink-0" />
                                 <div>
-                                    <h3 className="text-lg font-bold text-slate-900 dark:text-white">Key Takeaways</h3>
-                                    <p className="text-slate-600 dark:text-slate-400 text-sm">Get a quick, AI-powered summary of this lesson.</p>
+                                    <h3 className="text-lg font-bold text-white">Key Takeaways</h3>
+                                    <p className="text-slate-400 text-sm">Get a quick, AI-powered summary of this lesson.</p>
                                 </div>
                             </div>
                              {keyTakeaways ? (
-                                <div className="mt-4 bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg p-5 prose dark:prose-invert prose-sm max-w-none text-slate-800 dark:text-slate-300">
+                                <div className="mt-4 bg-slate-800 border border-slate-700 rounded-lg p-5 prose prose-invert prose-sm max-w-none text-slate-300">
                                     <TextSegment text={keyTakeaways} />
                                 </div>
                             ) : (
                                 <button
                                     onClick={handleGenerateTakeaways}
                                     disabled={isLoadingTakeaways}
-                                    className="mt-4 px-4 py-2 bg-blue-100 border border-blue-200 text-blue-800 font-semibold rounded-lg hover:bg-blue-200 dark:bg-cyan-500/10 dark:border-cyan-500/30 dark:text-cyan-300 dark:hover:bg-cyan-500/20 transition-colors flex items-center disabled:opacity-50"
+                                    className="mt-4 px-4 py-2 bg-cyan-500/10 border border-cyan-500/30 text-cyan-300 font-semibold rounded-lg hover:bg-cyan-500/20 transition-colors flex items-center disabled:opacity-50"
                                 >
                                     {isLoadingTakeaways ? <LoadingSpinner /> : 'Generate Summary'}
                                 </button>
@@ -297,11 +296,11 @@ export const LessonView: React.FC<LessonViewProps> = (props) => {
                     )}
 
                      {/* Lesson Navigation */}
-                    <div className="mt-12 pt-6 border-t border-slate-200 dark:border-slate-700 flex justify-between items-center">
+                    <div className="mt-12 pt-6 border-t border-slate-700 flex justify-between items-center">
                          <button
                             onClick={onPreviousLesson}
                             disabled={!hasPreviousLesson}
-                            className="inline-flex items-center gap-2 px-4 py-2 bg-slate-200 dark:bg-slate-700 text-slate-800 dark:text-slate-200 font-semibold rounded-lg shadow-sm hover:bg-slate-300 dark:hover:bg-slate-600 disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-200 hover:-translate-y-0.5"
+                            className="inline-flex items-center gap-2 px-4 py-2 bg-slate-700 text-slate-200 font-semibold rounded-lg shadow-sm hover:bg-slate-600 disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-200 hover:-translate-y-0.5"
                         >
                             <ChevronLeftIcon className="h-5 w-5" />
                             Previous
@@ -309,7 +308,7 @@ export const LessonView: React.FC<LessonViewProps> = (props) => {
                         <button
                             onClick={onNextLesson}
                             disabled={!hasNextLesson}
-                            className="inline-flex items-center gap-2 px-4 py-2 bg-blue-600 text-white dark:bg-cyan-500 dark:text-slate-900 font-semibold rounded-lg shadow-sm hover:bg-blue-700 dark:hover:bg-cyan-400 disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-200 hover:-translate-y-0.5 hover:shadow-lg hover:shadow-blue-500/20 dark:hover:shadow-cyan-500/20"
+                            className="inline-flex items-center gap-2 px-4 py-2 bg-cyan-500 text-slate-900 font-semibold rounded-lg shadow-sm hover:bg-cyan-400 disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-200 hover:-translate-y-0.5 hover:shadow-lg hover:shadow-cyan-500/20"
                         >
                             Next
                             <ChevronRightIcon className="h-5 w-5" />
@@ -322,20 +321,20 @@ export const LessonView: React.FC<LessonViewProps> = (props) => {
             <div className="w-full lg:w-80 lg:max-w-xs flex-shrink-0">
                 <div className="sticky top-28 space-y-6">
                      {!isLoadingContent && content && (
-                        <div className="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl p-5 text-center shadow-sm dark:shadow-none">
-                            <QuestionMarkCircleIcon className="w-8 h-8 text-blue-500 dark:text-cyan-400 mx-auto mb-2" />
-                            <h3 className="text-base font-bold text-slate-900 dark:text-white">Test Your Knowledge</h3>
-                            <p className="text-slate-600 dark:text-slate-400 text-sm mb-4">Take a quick quiz on this lesson.</p>
+                        <div className="bg-slate-800 border border-slate-700 rounded-xl p-5 text-center shadow-none">
+                            <QuestionMarkCircleIcon className="w-8 h-8 text-cyan-400 mx-auto mb-2" />
+                            <h3 className="text-base font-bold text-white">Test Your Knowledge</h3>
+                            <p className="text-slate-400 text-sm mb-4">Take a quick quiz on this lesson.</p>
                             <button
                                 onClick={() => onStartQuiz(lesson)}
-                                className="w-full px-4 py-2 bg-blue-100 border border-blue-200 text-blue-700 font-semibold rounded-lg hover:bg-blue-200 dark:bg-cyan-500/10 dark:border-cyan-500/30 dark:text-cyan-300 dark:hover:bg-cyan-500/20 transition-colors"
+                                className="w-full px-4 py-2 bg-cyan-500/10 border border-cyan-500/30 text-cyan-300 font-semibold rounded-lg hover:bg-cyan-500/20 transition-colors"
                             >
                                 Take Quiz
                             </button>
                         </div>
                     )}
                     <LessonCurriculumSidebar
-                        modules={modules}
+                        learningPaths={learningPaths}
                         selectedLessonKey={lesson.key}
                         onSelectLesson={onSelectLesson}
                         completedLessons={completedLessons}

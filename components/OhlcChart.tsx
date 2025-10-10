@@ -10,7 +10,7 @@ interface OhlcChartProps {
 
 export const OhlcChart: React.FC<OhlcChartProps> = ({ data, trades = [], width = 800, height = 400 }) => {
     if (!data || data.length === 0) {
-        return <div style={{ width, height }} className="flex items-center justify-center bg-slate-900 text-slate-500 rounded-md">No chart data available to display.</div>;
+        return <div style={{ width, height }} className="flex items-center justify-center bg-[--color-obsidian-slate] text-[--color-muted-grey] rounded-md">No chart data available to display.</div>;
     }
 
     const padding = { top: 20, right: 60, bottom: 30, left: 10 };
@@ -50,7 +50,7 @@ export const OhlcChart: React.FC<OhlcChartProps> = ({ data, trades = [], width =
                         y1={getY(value)}
                         x2={width - padding.right}
                         y2={getY(value)}
-                        stroke="#475569"
+                        stroke="var(--color-border)"
                         strokeWidth="0.5"
                         strokeDasharray="2,2"
                     />
@@ -58,7 +58,7 @@ export const OhlcChart: React.FC<OhlcChartProps> = ({ data, trades = [], width =
                         x={width - padding.right + 5}
                         y={getY(value)}
                         dy="0.3em"
-                        fill="#94a3b8"
+                        fill="var(--color-muted-grey)"
                         fontSize="10"
                     >
                         {value.toFixed(4)}
@@ -83,7 +83,7 @@ export const OhlcChart: React.FC<OhlcChartProps> = ({ data, trades = [], width =
                             y1={getY(d.high)}
                             x2={x}
                             y2={getY(d.low)}
-                            stroke={isBullish ? '#10b981' : '#f43f5e'}
+                            stroke={isBullish ? 'var(--color-signal-green)' : 'var(--color-warning-red)'}
                             strokeWidth="1"
                         />
                         {/* Body */}
@@ -92,7 +92,7 @@ export const OhlcChart: React.FC<OhlcChartProps> = ({ data, trades = [], width =
                             y={bodyY}
                             width={candleWidth}
                             height={bodyHeight > 0 ? bodyHeight : 1}
-                            fill={isBullish ? '#10b981' : '#f43f5e'}
+                            fill={isBullish ? 'var(--color-signal-green)' : 'var(--color-warning-red)'}
                         />
                     </g>
                 );
@@ -108,7 +108,7 @@ export const OhlcChart: React.FC<OhlcChartProps> = ({ data, trades = [], width =
                 const exitY = getY(trade.exitPrice);
 
                 const isWin = trade.outcome === 'Win';
-                const color = isWin ? '#10b981' : '#f43f5e';
+                const color = isWin ? 'var(--color-signal-green)' : 'var(--color-warning-red)';
                 const isLong = trade.exitPrice > trade.entryPrice;
 
                 return (
@@ -123,7 +123,7 @@ export const OhlcChart: React.FC<OhlcChartProps> = ({ data, trades = [], width =
                             strokeDasharray="4,4"
                         />
                          {/* Entry Marker */}
-                        <circle cx={entryX} cy={entryY} r="4" fill={color} stroke="#1e293b" strokeWidth="2" />
+                        <circle cx={entryX} cy={entryY} r="4" fill={color} stroke="var(--color-dark-matter)" strokeWidth="2" />
                         <text x={entryX} y={isLong ? entryY + 15 : entryY - 8} fill={color} fontSize="10" textAnchor="middle">Entry</text>
                         
                         {/* Exit Marker */}

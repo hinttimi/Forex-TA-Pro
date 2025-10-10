@@ -1,3 +1,5 @@
+
+
 import React, { useState, useEffect, useCallback } from 'react';
 import { Lesson, MultipleChoiceQuestion } from '../types';
 import { generateQuizSet } from '../services/geminiService';
@@ -40,7 +42,9 @@ export const QuizView: React.FC<QuizViewProps> = ({ lesson, onComplete, onNextLe
         return;
     }
     try {
-      const generatedQuestions = await generateQuizSet(apiKey, lesson.contentPrompt, QUIZ_LENGTH, `quiz-set-${lesson.key}`);
+      // FIX: The 'Lesson' type does not have a 'contentPrompt' property.
+      // The lesson's 'content' string, which contains the concept, should be used to generate the quiz.
+      const generatedQuestions = await generateQuizSet(apiKey, lesson.content, QUIZ_LENGTH, `quiz-set-${lesson.key}`);
       
       if (generatedQuestions.length < QUIZ_LENGTH) {
         console.warn(`AI generated only ${generatedQuestions.length}/${QUIZ_LENGTH} questions.`);
@@ -52,7 +56,7 @@ export const QuizView: React.FC<QuizViewProps> = ({ lesson, onComplete, onNextLe
       console.error("Failed to generate quiz questions:", error);
       setQuizState('error');
     }
-  }, [lesson.contentPrompt, lesson.key, apiKey]);
+  }, [lesson.content, lesson.key, apiKey]);
 
   useEffect(() => {
     loadQuestions();
@@ -94,7 +98,7 @@ export const QuizView: React.FC<QuizViewProps> = ({ lesson, onComplete, onNextLe
 
   const getButtonClass = (option: string) => {
     if (selectedAnswer === null) {
-      return 'bg-gray-700 hover:bg-gray-600';
+      return 'bg-slate-700 hover:bg-slate-600';
     }
     const { correctAnswer } = questions[currentQuestionIndex];
     if (option === correctAnswer) {
@@ -103,7 +107,7 @@ export const QuizView: React.FC<QuizViewProps> = ({ lesson, onComplete, onNextLe
     if (option === selectedAnswer && !isCorrect) {
       return 'bg-red-500/80';
     }
-    return 'bg-gray-700 opacity-50';
+    return 'bg-slate-700 opacity-50';
   };
 
   if (quizState === 'loading') {
@@ -125,7 +129,7 @@ export const QuizView: React.FC<QuizViewProps> = ({ lesson, onComplete, onNextLe
                 {!apiKey ? "Please set your Gemini API key to take a quiz." : "There was an issue generating questions from the AI. Please check your API key and try again."}
             </p>
         </div>
-        <button onClick={onComplete} className="mt-6 px-6 py-2 bg-gray-700 text-gray-200 font-semibold rounded-lg hover:bg-gray-600">
+        <button onClick={onComplete} className="mt-6 px-6 py-2 bg-slate-700 text-gray-200 font-semibold rounded-lg hover:bg-slate-600">
             Back to Lesson
         </button>
       </div>
@@ -137,7 +141,7 @@ export const QuizView: React.FC<QuizViewProps> = ({ lesson, onComplete, onNextLe
     return (
       <div className="max-w-2xl mx-auto text-center animate-[fade-in_0.5s]">
         {isPass ? (
-            <TrophyIcon className="w-20 h-20 mx-auto text-yellow-400" />
+            <TrophyIcon className="w-20 h-20 mx-auto text-[--color-focus-gold]" />
         ) : (
             <BookOpenIcon className="w-20 h-20 mx-auto text-cyan-400" />
         )}
@@ -147,9 +151,9 @@ export const QuizView: React.FC<QuizViewProps> = ({ lesson, onComplete, onNextLe
         <p className="text-gray-400">
             {isPass ? "Great job! You've mastered this topic." : "A good effort! Review the lesson to solidify your knowledge."}
         </p>
-        <div className={`mt-6 p-6 bg-gray-800/50 border ${isPass ? 'border-cyan-500/30' : 'border-gray-700'} rounded-lg`}>
+        <div className={`mt-6 p-6 bg-slate-800/50 border ${isPass ? 'border-[--color-focus-gold]/30' : 'border-slate-700'} rounded-lg`}>
           <p className="text-xl text-gray-300">Your final score is:</p>
-          <p className={`text-5xl font-bold my-2 ${isPass ? 'text-cyan-400' : 'text-gray-400'}`}>{score} / {questions.length}</p>
+          <p className={`text-5xl font-bold my-2 ${isPass ? 'text-[--color-focus-gold]' : 'text-slate-400'}`}>{score} / {questions.length}</p>
         </div>
 
         <div className="mt-8 space-y-3 sm:space-y-0 sm:flex sm:flex-row-reverse sm:justify-center sm:space-x-4 sm:space-x-reverse">
@@ -163,11 +167,11 @@ export const QuizView: React.FC<QuizViewProps> = ({ lesson, onComplete, onNextLe
                     Review Lesson <BookOpenIcon className="w-5 h-5 ml-2" />
                  </button>
              )}
-            <button onClick={handleRetry} className="w-full sm:w-auto inline-flex items-center justify-center px-6 py-3 bg-gray-700 text-gray-200 font-semibold rounded-lg hover:bg-gray-600">
+            <button onClick={handleRetry} className="w-full sm:w-auto inline-flex items-center justify-center px-6 py-3 bg-slate-700 text-gray-200 font-semibold rounded-lg hover:bg-slate-600">
                 Retry Quiz <ArrowPathIcon className="w-5 h-5 ml-2" />
             </button>
             {isPass && (
-                 <button onClick={onComplete} className="w-full sm:w-auto inline-flex items-center justify-center px-6 py-3 bg-gray-700 text-gray-200 font-semibold rounded-lg hover:bg-gray-600">
+                 <button onClick={onComplete} className="w-full sm:w-auto inline-flex items-center justify-center px-6 py-3 bg-slate-700 text-gray-200 font-semibold rounded-lg hover:bg-slate-600">
                     Review Lesson
                  </button>
             )}
@@ -182,12 +186,12 @@ export const QuizView: React.FC<QuizViewProps> = ({ lesson, onComplete, onNextLe
     <div className="max-w-3xl mx-auto">
       <div className="flex justify-between items-center mb-4">
         <h1 className="text-2xl font-bold text-white tracking-tight">Quiz: {lesson.title}</h1>
-        <div className="text-lg font-mono font-bold px-3 py-1 bg-gray-700 rounded-md text-cyan-400">
+        <div className="text-lg font-mono font-bold px-3 py-1 bg-slate-700 rounded-md text-[--color-focus-gold]">
             Score: {score}
         </div>
       </div>
-      <div className="w-full bg-gray-700 rounded-full h-2.5 mb-6">
-          <div className="bg-cyan-500 h-2.5 rounded-full" style={{ width: `${((currentQuestionIndex + 1) / questions.length) * 100}%` }}></div>
+      <div className="w-full bg-slate-700 rounded-full h-2.5 mb-6">
+          <div className="bg-[--color-focus-gold] h-2.5 rounded-full" style={{ width: `${((currentQuestionIndex + 1) / questions.length) * 100}%` }}></div>
       </div>
       <div className="animate-[fade-in_0.5s]">
         <h2 className="text-xl text-left text-gray-200 mb-6 font-semibold">

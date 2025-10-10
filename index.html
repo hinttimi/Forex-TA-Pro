@@ -29,31 +29,24 @@
       /* --- Base & Theming --- */
       body {
         font-family: 'Inter', sans-serif;
-        /* Light Theme (Classic) - Default */
-        --bg-color: #f8fafc; /* slate-50 */
-        --text-color-primary: #1e293b; /* slate-800 */
-        --text-color-secondary: #64748b; /* slate-500 */
-        background-color: var(--bg-color);
-        color: var(--text-color-primary);
-        transition: background-color 0.3s ease, color 0.3s ease;
+        --color-obsidian-slate: #12141D;
+        --color-dark-matter: #1E222D;
+        --color-neural-blue: #00BFFF;
+        --color-signal-green: #28C76F;
+        --color-warning-red: #EA5455;
+        --color-focus-gold: #FF9F43;
+        --color-ghost-white: #F8F8F8;
+        --color-muted-grey: #6E6B7B;
+        --color-border: #333847;
+
+        background-color: var(--color-obsidian-slate);
+        color: var(--color-ghost-white);
       }
 
-      html.dark body {
-        /* Dark Theme (Pro) */
-        --bg-color: #020617; /* slate-950 */
-        --text-color-primary: #e2e8f0; /* slate-200 */
-        --text-color-secondary: #94a3b8; /* slate-400 */
-        /* Subtle Aurora background */
-        background-image: radial-gradient(ellipse 50% 40% at 20% 15%, rgba(14, 165, 233, 0.1), transparent),
-                          radial-gradient(ellipse 50% 40% at 80% 20%, rgba(139, 92, 246, 0.1), transparent),
-                          radial-gradient(ellipse 40% 30% at 20% 85%, rgba(16, 185, 129, 0.1), transparent),
-                          radial-gradient(ellipse 40% 50% at 80% 90%, rgba(234, 179, 8, 0.1), transparent);
-      }
-
-      @keyframes fade-in-up {
+      @keyframes content-fade-in {
           from {
               opacity: 0;
-              transform: translateY(15px);
+              transform: translateY(10px);
           }
           to {
               opacity: 1;
@@ -62,21 +55,17 @@
       }
 
       .animate-fade-in-up {
-          animation: fade-in-up 0.5s ease-out forwards;
+          animation: content-fade-in 0.5s ease-out forwards;
       }
 
-      /* --- Custom Scrollbar (Theme-aware) --- */
+      /* --- Custom Scrollbar --- */
       ::-webkit-scrollbar { width: 8px; height: 8px; }
-      ::-webkit-scrollbar-track { background: #f1f5f9; } /* light: slate-100 */
-      ::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 4px; } /* light: slate-300 */
-      ::-webkit-scrollbar-thumb:hover { background: #94a3b8; } /* light: slate-400 */
-
-      html.dark ::-webkit-scrollbar-track { background: rgba(30, 41, 59, 0.5); } /* dark: slate-800 */
-      html.dark ::-webkit-scrollbar-thumb { background: #475569; } /* dark: slate-600 */
-      html.dark ::-webkit-scrollbar-thumb:hover { background: #64748b; } /* dark: slate-500 */
+      ::-webkit-scrollbar-track { background: rgba(30, 34, 45, 0.5); } /* Dark Matter with opacity */
+      ::-webkit-scrollbar-thumb { background: #444a5b; border-radius: 4px; }
+      ::-webkit-scrollbar-thumb:hover { background: var(--color-muted-grey); }
 
 
-      /* --- Tour Styles (Theme-aware) --- */
+      /* --- Tour Styles (will be updated later if needed) --- */
       .tour-highlight {
         position: fixed;
         border-radius: 8px;
@@ -87,20 +76,15 @@
       }
       .tour-tooltip {
         position: fixed;
-        background-color: #ffffff;
-        color: #1e293b; /* slate-800 */
+        background-color: var(--color-dark-matter);
+        color: var(--color-ghost-white);
         padding: 1rem;
         border-radius: 8px;
-        border: 1px solid #e2e8f0; /* slate-200 */
+        border: 1px solid var(--color-border);
         max-width: 320px;
         z-index: 1002;
         transition: all 0.4s ease-in-out;
         box-shadow: 0 10px 15px -3px rgba(0,0,0,0.1), 0 4px 6px -2px rgba(0,0,0,0.05);
-      }
-      html.dark .tour-tooltip {
-        background-color: #1e293b; /* slate-800 */
-        color: #e2e8f0; /* slate-200 */
-        border: 1px solid #475569; /* slate-600 */
       }
     </style>
   </head>

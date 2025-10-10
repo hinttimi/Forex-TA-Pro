@@ -5,13 +5,13 @@ export const BadgeShell: React.FC<React.PropsWithChildren<{ className?: string }
   <svg viewBox="0 0 100 100" className={className}>
     <defs>
       <radialGradient id="badge-gradient-gold" cx="50%" cy="50%" r="50%" fx="50%" fy="50%">
-        <stop offset="0%" style={{ stopColor: '#fde047' }} />
-        <stop offset="60%" style={{ stopColor: '#facc15' }} />
-        <stop offset="100%" style={{ stopColor: '#eab308' }} />
+        <stop offset="0%" stopColor="#FFD700" />
+        <stop offset="60%" stopColor="var(--color-focus-gold)" />
+        <stop offset="100%" stopColor="#B87333" />
       </radialGradient>
       <linearGradient id="badge-gradient-silver" x1="0%" y1="0%" x2="100%" y2="100%">
-        <stop offset="0%" style={{ stopColor: '#e5e7eb' }} />
-        <stop offset="100%" style={{ stopColor: '#9ca3af' }} />
+        <stop offset="0%" stopColor="#e5e7eb" />
+        <stop offset="100%" stopColor="#9ca3af" />
       </linearGradient>
       <filter id="drop-shadow-badge" x="-20%" y="-20%" width="140%" height="140%">
           <feGaussianBlur in="SourceAlpha" stdDeviation="2"/>

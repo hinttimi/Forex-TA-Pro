@@ -1,13 +1,15 @@
+
+
 import React, { useState, useCallback } from 'react';
-import { CurrencyStrengthMeter } from './widgets/CurrencyStrengthMeter';
-import { VolatilityMonitor } from './widgets/VolatilityMonitor';
-import { TopMoversWidget } from './widgets/TopMoversWidget';
-import { MarketSentiment } from './widgets/MarketSentiment';
-import { SparklesIcon } from './icons/SparklesIcon';
-import { useApiKey } from '../hooks/useApiKey';
-import { generateMarketNarrative } from '../services/geminiService';
-import { LoadingSpinner } from './LoadingSpinner';
-import { useMarketDynamics } from '../hooks/useMarketDynamics';
+import { CurrencyStrengthMeter } from './CurrencyStrengthMeter';
+import { VolatilityMonitor } from './VolatilityMonitor';
+import { TopMoversWidget } from './TopMoversWidget';
+import { MarketSentiment } from './MarketSentiment';
+import { SparklesIcon } from '../icons/SparklesIcon';
+import { useApiKey } from '../../hooks/useApiKey';
+import { generateMarketNarrative } from '../../services/geminiService';
+import { LoadingSpinner } from '../LoadingSpinner';
+import { useMarketDynamics } from '../../hooks/useMarketDynamics';
 
 const FormattedContent: React.FC<{ text: string }> = ({ text }) => {
     const renderInlineMarkdown = (text: string): React.ReactNode => {

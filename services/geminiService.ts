@@ -1,7 +1,11 @@
+
+
 import { GoogleGenAI, Type, GenerateContentResponse, GenerateImagesResponse, FunctionDeclaration, Modality } from "@google/genai";
 // FIX: Add missing type imports
-import { NewsArticle, MarketUpdate, EconomicEvent, MultipleChoiceQuestion, StrategyParams, BacktestResults, AnalysisResult, AppView, OhlcData, CurrencyStrengthData, VolatilityData, CorrelationData, MarketSentimentData } from '../types';
+// FIX: Corrected typo from TopMoverData to TopMoverData
+import { NewsArticle, MarketUpdate, EconomicEvent, MultipleChoiceQuestion, StrategyParams, BacktestResults, AnalysisResult, AppView, OhlcData, CurrencyStrengthData, VolatilityData, MarketSentimentData, TopMoverData, DailyMission } from '../types';
 import { MENTOR_PERSONAS } from "../constants/mentorSettings";
+import { LEARNING_PATHS } from "../constants";
 
 // --- Client Management ---
 /**
@@ -62,41 +66,6 @@ const withRetry = async <T>(
   throw new Error('Exceeded max retries for API call.');
 };
 
-
-export const generateLessonContent = async (apiKey: string, prompt: string, cacheKey?: string): Promise<string> => {
-  if (cacheKey) {
-    try {
-      const cachedContent = sessionStorage.getItem(cacheKey);
-      if (cachedContent) {
-        return cachedContent;
-      }
-    } catch (error) {
-      console.warn("Could not access sessionStorage:", error);
-    }
-  }
-
-  try {
-    const ai = getAiClient(apiKey);
-    const response = await withRetry<GenerateContentResponse>(() => ai.models.generateContent({
-        model: 'gemini-2.5-flash',
-        contents: prompt,
-    }));
-    const textContent = response.text;
-    
-    if (cacheKey) {
-      try {
-        sessionStorage.setItem(cacheKey, textContent);
-      } catch (error) {
-        console.warn("Could not save to sessionStorage:", error);
-      }
-    }
-
-    return textContent;
-  } catch (error) {
-    console.error("Error generating lesson content:", error);
-    throw error;
-  }
-};
 
 export const generateLessonSummary = async (apiKey: string, lessonContent: string): Promise<string> => {
     const prompt = `You are an expert educational writer. Summarize the following lesson content into 3-5 key bullet points. The summary should be concise and capture the most critical takeaways for a student. Use markdown for **bold** emphasis.
@@ -329,18 +298,69 @@ export const generateMentorResponse = async (
 ): Promise<{ text: string; image?: string; groundingChunks: any[]; functionCalls?: any[] }> => {
     
     const useImageModel = file?.mimeType.startsWith('image/');
-
-    const completedLessonsText = completedLessonTitles.length > 0
-        ? `The user has already completed the following lessons: ${completedLessonTitles.join(', ')}. Use this knowledge to tailor your explanations. If they ask about an advanced topic but are missing a prerequisite, gently guide them to the prerequisite lesson first.`
-        : "The user is a beginner and has not completed any lessons yet.";
     
     const selectedPersona = MENTOR_PERSONAS.find(p => p.id === personaId) || MENTOR_PERSONAS[0];
+
+    const curriculumOverview = LEARNING_PATHS.map(path => 
+        `### ${path.title} ${path.isFoundation ? '(Foundation)' : ''}\n${path.description}\n` +
+        path.modules.map(module => 
+            `**${module.title}**\n${module.lessons.map(lesson => `- ${lesson.title}`).join('\n')}`
+        ).join('\n')
+    ).join('\n\n');
+
+    const completedLessonsText = completedLessonTitles.length > 0
+        ? `The user has already completed the following lessons: ${completedLessonTitles.join(', ')}.`
+        : "The user is a beginner and has not completed any lessons yet.";
+
+    const toolManifest = `
+### Your Capabilities & In-App Tools
+You are not just a chatbot; you are an agent that can help the user navigate and use the "Forex TA Pro" application. You can perform the following actions:
+- Answer questions about forex trading, especially Smart Money Concepts.
+- Analyze charts the user uploads.
+- Use Google Search to find real-time market information.
+- Generate new charts to explain concepts using the format \`[CHART: a detailed prompt...]\`.
+- **Navigate the user around the app** by calling the \`executeTool\` function. When a user's request clearly maps to a tool, use it.
+
+Here is a list of tools you can navigate the user to with \`executeTool\`:
+- **dashboard**: The main home screen with progress and quick links.
+- **simulator**: A practice environment where users analyze a static chart with a hidden outcome, place a trade, and get feedback.
+- **live_simulator**: A real-time simulated price feed for practicing analysis on a moving chart.
+- **backtester**: The AI Strategy Lab. Use this when a user says "backtest a strategy for me..." and pass their strategy description, pair, timeframe, and period in the \`params\`.
+- **pattern**: A flashcard-style game to practice recognizing candlestick patterns. Good for requests like "let's practice patterns".
+- **timed**: A timed quiz challenge covering all topics.
+- **canvas**: A free-draw canvas where users can load a chart and draw their analysis.
+- **market_dynamics**: A dashboard showing live currency strength, volatility, and market sentiment.
+- **market_pulse**: A detailed AI-generated daily market briefing.
+- **news_feed**: A feed of the latest forex news.
+- **market_analyzer**: A tool to get an instant AI analysis of why a specific currency pair is moving. Use this when a user asks "why is EUR/USD moving?". Pass the pair in the \`params\`.
+- **economic_calendar**: A calendar of important economic events.
+- **trading_journal**: A tool for users to log their trades.
+- **trading_plan**: A section for users to define and save their trading rules.
+`;
 
     const systemInstructionForImageModel = `You are an expert forex trading mentor specializing in Smart Money Concepts (SMC). The user has uploaded a chart and is asking a question. Your task is to provide a text answer AND an edited version of the chart that visually explains your answer.
 On the returned image, you MUST draw annotations like rectangles around order blocks, arrows for market direction, and text labels for key concepts like "Liquidity Sweep" or "BOS".
 Return both your text explanation and the fully annotated image.`;
     
-    const systemInstructionForTextModel = `${selectedPersona.systemInstruction}\n\n${completedLessonsText}`;
+    const systemInstructionForTextModel = `${selectedPersona.systemInstruction}
+
+---
+## Application & User Context
+You are an AI assistant deeply integrated within the "Forex TA Pro" learning application. You have complete knowledge of the app's structure, content, and your own capabilities.
+
+${toolManifest}
+
+### App Curriculum Overview
+The app contains the following learning paths and lessons:
+${curriculumOverview}
+
+### User Progress
+${completedLessonsText}
+- Use this knowledge to tailor your explanations.
+- If a user asks about a concept they haven't learned yet (e.g., Fair Value Gaps), you can say, "That's a great question. It's covered in the 'Foundation' path. Would you like me to explain it, or would you prefer to jump to that lesson?"
+- Acknowledge their progress and be encouraging.
+---
+`;
 
     const systemInstruction = useImageModel ? systemInstructionForImageModel : systemInstructionForTextModel;
 
@@ -391,6 +411,69 @@ Return both your text explanation and the fully annotated image.`;
     }
 };
 
+const dailyMissionSchema = {
+    type: Type.OBJECT,
+    properties: {
+        title: { type: Type.STRING, description: "A short, engaging title for the mission." },
+        description: { type: Type.STRING, description: "A clear, one-sentence description of the task for the user." },
+        tool: {
+            type: Type.STRING,
+            description: "The specific tool in the app the user should use.",
+            enum: ['simulator', 'live_simulator', 'backtester', 'pattern', 'canvas']
+        },
+        completion_criteria: {
+            type: Type.STRING,
+            description: "The key that corresponds to the completion event for this tool.",
+            enum: ['simulatorRuns', 'pattern', 'timed', 'canvas', 'backtester', 'live_simulator']
+        },
+    },
+    required: ['title', 'description', 'tool', 'completion_criteria']
+};
+
+export const generateDailyMission = async (apiKey: string, completedLessonTitles: string[]): Promise<DailyMission> => {
+    const prompt = `You are an AI trading coach for the "Forex TA Pro" app. Your task is to generate a single, actionable daily mission to help a student practice their skills.
+
+Consider the following:
+- The student has already completed these lessons: ${completedLessonTitles.join(', ') || 'None yet'}.
+- The mission should be relevant to the concepts they have learned. If they are a beginner, give a simple task. If they have learned advanced concepts, give a more complex task.
+- The mission must require the user to use one of the available practice tools.
+
+Available practice tools and their corresponding completion criteria:
+- 'simulator': A static chart scenario. (completion_criteria: 'simulatorRuns')
+- 'live_simulator': A live, moving chart. (completion_criteria: 'live_simulator')
+- 'backtester': The AI Strategy Lab. (completion_criteria: 'backtester')
+- 'pattern': A pattern recognition flashcard game. (completion_criteria: 'pattern')
+- 'canvas': A free-draw chart analysis tool. (completion_criteria: 'canvas')
+
+Generate a mission and return it as a single JSON object adhering to the schema. The task should be specific and clear.`;
+
+    try {
+        const ai = getAiClient(apiKey);
+        const response = await withRetry<GenerateContentResponse>(() => ai.models.generateContent({
+            model: 'gemini-2.5-flash',
+            contents: prompt,
+            config: {
+                responseMimeType: "application/json",
+                responseSchema: dailyMissionSchema,
+            },
+        }));
+
+        const jsonText = response.text.trim();
+        const parsed = JSON.parse(jsonText);
+
+        if (parsed.title && parsed.description && parsed.tool && parsed.completion_criteria) {
+            return parsed;
+        } else {
+            throw new Error("Generated JSON for daily mission is malformed.");
+        }
+
+    } catch (error) {
+        console.error("Error generating daily mission:", error);
+        throw error;
+    }
+};
+
+
 export const generateMarketPulse = async (apiKey: string): Promise<string> => {
     const prompt = `You are a senior forex market analyst providing a daily briefing. It is currently ${new Date().toUTCString()}. Using real-time information, provide a concise summary of the current forex market state. Structure your response in markdown format with the following four sections exactly as titled:
 
@@ -423,6 +506,42 @@ export const generateMarketPulse = async (apiKey: string): Promise<string> => {
     }
 };
 
+const robustJsonParse = (text: string) => {
+    // First, try to find a markdown code block for JSON
+    const markdownMatch = text.match(/```(?:json)?\s*([\s\S]*?)\s*```/);
+    let jsonStringToParse;
+    if (markdownMatch && markdownMatch[1]) {
+        jsonStringToParse = markdownMatch[1];
+    } else {
+        // If no markdown, find the first '{' or '[' and the last '}' or ']'
+        const firstBrace = text.indexOf('{');
+        const firstBracket = text.indexOf('[');
+        
+        if (firstBrace === -1 && firstBracket === -1) {
+            throw new Error("No valid JSON object or array found in the AI's response.");
+        }
+
+        let start = -1;
+        let end = -1;
+
+        // Determine if we're looking for an object or an array based on which comes first
+        if (firstBrace !== -1 && (firstBrace < firstBracket || firstBracket === -1)) {
+            start = firstBrace;
+            end = text.lastIndexOf('}');
+        } else {
+            start = firstBracket;
+            end = text.lastIndexOf(']');
+        }
+        
+        if (end === -1 || end < start) {
+            throw new Error("Malformed JSON structure found in the AI's response.");
+        }
+        jsonStringToParse = text.substring(start, end + 1);
+    }
+    return JSON.parse(jsonStringToParse);
+};
+
+
 export const getForexNews = async (apiKey: string): Promise<{ articles: NewsArticle[], groundingChunks: any[] }> => {
     const prompt = `You are a financial news aggregator. Using your search tool, find the top 5 most recent and impactful news articles related to the Forex market (major currency pairs like EUR/USD, GBP/USD, USD/JPY, etc.).
 Return ONLY a valid JSON object with a single key "articles", which is an array of objects. Each object should have the keys: "headline", "summary", "sourceUrl", and "sourceTitle". For the "summary", provide a concise 2-3 sentence overview. Do not include any other text, explanations, or markdown formatting.`;
@@ -438,13 +557,9 @@ Return ONLY a valid JSON object with a single key "articles", which is an array 
         }));
         
         const groundingChunks = response.candidates?.[0]?.groundingMetadata?.groundingChunks || [];
-
-        const jsonMatch = response.text.match(/\{[\s\S]*\}/);
-        if (!jsonMatch) {
-            throw new Error("No valid JSON object found in the AI's response.");
-        }
         
-        const parsed: { articles: NewsArticle[] } = JSON.parse(jsonMatch[0]);
+        const parsed: { articles: NewsArticle[] } = robustJsonParse(response.text);
+
         if (!parsed.articles || !Array.isArray(parsed.articles)) {
             throw new Error("The AI did not return a valid JSON array for the news feed.");
         }
@@ -486,11 +601,7 @@ export const generateMarketUpdateSnippet = async (apiKey: string): Promise<Marke
                 },
             }));
 
-            const jsonMatch = response.text.match(/\{[\s\S]*\}/);
-            if (!jsonMatch) {
-                throw new Error("No valid JSON object found in the AI's response for news snippet.");
-            }
-            const parsed = JSON.parse(jsonMatch[0]);
+            const parsed = robustJsonParse(response.text);
 
             if (parsed.headline && parsed.summary) {
                 return {
@@ -613,11 +724,7 @@ Return ONLY a valid JSON object containing a single key "strengths", which is an
             },
         }));
         
-        const jsonMatch = response.text.match(/\{[\s\S]*\}/);
-        if (!jsonMatch) {
-            throw new Error("No valid JSON object found in the AI's response.");
-        }
-        const parsed: { strengths: Array<{ currency: string, strength: number }> } = JSON.parse(jsonMatch[0]);
+        const parsed: { strengths: Array<{ currency: string, strength: number }> } = robustJsonParse(response.text);
 
         if (!parsed.strengths || !Array.isArray(parsed.strengths)) {
             throw new Error("AI returned malformed currency strength data.");
@@ -652,11 +759,7 @@ Return ONLY a valid JSON object with a single key "volatilityData", which is an 
             },
         }));
 
-        const jsonMatch = response.text.match(/\{[\s\S]*\}/);
-        if (!jsonMatch) {
-            throw new Error("No valid JSON object found in the AI's response.");
-        }
-        const parsed: { volatilityData: VolatilityData[] } = JSON.parse(jsonMatch[0]);
+        const parsed: { volatilityData: VolatilityData[] } = robustJsonParse(response.text);
 
         if (parsed.volatilityData && Array.isArray(parsed.volatilityData)) {
             return parsed.volatilityData;
@@ -668,24 +771,34 @@ Return ONLY a valid JSON object with a single key "volatilityData", which is an 
     }
 };
 
-export const generateCorrelationData = async (apiKey: string): Promise<CorrelationData> => {
-    const pairs = ["EUR/USD", "GBP/USD", "AUD/USD", "USD/JPY", "USD/CAD", "USD/CHF"];
-    const prompt = `You are a forex market data provider. It is currently ${new Date().toUTCString()}. Using your real-time search tool, generate a correlation matrix for the following pairs: ${pairs.join(', ')}.
-Return ONLY a valid JSON object with a single key "matrix", which is an array of objects. Each object should represent a currency pair and its correlations with the other pairs. Do not include any other text, explanations, or markdown formatting.
-Example structure:
+export const generateTopMoversData = async (apiKey: string): Promise<TopMoverData[]> => {
+    const prompt = `You are a forex market data provider. Your sole task is to use your search tool to find the top movers in the forex market and return the data in a specific JSON format.
+
+Current Time: ${new Date().toUTCString()}
+
+Instructions:
+1. Identify the top 3 gaining and top 3 losing major forex pairs over the last 4 hours.
+2. Format the output as a single, valid JSON object.
+3. The JSON object must have a single key: "movers".
+4. The value of "movers" must be an array containing exactly 6 objects.
+5. Each object must have two keys: "pair" (string) and "change_pct" (number).
+6. "change_pct" should be positive for gainers and negative for losers.
+7. Sort the array from the top gainer to the top loser.
+
+Example of the exact output format required:
 {
-  "matrix": [
-    {
-      "pair": "EUR/USD",
-      "correlations": [
-        { "pair": "GBP/USD", "value": 0.85 },
-        { "pair": "AUD/USD", "value": 0.76 }
-      ]
-    },
-    ...
+  "movers": [
+    { "pair": "GBP/JPY", "change_pct": 0.55 },
+    { "pair": "EUR/JPY", "change_pct": 0.42 },
+    { "pair": "AUD/USD", "change_pct": 0.31 },
+    { "pair": "USD/CHF", "change_pct": -0.25 },
+    { "pair": "NZD/USD", "change_pct": -0.38 },
+    { "pair": "USD/CAD", "change_pct": -0.49 }
   ]
-}`;
-    
+}
+
+Return ONLY the valid JSON object. Do not include any other text, explanations, or markdown formatting.`;
+
     try {
         const ai = getAiClient(apiKey);
         const response = await withRetry<GenerateContentResponse>(() => ai.models.generateContent({
@@ -696,34 +809,18 @@ Example structure:
             },
         }));
 
-        const jsonMatch = response.text.match(/\{[\s\S]*\}/);
-        if (!jsonMatch) {
-            throw new Error("No valid JSON object or array found in the AI's response.");
-        }
-        const parsed: { matrix: Array<{pair: string, correlations: Array<{pair: string, value: number}>}> } = JSON.parse(jsonMatch[0]);
-        
-        if (!parsed.matrix || !Array.isArray(parsed.matrix)) {
-            throw new Error("AI returned malformed correlation data (not an array).");
-        }
+        const parsed: { movers: TopMoverData[] } = robustJsonParse(response.text);
 
-        const matrix: CorrelationData = {};
-        for (const row of parsed.matrix) {
-            if (row.pair && Array.isArray(row.correlations)) {
-                matrix[row.pair] = {};
-                for (const corr of row.correlations) {
-                     if (corr.pair && typeof corr.value === 'number') {
-                        matrix[row.pair][corr.pair] = corr.value;
-                    }
-                }
-            }
+        if (parsed.movers && Array.isArray(parsed.movers)) {
+            return parsed.movers;
         }
-        return matrix;
-
+        throw new Error("AI returned malformed top movers data.");
     } catch (error) {
-        console.error("Error generating correlation data:", error);
-        throw new Error(`The AI failed to provide correlation data. Please try again.`);
+        console.error("Error generating top movers data:", error);
+        throw new Error(`The AI failed to provide top movers data. Please try again.`);
     }
 };
+
 
 export const generateMarketNarrative = async (apiKey: string, marketDataJson: string): Promise<string> => {
     const prompt = `You are a senior forex market analyst. Based on the following real-time market data, provide a concise, high-level narrative of what is happening in the market. Explain which currencies are strong or weak and why, identify any highly volatile pairs, and point out significant correlations that might be driving price action.
@@ -760,11 +857,7 @@ Return ONLY a valid JSON object with the keys "sentiment" (string enum: 'Risk On
             },
         }));
         
-        const jsonMatch = response.text.match(/\{[\s\S]*\}/);
-        if (!jsonMatch) {
-            throw new Error("No valid JSON object found in the AI's response.");
-        }
-        const parsed = JSON.parse(jsonMatch[0]);
+        const parsed = robustJsonParse(response.text);
 
         if (parsed.sentiment && typeof parsed.score === 'number' && parsed.reasoning) {
             return parsed;

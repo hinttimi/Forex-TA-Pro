@@ -10,7 +10,6 @@ import {
   Line,
 } from 'recharts';
 import { BacktestTradeLog } from '../types';
-import { useTheme } from '../hooks/useTheme';
 
 interface EquityCurveChartProps {
   tradeLog: BacktestTradeLog[];
@@ -18,12 +17,11 @@ interface EquityCurveChartProps {
 }
 
 const CustomTooltip: React.FC<any> = ({ active, payload, label }) => {
-  const { theme } = useTheme();
   if (active && payload && payload.length) {
     return (
-      <div className="bg-white/80 dark:bg-slate-700/80 backdrop-blur-sm border border-slate-300 dark:border-slate-600 p-3 rounded-md text-sm shadow-lg">
-        <p className="label text-slate-600 dark:text-slate-300">{`Trade #${label}`}</p>
-        <p className="intro text-blue-600 dark:text-cyan-300 font-semibold">{`Equity: ${payload[0].value.toFixed(2)}R`}</p>
+      <div className="bg-[--color-dark-matter]/80 backdrop-blur-sm border border-[--color-border] p-3 rounded-md text-sm shadow-lg">
+        <p className="label text-[--color-ghost-white]/80">{`Trade #${label}`}</p>
+        <p className="intro text-[--color-neural-blue] font-semibold">{`Equity: ${payload[0].value.toFixed(2)}R`}</p>
       </div>
     );
   }
@@ -32,7 +30,6 @@ const CustomTooltip: React.FC<any> = ({ active, payload, label }) => {
 };
 
 export const EquityCurveChart: React.FC<EquityCurveChartProps> = ({ tradeLog, avgRR }) => {
-  const { theme } = useTheme();
 
   const equityData = useMemo(() => {
     if (!tradeLog || tradeLog.length === 0) {
@@ -54,20 +51,11 @@ export const EquityCurveChart: React.FC<EquityCurveChartProps> = ({ tradeLog, av
     return data;
   }, [tradeLog, avgRR]);
   
-  const themeColors = {
-      light: {
-          line: '#2563eb', // blue-600
-          grid: '#e2e8f0', // slate-200
-          tick: '#475569', // slate-600
-      },
-      dark: {
-          line: '#22d3ee', // cyan-400
-          grid: '#334155', // slate-700
-          tick: '#94a3b8', // slate-400
-      }
+  const colors = {
+      line: 'var(--color-neural-blue)',
+      grid: 'var(--color-border)',
+      tick: 'var(--color-muted-grey)',
   };
-
-  const colors = theme === 'dark' ? themeColors.dark : themeColors.light;
   
   return (
     <ResponsiveContainer width="100%" height="100%">

@@ -123,10 +123,10 @@ export const TimedChallengeView: React.FC = () => {
 
     const getButtonClass = (option: string) => {
         if (selectedAnswer === null) {
-            return 'bg-gray-700 hover:bg-gray-600';
+            return 'bg-[--color-dark-matter] hover:bg-slate-600';
         }
         const question = questions[questionIndex];
-        if (!question) return 'bg-gray-700 opacity-50';
+        if (!question) return 'bg-[--color-dark-matter] opacity-50';
 
         if (option === question.correctAnswer) {
             return 'bg-green-500/80 ring-2 ring-green-400';
@@ -134,14 +134,14 @@ export const TimedChallengeView: React.FC = () => {
         if (option === selectedAnswer && !isCorrect) {
             return 'bg-red-500/80';
         }
-        return 'bg-gray-700 opacity-50';
+        return 'bg-[--color-dark-matter] opacity-50';
     };
 
     if (challengeState === 'idle' || challengeState === 'error') {
         return (
             <div className="max-w-2xl mx-auto text-center">
-                <h1 className="text-4xl font-extrabold text-white mb-4 tracking-tight">Timed Challenge</h1>
-                <p className="prose prose-invert prose-lg max-w-none text-gray-300 mx-auto">
+                <h1 className="text-4xl font-extrabold text-[--color-ghost-white] mb-4 tracking-tight">Timed Challenge</h1>
+                <p className="prose prose-invert prose-lg max-w-none text-[--color-ghost-white]/80 mx-auto">
                     Test your knowledge against the clock. You'll have {TIME_PER_QUESTION} seconds to answer each of the {CHALLENGE_LENGTH} questions.
                 </p>
                 {challengeState === 'error' && (
@@ -149,7 +149,7 @@ export const TimedChallengeView: React.FC = () => {
                         <p>{error}</p>
                     </div>
                 )}
-                <button onClick={startChallenge} className="mt-8 px-8 py-4 bg-cyan-500 text-gray-900 font-bold text-xl rounded-lg shadow-md hover:bg-cyan-400 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-offset-gray-900 focus:ring-cyan-500 transition-all duration-200">
+                <button onClick={startChallenge} className="mt-8 px-8 py-4 bg-cyan-500 text-gray-900 font-bold text-xl rounded-lg shadow-md hover:bg-cyan-400 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-offset-slate-900 focus:ring-cyan-500 transition-all duration-200">
                     {challengeState === 'error' ? 'Try Again' : 'Start Challenge'}
                 </button>
                  {challengeState === 'error' && (
@@ -165,7 +165,7 @@ export const TimedChallengeView: React.FC = () => {
         return (
              <div className="flex flex-col items-center justify-center h-full text-center">
                 <LoadingSpinner />
-                <p className="mt-4 text-gray-300">Generating your challenge questions...</p>
+                <p className="mt-4 text-[--color-muted-grey]">Generating your challenge questions...</p>
             </div>
         );
     }
@@ -173,12 +173,12 @@ export const TimedChallengeView: React.FC = () => {
     if (challengeState === 'finished') {
         return (
              <div className="max-w-2xl mx-auto text-center">
-                <h1 className="text-4xl font-extrabold text-white mb-4 tracking-tight">Challenge Complete!</h1>
-                <div className="mt-8 p-8 bg-gray-800/50 border border-cyan-500/30 rounded-lg">
-                    <p className="text-2xl text-gray-300">Your final score is:</p>
-                    <p className="text-6xl font-bold text-cyan-400 my-4">{score} / {CHALLENGE_LENGTH}</p>
+                <h1 className="text-4xl font-extrabold text-[--color-ghost-white] mb-4 tracking-tight">Challenge Complete!</h1>
+                <div className="mt-8 p-8 bg-[--color-dark-matter]/50 border border-[--color-focus-gold]/30 rounded-lg">
+                    <p className="text-2xl text-[--color-ghost-white]/80">Your final score is:</p>
+                    <p className="text-6xl font-bold text-[--color-focus-gold] my-4">{score} / {CHALLENGE_LENGTH}</p>
                 </div>
-                <button onClick={restartChallenge} className="mt-8 inline-flex items-center px-6 py-3 bg-gray-700 text-gray-200 font-semibold rounded-lg shadow-md hover:bg-gray-600 transition-all duration-200">
+                <button onClick={restartChallenge} className="mt-8 inline-flex items-center px-6 py-3 bg-slate-700 text-[--color-ghost-white]/90 font-semibold rounded-lg shadow-md hover:bg-slate-600 transition-all duration-200">
                     <ArrowPathIcon className="w-5 h-5 mr-2" />
                     Try Again
                 </button>
@@ -191,25 +191,25 @@ export const TimedChallengeView: React.FC = () => {
     return (
         <div className="max-w-3xl mx-auto">
             <div className="flex justify-between items-center mb-6">
-                <h1 className="text-2xl font-bold text-white tracking-tight">Question {questionIndex + 1} / {CHALLENGE_LENGTH}</h1>
-                <div className="text-2xl font-mono font-bold px-4 py-2 bg-gray-700 rounded-lg text-cyan-400">
+                <h1 className="text-2xl font-bold text-[--color-ghost-white] tracking-tight">Question {questionIndex + 1} / {CHALLENGE_LENGTH}</h1>
+                <div className="text-2xl font-mono font-bold px-4 py-2 bg-slate-700 rounded-lg text-cyan-400">
                     {timer}s
                 </div>
             </div>
-            <div className="w-full bg-gray-700 rounded-full h-2.5 mb-6">
-                <div className="bg-cyan-500 h-2.5 rounded-full" style={{ width: `${(timer / TIME_PER_QUESTION) * 100}%`, transition: 'width 1s linear' }}></div>
+            <div className="w-full bg-slate-700 rounded-full h-2.5 mb-6">
+                <div className="bg-[--color-focus-gold] h-2.5 rounded-full" style={{ width: `${(timer / TIME_PER_QUESTION) * 100}%`, transition: 'width 1s linear' }}></div>
             </div>
 
             {challengeState === 'active' && question && (
                 <div className="animate-[fade-in_0.5s]">
-                    <h2 className="text-2xl text-left text-gray-200 mb-6 font-semibold">{question.question}</h2>
+                    <h2 className="text-2xl text-left text-[--color-ghost-white] mb-6 font-semibold">{question.question}</h2>
                     <div className="grid grid-cols-1 gap-4">
                         {question.options.map((option, idx) => (
                              <button
                                 key={idx}
                                 onClick={() => handleAnswer(option)}
                                 disabled={selectedAnswer !== null}
-                                className={`w-full text-left p-4 rounded-lg font-medium text-white transition-all duration-300 ${getButtonClass(option)} disabled:cursor-not-allowed`}
+                                className={`w-full text-left p-4 rounded-lg font-medium text-[--color-ghost-white] transition-all duration-300 ${getButtonClass(option)} disabled:cursor-not-allowed`}
                             >
                                 {option}
                             </button>
@@ -221,7 +221,7 @@ export const TimedChallengeView: React.FC = () => {
                             <p className={`text-xl font-bold ${isCorrect ? 'text-green-400' : 'text-red-400'}`}>
                                 {timer === 0 && selectedAnswer === '' ? "Time's Up!" : (isCorrect ? 'Correct!' : 'Incorrect!')}
                             </p>
-                            {!isCorrect && <p className="text-gray-300 mt-1">The correct answer was: <strong>{question.correctAnswer}</strong></p>}
+                            {!isCorrect && <p className="text-[--color-ghost-white]/80 mt-1">The correct answer was: <strong>{question.correctAnswer}</strong></p>}
                         </div>
                     )}
                 </div>
