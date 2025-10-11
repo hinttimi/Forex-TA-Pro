@@ -1,4 +1,4 @@
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState, useRef, useEffect, useCallback } from 'react';
 import { runBacktestOnHistoricalData, parseStrategyFromText, analyzeBacktestResults, analyzeLiveChart, generateSimulatedOhlcData } from '../services/geminiService';
 import { MarketDataManager } from '../services/marketDataService';
 import { LoadingSpinner } from './LoadingSpinner';
@@ -26,10 +26,12 @@ interface UploadedFile {
 
 interface AIBacktesterViewProps {
     initialRequest?: {
-        pair: string;
-        timeframe: string;
-        period: string;
-        strategyDescription: string;
+        pair?: string;
+        timeframe?: string;
+        period?: string;
+        strategyDescription?: string;
+        uploadedFiles?: UploadedFile[];
+        chartAnalysisPrompt?: string;
     }
 }
 
@@ -151,7 +153,26 @@ export const AIBacktesterView: React.FC<AIBacktesterViewProps> = ({ initialReque
         return { startDate: toYYYYMMDD(startDate), endDate: toYYYYMMDD(endDate) };
     }
 
-    const handleRunLab = async (strategyOverride?: string) => {
+    const handleAnalyzeChart = useCallback(async () => {
+        if (!apiKey) { setAnalyzerError("Please set your Gemini API key."); openKeyModal(); return; }
+        if (uploadedFiles.length === 0) { setAnalyzerError("Please upload at least one chart screenshot."); return; }
+
+        setAnalyzerError('');
+        setAnalysisResult(null);
+        setAnalyzerState('analyzing');
+
+        try {
+            const result = await analyzeLiveChart(apiKey, chartAnalysisPrompt, uploadedFiles);
+            setAnalysisResult(result);
+            setAnalyzerState('results');
+        } catch (e) {
+            console.error(e);
+            setAnalyzerError(e instanceof Error ? e.message : "An unknown error occurred during analysis.");
+            setAnalyzerState('error');
+        }
+    }, [apiKey, uploadedFiles, chartAnalysisPrompt, openKeyModal]);
+
+    const handleRunLab = useCallback(async (strategyOverride?: string) => {
         const finalStrategyText = strategyOverride || strategyText;
         if (!apiKey) { setLabError("Please set your Gemini API key."); openKeyModal(); return; }
         if (!finalStrategyText.trim()) { setLabError("Please describe your trading strategy."); return; }
@@ -206,37 +227,35 @@ export const AIBacktesterView: React.FC<AIBacktesterViewProps> = ({ initialReque
             setLabError(e instanceof Error ? e.message : "An unknown error occurred.");
             setLabState('error');
         }
-    };
+    }, [apiKey, openKeyModal, strategyText, pair, timeframe, period]);
 
     useEffect(() => {
         if (initialRequest) {
-            setPair(initialRequest.pair);
-            setTimeframe(initialRequest.timeframe);
-            setPeriod(initialRequest.period);
-            setStrategyText(initialRequest.strategyDescription);
-            handleRunLab(initialRequest.strategyDescription);
+            // Handle request for Strategy Lab tab
+            if (initialRequest.strategyDescription) {
+                setActiveTab('lab');
+                setPair(initialRequest.pair || 'EUR/USD');
+                setTimeframe(initialRequest.timeframe || '15M');
+                setPeriod(initialRequest.period || 'Last 3 Months');
+                setStrategyText(initialRequest.strategyDescription);
+                // Use a timeout to ensure state has been set before running
+                setTimeout(() => handleRunLab(initialRequest.strategyDescription), 100);
+            } 
+            // Handle request for Live Chart Analyzer tab
+            else if (initialRequest.uploadedFiles && initialRequest.uploadedFiles.length > 0) {
+                setActiveTab('analyzer');
+                setUploadedFiles(initialRequest.uploadedFiles);
+                if (initialRequest.chartAnalysisPrompt) {
+                    setChartAnalysisPrompt(initialRequest.chartAnalysisPrompt);
+                }
+                // Use a timeout to ensure state has rendered before calling analyze
+                setTimeout(() => {
+                    handleAnalyzeChart();
+                }, 100);
+            }
         }
-    }, [initialRequest]);
+    }, [initialRequest, handleRunLab, handleAnalyzeChart]);
 
-
-    const handleAnalyzeChart = async () => {
-        if (!apiKey) { setAnalyzerError("Please set your Gemini API key."); openKeyModal(); return; }
-        if (uploadedFiles.length === 0) { setAnalyzerError("Please upload at least one chart screenshot."); return; }
-
-        setAnalyzerError('');
-        setAnalysisResult(null);
-        setAnalyzerState('analyzing');
-
-        try {
-            const result = await analyzeLiveChart(apiKey, chartAnalysisPrompt, uploadedFiles);
-            setAnalysisResult(result);
-            setAnalyzerState('results');
-        } catch (e) {
-            console.error(e);
-            setAnalyzerError(e instanceof Error ? e.message : "An unknown error occurred during analysis.");
-            setAnalyzerState('error');
-        }
-    };
 
     const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
         const files = e.target.files;

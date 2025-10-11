@@ -1,8 +1,7 @@
-import React, { useState, useCallback, useEffect } from 'react';
-import { Lesson, LearningPath } from '../types';
-import { ChartDisplay } from './ChartDisplay';
+import React, { useState, useCallback, useEffect, useRef } from 'react';
+import { Lesson, LearningPath, OhlcData } from '../types';
 import { ExclamationTriangleIcon } from './icons/ExclamationTriangleIcon';
-import { generateChartImage, generateLessonSummary } from '../services/geminiService';
+import { generateChartDataForLesson, generateLessonSummary, generateMultimediaSummary } from '../services/geminiService';
 import { SparklesIcon } from './icons/SparklesIcon';
 import { QuestionMarkCircleIcon } from './icons/QuestionMarkCircleIcon';
 import { useApiKey } from '../hooks/useApiKey';
@@ -12,6 +11,11 @@ import { ChevronRightIcon } from './icons/ChevronRightIcon';
 import { DocumentTextIcon } from './icons/DocumentTextIcon';
 import { LoadingSpinner } from './LoadingSpinner';
 import { LessonSkeleton } from './LessonSkeleton';
+import { ChartSkeleton } from './ChartSkeleton';
+import { InteractiveChart } from './InteractiveChart';
+import { VideoCameraIcon } from './icons/VideoCameraIcon';
+import { PlayIcon } from './icons/PlayIcon';
+import { PauseIcon } from './icons/PauseIcon';
 
 interface LessonViewProps {
   lesson: Lesson;
@@ -24,6 +28,11 @@ interface LessonViewProps {
   learningPaths: LearningPath[];
   onSelectLesson: (lesson: Lesson) => void;
   completedLessons: Set<string>;
+}
+
+interface MultimediaSummary {
+    script: string;
+    images: string[];
 }
 
 // Helper function to render inline markdown like **bold**
@@ -95,48 +104,41 @@ const TextSegment: React.FC<{ text: string }> = ({ text }) => {
     );
 };
 
-// This component will handle fetching and displaying a single chart embedded in the content.
+// This component will handle fetching and displaying a single interactive chart.
 const EmbeddedChart: React.FC<{ prompt: string; lessonKey: string }> = ({ prompt, lessonKey }) => {
-    const [imageUrl, setImageUrl] = useState('');
+    const [chartData, setChartData] = useState<OhlcData[] | null>(null);
     const [isLoading, setIsLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
     const { apiKey } = useApiKey();
 
     useEffect(() => {
-        const generateImage = async () => {
+        const generateData = async () => {
             if (!apiKey) {
-                setError('API key not set.');
-                setIsLoading(false);
+                setError('API key not set.'); 
+                setIsLoading(false); 
                 return;
             }
-            setIsLoading(true);
+            setIsLoading(true); 
             setError(null);
             try {
-                // Generate a unique cache key based on lesson and a snippet of the prompt
-                const promptSnippet = prompt.slice(0, 30).replace(/\s/g, '');
-                const cacheKey = `embedded-chart-${lessonKey}-${promptSnippet}`;
-                const url = await generateChartImage(apiKey, prompt, cacheKey);
-                setImageUrl(url);
+                const cacheKey = `lesson-chart-data-${lessonKey}-${prompt.slice(0, 30).replace(/\s/g, '')}`;
+                const data = await generateChartDataForLesson(apiKey, prompt, cacheKey);
+                setChartData(data);
             } catch (e) {
-                console.error("Failed to generate embedded chart:", e);
-                setError('Failed to load chart.');
+                console.error("Failed to generate embedded chart data:", e);
+                setError('Failed to load chart data.');
             } finally {
                 setIsLoading(false);
             }
         };
-
-        generateImage();
+        generateData();
     }, [prompt, apiKey, lessonKey]);
 
     return (
-        <div className="my-8">
-             <ChartDisplay
-                imageUrl={imageUrl}
-                isLoading={isLoading}
-                loadingText="AI is drawing the chart..."
-                containerClassName="w-full aspect-video bg-slate-800 rounded-lg border border-slate-700 flex items-center justify-center p-2 shadow-sm"
-            />
-            {error && <p className="text-xs text-red-400 text-center mt-2">{error}</p>}
+        <div className="my-8 w-full aspect-video bg-slate-800 rounded-lg border border-slate-700 flex items-center justify-center shadow-sm">
+            {isLoading && <ChartSkeleton loadingText="AI is generating chart data..." />}
+            {error && <p className="text-xs text-red-400 text-center">{error}</p>}
+            {chartData && <InteractiveChart data={chartData} />}
         </div>
     );
 };
@@ -191,16 +193,39 @@ export const LessonView: React.FC<LessonViewProps> = (props) => {
     const [isLoadingTakeaways, setIsLoadingTakeaways] = useState(false);
     const { apiKey } = useApiKey();
     
+    // Multimedia summary state
+    const [multimediaSummary, setMultimediaSummary] = useState<MultimediaSummary | null>(null);
+    const [isGeneratingMultimedia, setIsGeneratingMultimedia] = useState(false);
+    const [multimediaError, setMultimediaError] = useState<string | null>(null);
+    const [generationStatus, setGenerationStatus] = useState('');
+    const [playbackState, setPlaybackState] = useState<'paused' | 'playing'>('paused');
+    const [currentSceneIndex, setCurrentSceneIndex] = useState(0);
+    const utteranceRef = useRef<SpeechSynthesisUtterance | null>(null);
+
     // Swipe navigation state
     const [touchStart, setTouchStart] = useState<number | null>(null);
     const [touchEnd, setTouchEnd] = useState<number | null>(null);
     const minSwipeDistance = 60;
 
-    // Reset summary when lesson changes
+    // Cleanup speech synthesis on unmount or when lesson changes
     useEffect(() => {
-        setKeyTakeaways('');
+        return () => {
+            if (window.speechSynthesis.speaking) {
+                window.speechSynthesis.cancel();
+            }
+        };
     }, [lesson.key]);
 
+    // Reset state when lesson changes
+    useEffect(() => {
+        setKeyTakeaways('');
+        setMultimediaSummary(null);
+        setMultimediaError(null);
+        setIsGeneratingMultimedia(false);
+        setGenerationStatus('');
+        setPlaybackState('paused');
+        setCurrentSceneIndex(0);
+    }, [lesson.key]);
 
     const handleGenerateTakeaways = useCallback(async () => {
         if (!apiKey || !lesson.content) return;
@@ -216,6 +241,73 @@ export const LessonView: React.FC<LessonViewProps> = (props) => {
         }
     }, [apiKey, lesson.content]);
 
+    const handleGenerateMultimedia = useCallback(async () => {
+        if (!apiKey || !lesson.content) return;
+        setIsGeneratingMultimedia(true);
+        setMultimediaError(null);
+        setMultimediaSummary(null);
+        setCurrentSceneIndex(0);
+        setPlaybackState('paused');
+
+        try {
+            const result = await generateMultimediaSummary(apiKey, lesson.content, setGenerationStatus);
+            setMultimediaSummary(result);
+        } catch(e) {
+            console.error("Failed to generate multimedia summary", e);
+            setMultimediaError("Sorry, could not generate a multimedia summary at this time.");
+        } finally {
+            setIsGeneratingMultimedia(false);
+            setGenerationStatus('');
+        }
+    }, [apiKey, lesson.content]);
+
+    const handlePlayback = () => {
+        if (!multimediaSummary) return;
+
+        if (playbackState === 'playing') { // Pause
+            window.speechSynthesis.pause();
+            setPlaybackState('paused');
+        } else { // Play or Resume
+            setPlaybackState('playing');
+            if (window.speechSynthesis.paused && utteranceRef.current) {
+                window.speechSynthesis.resume();
+            } else {
+                // Start new playback
+                setCurrentSceneIndex(0);
+                const utterance = new SpeechSynthesisUtterance(multimediaSummary.script);
+                utteranceRef.current = utterance;
+                
+                const wordBoundaries: {charIndex: number, word: string}[] = [];
+                const words = multimediaSummary.script.split(/\s+/);
+                let charCount = 0;
+                words.forEach(word => {
+                    wordBoundaries.push({ charIndex: charCount, word });
+                    charCount += word.length + 1;
+                });
+                
+                const totalDuration = multimediaSummary.images.length * 5; // Simple estimate
+                const wordsPerImage = Math.ceil(words.length / multimediaSummary.images.length);
+
+                utterance.onboundary = (event) => {
+                    if (event.name === 'word') {
+                        const currentWordIndex = wordBoundaries.findIndex(b => b.charIndex >= event.charIndex);
+                        const imageIndex = Math.floor(currentWordIndex / wordsPerImage);
+                        if (imageIndex < multimediaSummary.images.length) {
+                             setCurrentSceneIndex(imageIndex);
+                        }
+                    }
+                };
+
+                utterance.onend = () => {
+                    setPlaybackState('paused');
+                    setCurrentSceneIndex(0);
+                };
+                
+                window.speechSynthesis.speak(utterance);
+            }
+        }
+    };
+    
     const onTouchStart = (e: React.TouchEvent) => {
         setTouchEnd(null);
         setTouchStart(e.targetTouches[0].clientX);
@@ -273,7 +365,7 @@ export const LessonView: React.FC<LessonViewProps> = (props) => {
                         lessonKey={lesson.key}
                     />
 
-                    <div className="mt-12 border-t border-slate-700 pt-8" id="tour-step-4-visualize">
+                    <div className="mt-12 border-t border-slate-700 pt-8">
                          <div className="flex items-start">
                             <DocumentTextIcon className="w-8 h-8 text-cyan-400 mr-4 mt-1 flex-shrink-0" />
                             <div>
@@ -295,6 +387,52 @@ export const LessonView: React.FC<LessonViewProps> = (props) => {
                             </button>
                         )}
                          {!apiKey && <p className="text-xs text-yellow-400 mt-2">Set your API key to enable summary generation.</p>}
+                    </div>
+                    
+                    <div className="mt-12 border-t border-slate-700 pt-8">
+                        <div className="flex items-start">
+                            <VideoCameraIcon className="w-8 h-8 text-cyan-400 mr-4 mt-1 flex-shrink-0" />
+                            <div>
+                                <h3 className="text-lg font-bold text-white">AI Multimedia Summary</h3>
+                                <p className="text-slate-400 text-sm">Watch an animated summary with voiceover.</p>
+                            </div>
+                        </div>
+                        {multimediaSummary ? (
+                            <div className="mt-4 relative w-full aspect-video bg-black rounded-lg overflow-hidden border border-slate-700">
+                                <img 
+                                    key={currentSceneIndex}
+                                    src={multimediaSummary.images[currentSceneIndex]} 
+                                    alt={`Scene ${currentSceneIndex + 1}`}
+                                    className="w-full h-full object-cover animate-[fade-in_0.5s_ease-in-out]"
+                                />
+                                <div className="absolute bottom-0 left-0 right-0 p-4 bg-gradient-to-t from-black/70 to-transparent flex items-center justify-between">
+                                    <button onClick={handlePlayback} className="p-2 bg-white/20 rounded-full text-white hover:bg-white/40 backdrop-blur-sm">
+                                        {playbackState === 'playing' ? <PauseIcon className="w-6 h-6"/> : <PlayIcon className="w-6 h-6"/>}
+                                    </button>
+                                    <div className="flex space-x-1.5">
+                                        {multimediaSummary.images.map((_, index) => (
+                                            <div key={index} className={`w-2 h-2 rounded-full transition-colors ${index === currentSceneIndex ? 'bg-white' : 'bg-white/50'}`}></div>
+                                        ))}
+                                    </div>
+                                </div>
+                            </div>
+                        ) : (
+                            isGeneratingMultimedia ? (
+                                <div className="mt-4 flex items-center justify-center gap-3 p-4 bg-slate-800 border border-slate-700 rounded-lg h-32">
+                                    <LoadingSpinner />
+                                    <span className="text-sm text-slate-400">{generationStatus || 'Starting summary generation...'}</span>
+                                </div>
+                            ) : (
+                                 <button
+                                    onClick={handleGenerateMultimedia}
+                                    disabled={!apiKey}
+                                    className="mt-4 px-4 py-2 bg-cyan-500/10 border border-cyan-500/30 text-cyan-300 font-semibold rounded-lg hover:bg-cyan-500/20 transition-colors flex items-center disabled:opacity-50 disabled:cursor-not-allowed"
+                                >
+                                    Generate Multimedia Summary
+                                </button>
+                            )
+                        )}
+                        {multimediaError && <p className="text-xs text-red-400 mt-2">{multimediaError}</p>}
                     </div>
 
                      {/* Lesson Navigation */}
@@ -341,6 +479,12 @@ export const LessonView: React.FC<LessonViewProps> = (props) => {
                     />
                 </div>
             </div>
+            <style>{`
+                @keyframes fade-in {
+                    from { opacity: 0; }
+                    to { opacity: 1; }
+                }
+            `}</style>
         </div>
     );
 };

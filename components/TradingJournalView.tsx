@@ -5,6 +5,10 @@ import { PlusIcon } from './icons/PlusIcon';
 import { XMarkIcon } from './icons/XMarkIcon';
 import { TrashIcon } from './icons/TrashIcon';
 import { useCompletion } from '../hooks/useCompletion';
+import { SparklesIcon } from './icons/SparklesIcon';
+import { LoadingSpinner } from './LoadingSpinner';
+import { useApiKey } from '../hooks/useApiKey';
+import { analyzeTradeJournal } from '../services/geminiService';
 
 const TRADING_JOURNAL_KEY = 'tradingJournalEntries';
 
@@ -23,12 +27,67 @@ const initialTradeState: Omit<TradeLog, 'id'> = {
     notes: '',
 };
 
+// Helper to render markdown from AI
+const FormattedContent: React.FC<{ text: string }> = ({ text }) => {
+    const renderInlineMarkdown = (text: string): React.ReactNode => {
+        const parts: React.ReactNode[] = [];
+        let lastIndex = 0;
+        const regex = /\*\*(.*?)\*\*/g;
+        let match;
+        let key = 0;
+
+        while ((match = regex.exec(text)) !== null) {
+            if (match.index > lastIndex) parts.push(text.substring(lastIndex, match.index));
+            parts.push(<strong key={`strong-${key++}`} className="font-bold text-cyan-300">{match[1]}</strong>);
+            lastIndex = regex.lastIndex;
+        }
+        if (lastIndex < text.length) parts.push(text.substring(lastIndex));
+        return <>{parts}</>;
+    };
+
+    const lines = text.split('\n').filter(p => p.trim() !== '');
+    const elements: React.ReactElement[] = [];
+    let listItems: React.ReactElement[] = [];
+
+    const flushListItems = () => {
+        if (listItems.length > 0) {
+            elements.push(<ul key={`ul-${elements.length}`} className="list-disc space-y-1 my-3 pl-5">{listItems}</ul>);
+            listItems = [];
+        }
+    };
+
+    lines.forEach((line, index) => {
+        const trimmedLine = line.trim();
+        const isListItem = trimmedLine.startsWith('* ') || trimmedLine.startsWith('- ');
+        const isHeading = trimmedLine.startsWith('### ');
+
+        if (isListItem) {
+            listItems.push(<li key={index}>{renderInlineMarkdown(trimmedLine.substring(2))}</li>);
+        } else {
+            flushListItems();
+            if(isHeading) {
+                 elements.push(<h4 key={index} className="text-lg font-semibold text-white mt-4 mb-2">{renderInlineMarkdown(trimmedLine.substring(4))}</h4>);
+            } else {
+                elements.push(<p key={index} className="mb-3 leading-relaxed">{renderInlineMarkdown(trimmedLine)}</p>);
+            }
+        }
+    });
+    flushListItems();
+    return <>{elements}</>;
+};
+
 export const TradingJournalView: React.FC = () => {
     const [entries, setEntries] = useState<TradeLog[]>([]);
     const [isModalOpen, setIsModalOpen] = useState(false);
     const [editingTrade, setEditingTrade] = useState<Omit<TradeLog, 'id'> | TradeLog>(initialTradeState);
     const [filter, setFilter] = useState<'all' | TradeOutcome>('all');
     const { logTradeLogged } = useCompletion();
+    
+    // AI Coach State
+    const [isAnalyzing, setIsAnalyzing] = useState(false);
+    const [analysisResult, setAnalysisResult] = useState<string | null>(null);
+    const [analysisError, setAnalysisError] = useState<string | null>(null);
+    const { apiKey } = useApiKey();
 
     useEffect(() => {
         try {
@@ -80,6 +139,23 @@ export const TradingJournalView: React.FC = () => {
         }
     };
     
+    const handleAnalyzeJournal = async () => {
+        if (!apiKey || entries.length < 5) return;
+        setIsAnalyzing(true);
+        setAnalysisError(null);
+        setAnalysisResult(null);
+        try {
+            const tradesToAnalyze = entries.slice(0, 20); // Analyze last 20 trades
+            const result = await analyzeTradeJournal(apiKey, tradesToAnalyze);
+            setAnalysisResult(result);
+        } catch(e) {
+            console.error(e);
+            setAnalysisError("The AI Coach couldn't analyze your journal. Please check your API key and try again.");
+        } finally {
+            setIsAnalyzing(false);
+        }
+    }
+    
     const outcomeColorClass = (outcome: TradeOutcome) => {
         return {
             'Win': 'bg-green-500/10 text-green-400 border-green-500/20',
@@ -97,11 +173,31 @@ export const TradingJournalView: React.FC = () => {
                     <h1 className="text-4xl font-extrabold text-white tracking-tight">Trading Journal</h1>
                     <p className="text-[--color-muted-grey] mt-1">Log your trades to analyze performance and master your psychology.</p>
                 </div>
-                <button onClick={() => handleOpenModal()} className="mt-4 sm:mt-0 inline-flex items-center px-4 py-2 bg-cyan-500 text-slate-900 font-semibold rounded-lg shadow-md hover:bg-cyan-400">
-                    <PlusIcon className="w-5 h-5 mr-2" />
-                    Log New Trade
-                </button>
+                <div className="flex items-center gap-3 mt-4 sm:mt-0">
+                    <button 
+                        onClick={handleAnalyzeJournal} 
+                        disabled={entries.length < 5 || isAnalyzing}
+                        title={entries.length < 5 ? 'Log at least 5 trades to enable AI analysis' : 'Analyze last 20 trades with AI'}
+                        className="inline-flex items-center px-4 py-2 bg-purple-600 text-white font-semibold rounded-lg shadow-md hover:bg-purple-500 disabled:bg-slate-600 disabled:cursor-not-allowed"
+                    >
+                        <SparklesIcon className="w-5 h-5 mr-2" />
+                        AI Coach
+                    </button>
+                    <button onClick={() => handleOpenModal()} className="inline-flex items-center px-4 py-2 bg-cyan-500 text-slate-900 font-semibold rounded-lg shadow-md hover:bg-cyan-400">
+                        <PlusIcon className="w-5 h-5 mr-2" />
+                        Log New Trade
+                    </button>
+                </div>
             </div>
+
+            { (isAnalyzing || analysisError || analysisResult) && (
+                <div className="mb-8 p-6 bg-slate-800/50 border border-slate-700 rounded-lg">
+                    <h2 className="text-2xl font-bold text-white mb-4">AI Journal Coach Analysis</h2>
+                    {isAnalyzing && <div className="flex justify-center items-center gap-2"><LoadingSpinner /><span>Analyzing your trades...</span></div>}
+                    {analysisError && <p className="text-red-400">{analysisError}</p>}
+                    {analysisResult && <div className="prose prose-invert prose-sm max-w-none text-slate-300"><FormattedContent text={analysisResult} /></div>}
+                </div>
+            )}
 
             {entries.length > 0 && (
                 <div className="mb-4 flex items-center space-x-2">

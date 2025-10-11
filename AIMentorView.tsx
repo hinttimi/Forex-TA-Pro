@@ -276,6 +276,7 @@ export const AIMentorView: React.FC<AIMentorViewProps> = ({ onSetView, onExecute
         chatContainerRef.current?.scrollTo({ top: chatContainerRef.current.scrollHeight, behavior: 'smooth' });
     }, [messages, currentInputTranscription, currentOutputTranscription]);
 
+    // FIX: Updated handleSendMessage to correctly handle file uploads and API calls.
     const handleSendMessage = async () => {
         if ((!userInput.trim() && !uploadedFile) || isLoading) return;
         if (!apiKey) {
@@ -286,13 +287,32 @@ export const AIMentorView: React.FC<AIMentorViewProps> = ({ onSetView, onExecute
         stopSpeaking();
         setError(null);
 
-        const isImage = uploadedFile?.mimeType.startsWith('image/');
+        // Redirect file uploads to the AI Backtester's analyzer tab, which is the new intended behavior.
+        if (uploadedFile) {
+            const userMessage: Message = { 
+                id: Date.now(), 
+                role: 'user', 
+                text: `Analyzing your chart in the AI Strategy Lab...`, 
+            };
+            setMessages(prev => [...prev, userMessage]);
+            
+            onExecuteTool({ 
+                toolName: 'backtester', 
+                params: { 
+                    uploadedFiles: [uploadedFile], 
+                    chartAnalysisPrompt: userInput.trim() 
+                } 
+            });
+
+            setUserInput('');
+            setUploadedFile(null);
+            return;
+        }
+
         const userMessage: Message = { 
             id: Date.now(), 
             role: 'user', 
             text: userInput.trim(), 
-            ...(uploadedFile && { file: uploadedFile }),
-            ...(isImage && uploadedFile && { userImage: `data:${uploadedFile.mimeType};base64,${uploadedFile.data}` })
         };
         setMessages(prev => [...prev, userMessage]);
         
@@ -305,8 +325,9 @@ export const AIMentorView: React.FC<AIMentorViewProps> = ({ onSetView, onExecute
             const completedLessonTitles = allLessons
                 .filter(l => completedLessons.has(l.key))
                 .map(l => l.title);
-
-            const { text: responseText, image: responseImage, groundingChunks, functionCalls } = await generateMentorResponse(apiKey, userMessage.text, completedLessonTitles, personaId, userMessage.file);
+            
+            // Removed 'image' property from destructuring and file argument, as it's handled separately.
+            const { text: responseText, groundingChunks, functionCalls } = await generateMentorResponse(apiKey, userMessage.text, completedLessonTitles, personaId);
             
             const modelMessageId = Date.now() + 1;
             
@@ -322,13 +343,13 @@ export const AIMentorView: React.FC<AIMentorViewProps> = ({ onSetView, onExecute
                 }
             }
 
-            if (cleanText || responseImage) {
+            // Removed check for 'responseImage' as it no longer exists.
+            if (cleanText) {
                 const modelMessage: Message = { 
                     id: modelMessageId, 
                     role: 'model', 
                     text: cleanText, 
                     isImageLoading: !!chartMatch,
-                    modelResponseImage: responseImage,
                     groundingChunks 
                 };
                 setMessages(prev => [...prev, modelMessage]);
@@ -407,10 +428,10 @@ export const AIMentorView: React.FC<AIMentorViewProps> = ({ onSetView, onExecute
         audioResourcesRef.current.scriptProcessor?.disconnect();
         
         if (audioResourcesRef.current.inputAudioContext?.state !== 'closed') {
-            audioResourcesRef.current.inputAudioContext?.close();
+            audioResourcesRef.current.inputAudioContext?.close().catch(e => console.error("Error closing input context:", e));
         }
         if (audioResourcesRef.current.outputAudioContext?.state !== 'closed') {
-            audioResourcesRef.current.outputAudioContext?.close();
+            audioResourcesRef.current.outputAudioContext?.close().catch(e => console.error("Error closing output context:", e));
         }
         
         audioResourcesRef.current.sources.forEach(s => s.stop());
@@ -479,18 +500,18 @@ export const AIMentorView: React.FC<AIMentorViewProps> = ({ onSetView, onExecute
                     },
                     onmessage: async (message: LiveServerMessage) => {
                         if (message.serverContent?.outputTranscription) {
-                            setCurrentOutputTranscription(prev => prev + message.serverContent.outputTranscription.text);
+                            localOutputTranscription += message.serverContent.outputTranscription.text;
+                            setCurrentOutputTranscription(localOutputTranscription);
                         } else if (message.serverContent?.inputTranscription) {
-                            setCurrentInputTranscription(prev => prev + message.serverContent.inputTranscription.text);
+                             localInputTranscription += message.serverContent.inputTranscription.text;
+                             setCurrentInputTranscription(localInputTranscription);
                         }
 
                         if (message.serverContent?.turnComplete) {
-                            const fullInput = localInputTranscription + currentInputTranscription;
-                            const fullOutput = localOutputTranscription + currentOutputTranscription;
                             setMessages(prev => [
                                 ...prev,
-                                { id: Date.now(), role: 'user', text: fullInput || "[spoken input]" },
-                                { id: Date.now() + 1, role: 'model', text: fullOutput || "[spoken response]" },
+                                { id: Date.now(), role: 'user', text: localInputTranscription || "[spoken input]" },
+                                { id: Date.now() + 1, role: 'model', text: localOutputTranscription || "[spoken response]" },
                             ]);
                             localInputTranscription = '';
                             localOutputTranscription = '';
@@ -500,17 +521,20 @@ export const AIMentorView: React.FC<AIMentorViewProps> = ({ onSetView, onExecute
 
                         const base64EncodedAudioString = message.serverContent?.modelTurn?.parts[0]?.inlineData?.data;
                         if (base64EncodedAudioString) {
-                            let { nextStartTime, sources, outputNode: outNode, outputAudioContext: outCtx } = audioResourcesRef.current;
+                            const { nextStartTime, sources, outputNode: outNode, outputAudioContext: outCtx } = audioResourcesRef.current;
                             if (!outNode || !outCtx) return;
 
-                            nextStartTime = Math.max(nextStartTime, outCtx.currentTime);
+                            const currentTime = outCtx.currentTime;
+                            const scheduleTime = Math.max(nextStartTime, currentTime);
+                            
                             const audioBuffer = await decodeAudioData(decode(base64EncodedAudioString), outCtx, 24000, 1);
                             const source = outCtx.createBufferSource();
                             source.buffer = audioBuffer;
                             source.connect(outNode);
                             source.addEventListener('ended', () => { sources.delete(source); });
-                            source.start(nextStartTime);
-                            audioResourcesRef.current.nextStartTime = nextStartTime + audioBuffer.duration;
+                            
+                            source.start(scheduleTime);
+                            audioResourcesRef.current.nextStartTime = scheduleTime + audioBuffer.duration;
                             sources.add(source);
                         }
                     },
@@ -525,6 +549,9 @@ export const AIMentorView: React.FC<AIMentorViewProps> = ({ onSetView, onExecute
                     responseModalities: [Modality.AUDIO],
                     inputAudioTranscription: {},
                     outputAudioTranscription: {},
+                    speechConfig: {
+                      voiceConfig: {prebuiltVoiceConfig: {voiceName: 'Zephyr'}},
+                    },
                     systemInstruction: 'You are an expert forex trading mentor specializing in Smart Money Concepts. Keep your spoken answers concise and clear.',
                 },
             });
