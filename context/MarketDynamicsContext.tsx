@@ -1,10 +1,7 @@
 import React, { createContext, useState, useCallback, useEffect, ReactNode, useMemo } from 'react';
 import { useApiKey } from '../hooks/useApiKey';
 import { 
-    generateCurrencyStrengthData, 
-    generateVolatilityData, 
-    generateMarketSentimentData,
-    generateTopMoversData
+    generateMarketDynamicsData
 } from '../services/geminiService';
 import { 
     CurrencyStrengthData, 
@@ -77,50 +74,25 @@ export const MarketDynamicsProvider: React.FC<{ children: ReactNode }> = ({ chil
         setLoading({ strength: true, volatility: true, topMovers: true, sentiment: true });
         setErrors({ strength: null, volatility: null, topMovers: null, sentiment: null });
 
-        // --- Fetch data sequentially to avoid rate limiting ---
-
-        // Fetch Strength
         try {
-            const result = await generateCurrencyStrengthData(apiKey);
-            setData(prev => ({ ...prev, strength: result }));
+            const result = await generateMarketDynamicsData(apiKey);
+            setData({
+                strength: result.strength,
+                volatility: result.volatility,
+                topMovers: result.topMovers,
+                sentiment: result.sentiment,
+            });
         } catch (e) {
-            console.error("Failed to fetch currency strength:", e);
-            setErrors(prev => ({ ...prev, strength: e instanceof Error ? e.message : "Failed to load." }));
+            console.error("Failed to fetch market dynamics data:", e);
+            const errorMsg = e instanceof Error ? e.message : "Failed to load market data.";
+            setErrors({
+                strength: errorMsg,
+                volatility: errorMsg,
+                topMovers: errorMsg,
+                sentiment: errorMsg,
+            });
         } finally {
-            setLoading(prev => ({ ...prev, strength: false }));
-        }
-
-        // Fetch Volatility
-        try {
-            const result = await generateVolatilityData(apiKey);
-            setData(prev => ({ ...prev, volatility: result }));
-        } catch (e) {
-            console.error("Failed to fetch volatility:", e);
-            setErrors(prev => ({ ...prev, volatility: e instanceof Error ? e.message : "Failed to load." }));
-        } finally {
-            setLoading(prev => ({ ...prev, volatility: false }));
-        }
-        
-        // Fetch Top Movers
-        try {
-            const result = await generateTopMoversData(apiKey);
-            setData(prev => ({ ...prev, topMovers: result }));
-        } catch (e) {
-            console.error("Failed to fetch top movers:", e);
-            setErrors(prev => ({ ...prev, topMovers: e instanceof Error ? e.message : "Failed to load." }));
-        } finally {
-            setLoading(prev => ({ ...prev, topMovers: false }));
-        }
-
-        // Fetch Sentiment
-        try {
-            const result = await generateMarketSentimentData(apiKey);
-            setData(prev => ({ ...prev, sentiment: result }));
-        } catch (e) {
-            console.error("Failed to fetch sentiment:", e);
-            setErrors(prev => ({ ...prev, sentiment: e instanceof Error ? e.message : "Failed to load." }));
-        } finally {
-            setLoading(prev => ({ ...prev, sentiment: false }));
+            setLoading({ strength: false, volatility: false, topMovers: false, sentiment: false });
         }
     }, [apiKey]);
     

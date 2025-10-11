@@ -15,10 +15,8 @@ import { LessonSkeleton } from './LessonSkeleton';
 
 interface LessonViewProps {
   lesson: Lesson;
-  content: string;
-  isLoadingContent: boolean;
+  isLoadingContent: boolean; // This is for the initial brief skeleton
   onStartQuiz: (lesson: Lesson) => void;
-  error: string | null;
   onNextLesson: () => void;
   onPreviousLesson: () => void;
   hasNextLesson: boolean;
@@ -178,10 +176,8 @@ const DynamicLessonContent: React.FC<DynamicLessonContentProps> = ({ text, lesso
 export const LessonView: React.FC<LessonViewProps> = (props) => {
     const {
         lesson,
-        content,
-        isLoadingContent,
+        isLoadingContent: isInitialLoading,
         onStartQuiz,
-        error,
         onNextLesson,
         onPreviousLesson,
         hasNextLesson,
@@ -200,11 +196,17 @@ export const LessonView: React.FC<LessonViewProps> = (props) => {
     const [touchEnd, setTouchEnd] = useState<number | null>(null);
     const minSwipeDistance = 60;
 
+    // Reset summary when lesson changes
+    useEffect(() => {
+        setKeyTakeaways('');
+    }, [lesson.key]);
+
+
     const handleGenerateTakeaways = useCallback(async () => {
-        if (!apiKey || !content) return;
+        if (!apiKey || !lesson.content) return;
         setIsLoadingTakeaways(true);
         try {
-            const summary = await generateLessonSummary(apiKey, content);
+            const summary = await generateLessonSummary(apiKey, lesson.content);
             setKeyTakeaways(summary);
         } catch (e) {
             console.error("Failed to generate key takeaways", e);
@@ -212,12 +214,7 @@ export const LessonView: React.FC<LessonViewProps> = (props) => {
         } finally {
             setIsLoadingTakeaways(false);
         }
-    }, [apiKey, content]);
-
-    // Reset takeaways when lesson changes
-    useEffect(() => {
-        setKeyTakeaways('');
-    }, [lesson.key]);
+    }, [apiKey, lesson.content]);
 
     const onTouchStart = (e: React.TouchEvent) => {
         setTouchEnd(null);
@@ -241,6 +238,25 @@ export const LessonView: React.FC<LessonViewProps> = (props) => {
         setTouchEnd(null);
     };
   
+    if (isInitialLoading) {
+        return (
+             <div className="flex flex-col lg:flex-row gap-8 xl:gap-12">
+                <div className="flex-1 min-w-0">
+                    <div className="max-w-4xl">
+                        <LessonSkeleton />
+                    </div>
+                </div>
+                 <div className="w-full lg:w-80 lg:max-w-xs flex-shrink-0">
+                    {/* Simplified skeleton for sidebar */}
+                    <div className="sticky top-28 space-y-6 animate-pulse">
+                        <div className="h-48 bg-slate-800 rounded-xl"></div>
+                        <div className="h-96 bg-slate-800 rounded-xl"></div>
+                    </div>
+                </div>
+            </div>
+        )
+    }
+  
     return (
         <div 
             className="flex flex-col lg:flex-row gap-8 xl:gap-12"
@@ -251,49 +267,35 @@ export const LessonView: React.FC<LessonViewProps> = (props) => {
             {/* Main Content */}
             <div className="flex-1 min-w-0">
                 <div className="max-w-4xl">
-                     {isLoadingContent ? (
-                        <LessonSkeleton />
-                     ) : (
-                        <>
-                            <h1 className="text-4xl font-extrabold text-slate-100 mb-6 tracking-tight">{lesson.title}</h1>
-                            <DynamicLessonContent 
-                                text={content} 
-                                lessonKey={lesson.key}
-                            />
-                        </>
-                     )}
+                    <h1 className="text-4xl font-extrabold text-slate-100 mb-6 tracking-tight">{lesson.title}</h1>
+                    <DynamicLessonContent 
+                        text={lesson.content} 
+                        lessonKey={lesson.key}
+                    />
 
-                    {error && (
-                        <div className="mt-6 bg-red-500/10 border border-red-500/30 text-red-300 px-4 py-3 rounded-lg flex items-center">
-                            <ExclamationTriangleIcon className="w-5 h-5 mr-3" />
-                            <span>{error}</span>
-                        </div>
-                    )}
-
-                    {!isLoadingContent && content && (
-                        <div className="mt-12 border-t border-slate-700 pt-8" id="tour-step-4-visualize">
-                             <div className="flex items-start">
-                                <DocumentTextIcon className="w-8 h-8 text-cyan-400 mr-4 mt-1 flex-shrink-0" />
-                                <div>
-                                    <h3 className="text-lg font-bold text-white">Key Takeaways</h3>
-                                    <p className="text-slate-400 text-sm">Get a quick, AI-powered summary of this lesson.</p>
-                                </div>
+                    <div className="mt-12 border-t border-slate-700 pt-8" id="tour-step-4-visualize">
+                         <div className="flex items-start">
+                            <DocumentTextIcon className="w-8 h-8 text-cyan-400 mr-4 mt-1 flex-shrink-0" />
+                            <div>
+                                <h3 className="text-lg font-bold text-white">Key Takeaways</h3>
+                                <p className="text-slate-400 text-sm">Get a quick, AI-powered summary of this lesson.</p>
                             </div>
-                             {keyTakeaways ? (
-                                <div className="mt-4 bg-slate-800 border border-slate-700 rounded-lg p-5 prose prose-invert prose-sm max-w-none text-slate-300">
-                                    <TextSegment text={keyTakeaways} />
-                                </div>
-                            ) : (
-                                <button
-                                    onClick={handleGenerateTakeaways}
-                                    disabled={isLoadingTakeaways}
-                                    className="mt-4 px-4 py-2 bg-cyan-500/10 border border-cyan-500/30 text-cyan-300 font-semibold rounded-lg hover:bg-cyan-500/20 transition-colors flex items-center disabled:opacity-50"
-                                >
-                                    {isLoadingTakeaways ? <LoadingSpinner /> : 'Generate Summary'}
-                                </button>
-                            )}
                         </div>
-                    )}
+                         {keyTakeaways ? (
+                            <div className="mt-4 bg-slate-800 border border-slate-700 rounded-lg p-5 prose prose-invert prose-sm max-w-none text-slate-300">
+                                <TextSegment text={keyTakeaways} />
+                            </div>
+                        ) : (
+                            <button
+                                onClick={handleGenerateTakeaways}
+                                disabled={isLoadingTakeaways || !apiKey}
+                                className="mt-4 px-4 py-2 bg-cyan-500/10 border border-cyan-500/30 text-cyan-300 font-semibold rounded-lg hover:bg-cyan-500/20 transition-colors flex items-center disabled:opacity-50 disabled:cursor-not-allowed"
+                            >
+                                {isLoadingTakeaways ? <LoadingSpinner /> : 'Generate Summary'}
+                            </button>
+                        )}
+                         {!apiKey && <p className="text-xs text-yellow-400 mt-2">Set your API key to enable summary generation.</p>}
+                    </div>
 
                      {/* Lesson Navigation */}
                     <div className="mt-12 pt-6 border-t border-slate-700 flex justify-between items-center">
@@ -320,19 +322,17 @@ export const LessonView: React.FC<LessonViewProps> = (props) => {
             {/* Right Sidebar */}
             <div className="w-full lg:w-80 lg:max-w-xs flex-shrink-0">
                 <div className="sticky top-28 space-y-6">
-                     {!isLoadingContent && content && (
-                        <div className="bg-slate-800 border border-slate-700 rounded-xl p-5 text-center shadow-none">
-                            <QuestionMarkCircleIcon className="w-8 h-8 text-cyan-400 mx-auto mb-2" />
-                            <h3 className="text-base font-bold text-white">Test Your Knowledge</h3>
-                            <p className="text-slate-400 text-sm mb-4">Take a quick quiz on this lesson.</p>
-                            <button
-                                onClick={() => onStartQuiz(lesson)}
-                                className="w-full px-4 py-2 bg-cyan-500/10 border border-cyan-500/30 text-cyan-300 font-semibold rounded-lg hover:bg-cyan-500/20 transition-colors"
-                            >
-                                Take Quiz
-                            </button>
-                        </div>
-                    )}
+                    <div className="bg-slate-800 border border-slate-700 rounded-xl p-5 text-center shadow-none">
+                        <QuestionMarkCircleIcon className="w-8 h-8 text-cyan-400 mx-auto mb-2" />
+                        <h3 className="text-base font-bold text-white">Test Your Knowledge</h3>
+                        <p className="text-slate-400 text-sm mb-4">Take a quick quiz on this lesson.</p>
+                        <button
+                            onClick={() => onStartQuiz(lesson)}
+                            className="w-full px-4 py-2 bg-cyan-500/10 border border-cyan-500/30 text-cyan-300 font-semibold rounded-lg hover:bg-cyan-500/20 transition-colors"
+                        >
+                            Take Quiz
+                        </button>
+                    </div>
                     <LessonCurriculumSidebar
                         learningPaths={learningPaths}
                         selectedLessonKey={lesson.key}

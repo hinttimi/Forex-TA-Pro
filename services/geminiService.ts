@@ -1,5 +1,3 @@
-
-
 import { GoogleGenAI, Type, GenerateContentResponse, GenerateImagesResponse, FunctionDeclaration, Modality } from "@google/genai";
 // FIX: Add missing type imports
 // FIX: Corrected typo from TopMoverData to TopMoverData
@@ -21,6 +19,46 @@ export const getAiClient = (apiKey: string): GoogleGenAI => {
     // Always create a new client to ensure no session state or caching issues.
     return new GoogleGenAI({ apiKey });
 };
+
+/**
+ * Tries to find and parse a JSON object or array from a string that might contain other text.
+ * @param text The string to parse.
+ * @returns The parsed JSON object or null if no valid JSON is found.
+ */
+const robustJsonParse = (text: string): any => {
+    // Try to find JSON block enclosed in ```json ... ```
+    const match = text.match(/```json\s*([\s\S]*?)\s*```/);
+    const jsonString = match ? match[1] : text;
+
+    try {
+        return JSON.parse(jsonString.trim());
+    } catch (e) {
+        // Fallback for cases where JSON is just embedded without markers
+        const firstBracket = jsonString.indexOf('{');
+        const firstSquare = jsonString.indexOf('[');
+        let start = -1;
+
+        if (firstBracket === -1 && firstSquare === -1) return null;
+        if (firstBracket === -1) start = firstSquare;
+        else if (firstSquare === -1) start = firstBracket;
+        else start = Math.min(firstBracket, firstSquare);
+        
+        const lastBracket = jsonString.lastIndexOf('}');
+        const lastSquare = jsonString.lastIndexOf(']');
+        const end = Math.max(lastBracket, lastSquare);
+
+        if (start !== -1 && end !== -1) {
+            try {
+                const potentialJson = jsonString.substring(start, end + 1);
+                return JSON.parse(potentialJson);
+            } catch (e2) {
+                console.error("Failed to robustly parse JSON:", e2);
+                return null;
+            }
+        }
+    }
+    return null;
+}
 
 
 // --- Helper for API call retries with exponential backoff ---
@@ -65,7 +103,6 @@ const withRetry = async <T>(
   }
   throw new Error('Exceeded max retries for API call.');
 };
-
 
 export const generateLessonSummary = async (apiKey: string, lessonContent: string): Promise<string> => {
     const prompt = `You are an expert educational writer. Summarize the following lesson content into 3-5 key bullet points. The summary should be concise and capture the most critical takeaways for a student. Use markdown for **bold** emphasis.
@@ -506,45 +543,8 @@ export const generateMarketPulse = async (apiKey: string): Promise<string> => {
     }
 };
 
-const robustJsonParse = (text: string) => {
-    // First, try to find a markdown code block for JSON
-    const markdownMatch = text.match(/```(?:json)?\s*([\s\S]*?)\s*```/);
-    let jsonStringToParse;
-    if (markdownMatch && markdownMatch[1]) {
-        jsonStringToParse = markdownMatch[1];
-    } else {
-        // If no markdown, find the first '{' or '[' and the last '}' or ']'
-        const firstBrace = text.indexOf('{');
-        const firstBracket = text.indexOf('[');
-        
-        if (firstBrace === -1 && firstBracket === -1) {
-            throw new Error("No valid JSON object or array found in the AI's response.");
-        }
-
-        let start = -1;
-        let end = -1;
-
-        // Determine if we're looking for an object or an array based on which comes first
-        if (firstBrace !== -1 && (firstBrace < firstBracket || firstBracket === -1)) {
-            start = firstBrace;
-            end = text.lastIndexOf('}');
-        } else {
-            start = firstBracket;
-            end = text.lastIndexOf(']');
-        }
-        
-        if (end === -1 || end < start) {
-            throw new Error("Malformed JSON structure found in the AI's response.");
-        }
-        jsonStringToParse = text.substring(start, end + 1);
-    }
-    return JSON.parse(jsonStringToParse);
-};
-
-
 export const getForexNews = async (apiKey: string): Promise<{ articles: NewsArticle[], groundingChunks: any[] }> => {
-    const prompt = `You are a financial news aggregator. Using your search tool, find the top 5 most recent and impactful news articles related to the Forex market (major currency pairs like EUR/USD, GBP/USD, USD/JPY, etc.).
-Return ONLY a valid JSON object with a single key "articles", which is an array of objects. Each object should have the keys: "headline", "summary", "sourceUrl", and "sourceTitle". For the "summary", provide a concise 2-3 sentence overview. Do not include any other text, explanations, or markdown formatting.`;
+    const prompt = `Using your search tool, find the top 5 most recent and impactful news articles related to the Forex market (major currency pairs like EUR/USD, GBP/USD, USD/JPY, etc.). Return the data as a JSON object inside a \`\`\`json block. The JSON object should have a single key "articles", which is an array of objects. For each article object, include "headline", "summary" (a concise 2-3 sentence overview), "sourceUrl", and "sourceTitle".`;
 
     try {
         const ai = getAiClient(apiKey);
@@ -557,10 +557,9 @@ Return ONLY a valid JSON object with a single key "articles", which is an array 
         }));
         
         const groundingChunks = response.candidates?.[0]?.groundingMetadata?.groundingChunks || [];
-        
-        const parsed: { articles: NewsArticle[] } = robustJsonParse(response.text);
+        const parsed = robustJsonParse(response.text);
 
-        if (!parsed.articles || !Array.isArray(parsed.articles)) {
+        if (!parsed || !parsed.articles || !Array.isArray(parsed.articles)) {
             throw new Error("The AI did not return a valid JSON array for the news feed.");
         }
 
@@ -592,7 +591,7 @@ export const generateMarketUpdateSnippet = async (apiKey: string): Promise<Marke
                 content: response.text,
             };
         } else { // 'news'
-            const prompt = `You are a financial news aggregator. Using your search tool, find the single most recent and impactful news headline related to the Forex market. Return ONLY a valid JSON object with keys: "headline" and "summary". The summary should be a single, concise sentence. Do not include any other text, explanations, or markdown formatting.`;
+            const prompt = `Using your search tool, find the single most recent and impactful news headline related to the Forex market. Return the data as a JSON object inside a \`\`\`json block. The object should have two keys: "headline" and "summary" (a single, concise sentence).`;
             const response = await withRetry<GenerateContentResponse>(() => ai.models.generateContent({
                 model: "gemini-2.5-flash",
                 contents: prompt,
@@ -603,7 +602,7 @@ export const generateMarketUpdateSnippet = async (apiKey: string): Promise<Marke
 
             const parsed = robustJsonParse(response.text);
 
-            if (parsed.headline && parsed.summary) {
+            if (parsed && parsed.headline && parsed.summary) {
                 return {
                     type: 'news',
                     title: parsed.headline,
@@ -710,9 +709,18 @@ export const generatePostEventSummary = async (apiKey: string, event: EconomicEv
     }
 };
 
-export const generateCurrencyStrengthData = async (apiKey: string): Promise<CurrencyStrengthData> => {
-    const prompt = `You are a forex market data provider. It is currently ${new Date().toUTCString()}. Using your real-time search tool, find the relative strength of the 8 major currencies (USD, EUR, JPY, GBP, AUD, CAD, CHF, NZD).
-Return ONLY a valid JSON object containing a single key "strengths", which is an array of objects. Each object must have a "currency" (string) and a "strength" (numerical score from 0 to 10). Do not include any other text, explanations, or markdown formatting.`;
+export const generateMarketDynamicsData = async (apiKey: string): Promise<{
+    strength: CurrencyStrengthData;
+    volatility: VolatilityData[];
+    topMovers: TopMoverData[];
+    sentiment: MarketSentimentData;
+}> => {
+    const prompt = `Using your real-time search tool, provide a complete analysis of the current forex market dynamics. You must return a single JSON object inside a \`\`\`json block containing all of the following keys: "strengths", "volatilityData", "movers", "sentiment". Current time: ${new Date().toUTCString()}.
+    - **"strengths"**: An array of objects for the 8 major currencies (USD, EUR, JPY, GBP, AUD, CAD, CHF, NZD), each with "currency" (string) and "strength" (number, from 0 to 10).
+    - **"volatilityData"**: An array of 5 objects for the most volatile major forex pairs, each with "pair" (string) and "volatility" (number, score from 1-10).
+    - **"movers"**: An array of 6 objects for the top 3 gaining and top 3 losing major forex pairs over the last 4 hours, each with "pair" (string) and "change_pct" (number). Sort from top gainer to top loser.
+    - **"sentiment"**: An object with "sentiment" (string: 'Risk On', 'Risk Off', 'Neutral', 'Mixed'), "score" (number: 0-10), and "reasoning" (string).
+    `;
 
     try {
         const ai = getAiClient(apiKey);
@@ -723,11 +731,11 @@ Return ONLY a valid JSON object containing a single key "strengths", which is an
                 tools: [{googleSearch: {}}],
             },
         }));
-        
-        const parsed: { strengths: Array<{ currency: string, strength: number }> } = robustJsonParse(response.text);
 
-        if (!parsed.strengths || !Array.isArray(parsed.strengths)) {
-            throw new Error("AI returned malformed currency strength data.");
+        const parsed = robustJsonParse(response.text);
+
+        if (!parsed || !parsed.strengths || !parsed.volatilityData || !parsed.movers || !parsed.sentiment) {
+            throw new Error("AI returned malformed market dynamics data.");
         }
         
         const strengthData: CurrencyStrengthData = {};
@@ -737,87 +745,20 @@ Return ONLY a valid JSON object containing a single key "strengths", which is an
             }
         }
         
-        return strengthData;
-
-    } catch (error) {
-        console.error("Error generating currency strength data:", error);
-        throw new Error(`The AI failed to provide currency strength data. Please try again.`);
-    }
-};
-
-export const generateVolatilityData = async (apiKey: string): Promise<VolatilityData[]> => {
-    const prompt = `You are a forex market data provider. It is currently ${new Date().toUTCString()}. Using your real-time search tool, identify the 5 most volatile major forex pairs based on recent price action.
-Return ONLY a valid JSON object with a single key "volatilityData", which is an array of objects. Each object must have a 'pair' (e.g., "GBP/JPY") and a 'volatility' score (a relative number from 1-10 where 10 is most volatile). Do not include any other text, explanations, or markdown formatting.`;
-
-    try {
-        const ai = getAiClient(apiKey);
-        const response = await withRetry<GenerateContentResponse>(() => ai.models.generateContent({
-            model: 'gemini-2.5-flash',
-            contents: prompt,
-            config: {
-                tools: [{googleSearch: {}}],
-            },
-        }));
-
-        const parsed: { volatilityData: VolatilityData[] } = robustJsonParse(response.text);
-
-        if (parsed.volatilityData && Array.isArray(parsed.volatilityData)) {
-            return parsed.volatilityData;
+        if (Object.keys(strengthData).length === 0) {
+             throw new Error("AI returned empty currency strength data.");
         }
-        throw new Error("AI returned malformed volatility data.");
+        
+        return {
+            strength: strengthData,
+            volatility: parsed.volatilityData,
+            topMovers: parsed.movers,
+            sentiment: parsed.sentiment,
+        };
+
     } catch (error) {
-        console.error("Error generating volatility data:", error);
-        throw new Error(`The AI failed to provide volatility data. Please try again.`);
-    }
-};
-
-export const generateTopMoversData = async (apiKey: string): Promise<TopMoverData[]> => {
-    const prompt = `You are a forex market data provider. Your sole task is to use your search tool to find the top movers in the forex market and return the data in a specific JSON format.
-
-Current Time: ${new Date().toUTCString()}
-
-Instructions:
-1. Identify the top 3 gaining and top 3 losing major forex pairs over the last 4 hours.
-2. Format the output as a single, valid JSON object.
-3. The JSON object must have a single key: "movers".
-4. The value of "movers" must be an array containing exactly 6 objects.
-5. Each object must have two keys: "pair" (string) and "change_pct" (number).
-6. "change_pct" should be positive for gainers and negative for losers.
-7. Sort the array from the top gainer to the top loser.
-
-Example of the exact output format required:
-{
-  "movers": [
-    { "pair": "GBP/JPY", "change_pct": 0.55 },
-    { "pair": "EUR/JPY", "change_pct": 0.42 },
-    { "pair": "AUD/USD", "change_pct": 0.31 },
-    { "pair": "USD/CHF", "change_pct": -0.25 },
-    { "pair": "NZD/USD", "change_pct": -0.38 },
-    { "pair": "USD/CAD", "change_pct": -0.49 }
-  ]
-}
-
-Return ONLY the valid JSON object. Do not include any other text, explanations, or markdown formatting.`;
-
-    try {
-        const ai = getAiClient(apiKey);
-        const response = await withRetry<GenerateContentResponse>(() => ai.models.generateContent({
-            model: 'gemini-2.5-flash',
-            contents: prompt,
-            config: {
-                tools: [{googleSearch: {}}],
-            },
-        }));
-
-        const parsed: { movers: TopMoverData[] } = robustJsonParse(response.text);
-
-        if (parsed.movers && Array.isArray(parsed.movers)) {
-            return parsed.movers;
-        }
-        throw new Error("AI returned malformed top movers data.");
-    } catch (error) {
-        console.error("Error generating top movers data:", error);
-        throw new Error(`The AI failed to provide top movers data. Please try again.`);
+        console.error("Error generating combined market dynamics data:", error);
+        throw new Error(`The AI failed to provide a complete market dynamics overview. Please try again.`);
     }
 };
 
@@ -840,32 +781,6 @@ ${marketDataJson}
     } catch (error) {
         console.error("Error generating market narrative:", error);
         throw error;
-    }
-};
-
-export const generateMarketSentimentData = async (apiKey: string): Promise<MarketSentimentData> => {
-    const prompt = `You are a forex market data provider. It is currently ${new Date().toUTCString()}. Using your real-time search tool, analyze the current overall market sentiment for forex trading. Consider major indices (like S&P 500), the VIX, commodity prices (like Gold and Oil), and recent news.
-Return ONLY a valid JSON object with the keys "sentiment" (string enum: 'Risk On', 'Risk Off', 'Neutral', 'Mixed'), "score" (number from 0 to 10), and "reasoning" (string). Do not include any other text, explanations, or markdown formatting.`;
-
-    try {
-        const ai = getAiClient(apiKey);
-        const response = await withRetry<GenerateContentResponse>(() => ai.models.generateContent({
-            model: 'gemini-2.5-flash',
-            contents: prompt,
-            config: {
-                tools: [{googleSearch: {}}],
-            },
-        }));
-        
-        const parsed = robustJsonParse(response.text);
-
-        if (parsed.sentiment && typeof parsed.score === 'number' && parsed.reasoning) {
-            return parsed;
-        }
-        throw new Error("AI returned malformed market sentiment data.");
-    } catch (error) {
-        console.error("Error generating market sentiment data:", error);
-        throw new Error(`The AI failed to provide market sentiment data. Please try again.`);
     }
 };
 

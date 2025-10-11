@@ -54,7 +54,6 @@ const AppContent: React.FC = () => {
   const [currentView, setCurrentView] = useState<AppView>('dashboard');
   const [currentLesson, setCurrentLesson] = useState<Lesson | null>(null);
   const [isLoadingContent, setIsLoadingContent] = useState<boolean>(false);
-  const [error, setError] = useState<string | null>(null);
   const [quizLesson, setQuizLesson] = useState<Lesson | null>(null);
   const [marketUpdate, setMarketUpdate] = useState<MarketUpdate | null>(null);
   const [isFeedbackModalOpen, setIsFeedbackModalOpen] = useState(false);
@@ -73,7 +72,6 @@ const AppContent: React.FC = () => {
     }
     setCurrentView('lesson');
     setCurrentLesson(lesson);
-    setError(null);
   }, [currentView, currentLesson]);
 
   // When a lesson is selected, turn off the loading skeleton after a brief moment
@@ -209,7 +207,6 @@ const AppContent: React.FC = () => {
 
   const handleSetView = (view: AppView) => {
     setCurrentView(view);
-    setError(null);
   }
 
   const handleStartQuiz = (lesson: Lesson) => {
@@ -232,10 +229,8 @@ const AppContent: React.FC = () => {
         return currentLesson ? (
           <LessonView
             lesson={currentLesson}
-            content={currentLesson.content} // Pass raw content directly
             isLoadingContent={isLoadingContent}
             onStartQuiz={handleStartQuiz}
-            error={error}
             onNextLesson={handleNextLesson}
             onPreviousLesson={handlePreviousLesson}
             hasNextLesson={hasNextLesson}
