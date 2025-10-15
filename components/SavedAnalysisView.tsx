@@ -1,5 +1,3 @@
-
-
 import React, { useState, useEffect } from 'react';
 import { TrashIcon } from './icons/TrashIcon';
 import { BookmarkSquareIcon } from './icons/BookmarkSquareIcon';
@@ -42,7 +40,7 @@ export const SavedAnalysisView: React.FC<SavedAnalysisViewProps> = ({ onSetView 
         <div className="max-w-7xl mx-auto">
             <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-6">
                 <div>
-                    <h1 className="text-4xl font-extrabold text-[--color-ghost-white] tracking-tight">Saved Analysis</h1>
+                    <h1 className="text-4xl font-extrabold text-white tracking-tight">Saved Analysis</h1>
                     <p className="text-[--color-muted-grey] mt-1">Review your saved trade setups from the simulator.</p>
                 </div>
                 {analyses.length > 0 && (

@@ -1,5 +1,3 @@
-
-
 import React, { useState } from 'react';
 import { XMarkIcon } from './icons/XMarkIcon';
 import { CheckCircleIcon } from './icons/CheckCircleIcon';
@@ -33,7 +31,7 @@ export const FeedbackModal: React.FC<FeedbackModalProps> = ({ isOpen, onClose })
         e.preventDefault();
         if (!message.trim()) return;
 
-        // FIX: The check for placeholder credentials was causing a TypeScript error because the
+        // The check for placeholder credentials was causing a TypeScript error because the
         // constants have been assigned with actual values, making the check redundant.
         // The try/catch block below will handle runtime errors with the EmailJS service.
 

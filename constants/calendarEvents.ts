@@ -1,5 +1,3 @@
-
-
 import { EconomicEvent } from '../types';
 
 // Helper function to get a future date, avoiding weekends
@@ -20,7 +18,7 @@ const getFutureEventDate = (dayOffset: number, hour: number, minute: number): Da
     return getNextBusinessDay(date);
 };
 
-// FIX: The .sort() method was preventing TypeScript's contextual typing from being applied to the array literal,
+// The .sort() method was preventing TypeScript's contextual typing from being applied to the array literal,
 // causing an error with the 'impact' property.
 // By defining the array first and then sorting it, we ensure correct type checking.
 const events: EconomicEvent[] = [

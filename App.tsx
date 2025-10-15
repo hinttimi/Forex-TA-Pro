@@ -41,12 +41,22 @@ import { TradingJournalView } from './components/TradingJournalView';
 import { MentorSettingsProvider } from './context/MentorSettingsContext';
 import { MarketDynamicsDashboard } from './components/MarketDynamicsDashboard';
 import { MarketDynamicsProvider } from './context/MarketDynamicsContext';
+import { MentorSuggestionToast } from './components/MentorSuggestionToast';
 
 const allLessons = LEARNING_PATHS.flatMap(path => path.modules.flatMap(module => module.lessons));
 
 const findLessonIndex = (lessonKey: string) => {
     return allLessons.findIndex(l => l.key === lessonKey);
 };
+
+const keyLessonsForSuggestions: Record<string, { message: string; tool: AppView; params?: any }> = {
+    'uf-m2-l6': { message: "You've learned about Engulfing Patterns! Want to practice identifying them in the Pattern Recognition tool?", tool: 'pattern' },
+    'uf-m3-l1': { message: "Great work on understanding uptrends! Ready to practice analyzing them in the Trade Simulator?", tool: 'simulator' },
+    'uf-m3-l2': { message: "You've got downtrends down. Want to apply that knowledge in the Trade Simulator?", tool: 'simulator' },
+    'uf-m4-l4': { message: "S/R Flips are a core concept. Shall we jump into the Trade Simulator to see them in action?", tool: 'simulator' },
+    'uf-m6-l5': { message: "You've built your checklist! Want the AI Mentor to help you backtest a strategy based on it?", tool: 'backtester' },
+};
+
 
 const AppContent: React.FC = () => {
   // --- ALL HOOKS MUST BE AT THE TOP AND UNCONDITIONAL ---
@@ -59,6 +69,7 @@ const AppContent: React.FC = () => {
   const [isFeedbackModalOpen, setIsFeedbackModalOpen] = useState(false);
   const [isTourActive, setIsTourActive] = useState(false);
   const [toolExecutionParams, setToolExecutionParams] = useState<{ toolName: AppView, params: any } | null>(null);
+  const [mentorSuggestion, setMentorSuggestion] = useState<{ message: string; tool: AppView; params?: any } | null>(null);
 
   const { apiKey, isKeyModalOpen, wasKeyJustSet } = useApiKey();
   const { logLessonCompleted, getCompletedLessons, getCompletionCount } = useCompletion();
@@ -74,6 +85,11 @@ const AppContent: React.FC = () => {
     setCurrentLesson(lesson);
   }, [currentView, currentLesson]);
 
+  const handleExecuteTool = useCallback((toolName: AppView, params: any = {}) => {
+    setToolExecutionParams({ toolName, params });
+    setCurrentView(toolName);
+  }, []);
+
   // When a lesson is selected, turn off the loading skeleton after a brief moment
   // to allow the UI to update and render the skeleton before showing content.
   useEffect(() => {
@@ -81,10 +97,19 @@ const AppContent: React.FC = () => {
           const timer = setTimeout(() => {
               setIsLoadingContent(false);
               logLessonCompleted(currentLesson.key);
+
+              // Proactive Mentor Suggestion
+              const suggestion = keyLessonsForSuggestions[currentLesson.key];
+              if (suggestion && !mentorSuggestion) {
+                  setTimeout(() => {
+                      setMentorSuggestion(suggestion);
+                  }, 2500); // Delay to not be too jarring
+              }
+
           }, 100); // A small delay for the skeleton to be visible
           return () => clearTimeout(timer);
       }
-  }, [currentLesson, isLoadingContent, logLessonCompleted]);
+  }, [currentLesson, isLoadingContent, logLessonCompleted, mentorSuggestion]);
   
   const handleNextLesson = useCallback(() => {
     if (!currentLesson) return;
@@ -113,10 +138,9 @@ const AppContent: React.FC = () => {
     }
   }, [currentLesson, currentView, completedLessons, handleSelectLesson]);
 
-  const handleExecuteTool = useCallback((payload: { toolName: AppView, params: any }) => {
-    setToolExecutionParams(payload);
-    setCurrentView(payload.toolName);
-  }, []);
+  const handleExecuteToolFromMentor = useCallback((payload: { toolName: AppView, params: any }) => {
+    handleExecuteTool(payload.toolName, payload.params);
+  }, [handleExecuteTool]);
 
   // Effect to clear tool execution params after they have been used for a render.
   // This prevents the tool from re-triggering if the view is revisited.
@@ -259,7 +283,7 @@ const AppContent: React.FC = () => {
       case 'trading_journal':
         return <TradingJournalView />;
       case 'mentor':
-        return <AIMentorView onSetView={handleSetView} onExecuteTool={handleExecuteTool} />;
+        return <AIMentorView onSetView={handleSetView} onExecuteTool={handleExecuteToolFromMentor} />;
       case 'quiz':
         return quizLesson ? (
             <QuizView 
@@ -280,7 +304,7 @@ const AppContent: React.FC = () => {
       case 'economic_calendar':
         return <EconomicCalendarView />;
       case 'backtester':
-        return <AIBacktesterView initialRequest={toolExecutionParams?.params} />;
+        return <AIBacktesterView initialRequest={toolExecutionParams?.params} onSetView={handleSetView} />;
       case 'settings':
         return <SettingsView />;
       default:
@@ -331,6 +355,11 @@ const AppContent: React.FC = () => {
       </div>
        <BadgeNotification />
        <MarketUpdateToast update={marketUpdate} onClose={() => setMarketUpdate(null)} />
+       <MentorSuggestionToast
+            suggestion={mentorSuggestion}
+            onAccept={handleExecuteTool}
+            onClose={() => setMentorSuggestion(null)}
+        />
        <BottomNavBar currentView={currentView} onSetView={handleSetView} onSelectLesson={handleGoToLessonFromNav} />
        {currentView !== 'mentor' && currentView !== 'dashboard' && <FloatingActionButton onSetView={handleSetView} />}
     </div>

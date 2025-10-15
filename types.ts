@@ -106,6 +106,12 @@ export interface AnalysisResult {
 export type TradeOutcome = 'Win' | 'Loss' | 'Break-Even';
 export type EmotionalState = 'Patient' | 'Confident' | 'Anxious' | 'FOMO' | 'Greedy' | 'Hesitant' | 'Revenge Trading';
 
+export interface UploadedFile {
+    data: string; // base64 data without the prefix
+    mimeType: string;
+    name: string;
+}
+
 export interface TradeLog {
     id: number;
     date: string;
@@ -116,6 +122,8 @@ export interface TradeLog {
     setup: string;
     emotion: EmotionalState;
     notes?: string;
+    chartScreenshot?: UploadedFile;
+    aiReview?: string;
 }
 
 export interface MentorPersona {

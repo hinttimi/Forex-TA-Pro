@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect, useCallback } from 'react';
-import { generateMentorResponse, getAiClient, generateChartImage } from '../services/geminiService';
+import { generateMentorResponse, getAiClient, generateChartImage, generateSpeech } from '../services/geminiService';
 import { SparklesIcon } from './icons/SparklesIcon';
 import { PaperAirplaneIcon } from './icons/PaperAirplaneIcon';
 import { PaperClipIcon } from './icons/PaperClipIcon';
@@ -14,22 +14,17 @@ import { SpeakerXMarkIcon } from './icons/SpeakerXMarkIcon';
 import { useApiKey } from '../hooks/useApiKey';
 import { DocumentTextIcon } from './icons/DocumentTextIcon';
 import { LinkIcon } from './icons/LinkIcon';
-import { AppView, Lesson } from '../types';
+import { AppView, Lesson, UploadedFile } from '../types';
 import { LightBulbIcon } from './icons/LightBulbIcon';
 import { RocketLaunchIcon } from './icons/RocketLaunchIcon';
 import { MagnifyingGlassIcon } from './icons/MagnifyingGlassIcon';
 import { useCompletion } from '../hooks/useCompletion';
 import { LEARNING_PATHS } from '../constants';
 import { useMentorSettings } from '../hooks/useMentorSettings';
-import { MENTOR_PERSONAS } from '../constants/mentorSettings';
+import { MENTOR_PERSONAS, MENTOR_VOICES } from '../constants/mentorSettings';
 import { BeakerIcon } from './icons/BeakerIcon';
 
 // --- Types ---
-interface UploadedFile {
-    data: string; // base64 data without the prefix
-    mimeType: string;
-    name: string;
-}
 interface Message {
     id: number;
     role: 'user' | 'model';
@@ -189,7 +184,7 @@ export const AIMentorView: React.FC<AIMentorViewProps> = ({ onSetView, onExecute
     const [error, setError] = useState<string | null>(null);
     const { apiKey, openKeyModal } = useApiKey();
     const { getCompletedLessons } = useCompletion();
-    const { personaId, setPersonaId } = useMentorSettings();
+    const { personaId, setPersonaId, voiceId } = useMentorSettings();
     
     // Voice state
     const [voiceState, setVoiceState] = useState<VoiceState>('idle');
@@ -210,33 +205,57 @@ export const AIMentorView: React.FC<AIMentorViewProps> = ({ onSetView, onExecute
     // Text-to-Speech state
     const [isTtsEnabled, setIsTtsEnabled] = useState(false);
     const [isSpeaking, setIsSpeaking] = useState(false);
+    const ttsAudioContextRef = useRef<AudioContext | null>(null);
+    const ttsActiveSourceRef = useRef<AudioBufferSourceNode | null>(null);
 
     const fileInputRef = useRef<HTMLInputElement>(null);
     const chatContainerRef = useRef<HTMLDivElement>(null);
 
-    // --- Text-to-Speech Handlers ---
+     // --- Text-to-Speech Handlers (using Gemini TTS) ---
     const stopSpeaking = useCallback(() => {
-        if (window.speechSynthesis) {
-            window.speechSynthesis.cancel();
-            setIsSpeaking(false);
+        if (ttsActiveSourceRef.current) {
+            ttsActiveSourceRef.current.stop();
+            ttsActiveSourceRef.current = null;
         }
+        setIsSpeaking(false);
     }, []);
 
-    const speak = useCallback((text: string) => {
-        if (!window.speechSynthesis || !text) return;
+    const speak = useCallback(async (text: string) => {
+        if (!apiKey || !text || voiceState !== 'idle') return;
         
         stopSpeaking();
-        
-        // Clean up any potential markdown for better speech flow
-        const cleanedText = text.replace(/\*\*/g, '').replace(/\[CHART:.*?\]/s, '');
 
-        const utterance = new SpeechSynthesisUtterance(cleanedText);
-        utterance.onstart = () => setIsSpeaking(true);
-        utterance.onend = () => setIsSpeaking(false);
-        utterance.onerror = () => setIsSpeaking(false);
-        
-        window.speechSynthesis.speak(utterance);
-    }, [stopSpeaking]);
+        try {
+            setIsSpeaking(true);
+            const selectedVoice = MENTOR_VOICES.find(v => v.id === voiceId) || MENTOR_VOICES[0];
+            const cleanedText = text.replace(/\[CHART:.*?\]/gs, '');
+            const base64Audio = await generateSpeech(apiKey, cleanedText, selectedVoice.name);
+
+            if (!ttsAudioContextRef.current || ttsAudioContextRef.current.state === 'closed') {
+                ttsAudioContextRef.current = new (window.AudioContext || (window as any).webkitAudioContext)({ sampleRate: 24000 });
+            }
+            const audioContext = ttsAudioContextRef.current;
+            
+            const audioBuffer = await decodeAudioData(decode(base64Audio), audioContext, 24000, 1);
+            const source = audioContext.createBufferSource();
+            source.buffer = audioBuffer;
+            source.connect(audioContext.destination);
+            
+            source.onended = () => {
+                setIsSpeaking(false);
+                ttsActiveSourceRef.current = null;
+            };
+
+            source.start();
+            ttsActiveSourceRef.current = source;
+
+        } catch (e) {
+            console.error("TTS Error:", e);
+            setError("Could not generate audio for the response.");
+            setIsSpeaking(false);
+        }
+    }, [apiKey, voiceId, stopSpeaking, voiceState]);
+
 
     const handleToggleTts = () => {
         const newIsEnabled = !isTtsEnabled;
@@ -245,6 +264,7 @@ export const AIMentorView: React.FC<AIMentorViewProps> = ({ onSetView, onExecute
             stopSpeaking();
         }
     };
+
 
     // Load chat history from localStorage on component mount
     useEffect(() => {
@@ -276,7 +296,6 @@ export const AIMentorView: React.FC<AIMentorViewProps> = ({ onSetView, onExecute
         chatContainerRef.current?.scrollTo({ top: chatContainerRef.current.scrollHeight, behavior: 'smooth' });
     }, [messages, currentInputTranscription, currentOutputTranscription]);
 
-    // FIX: Updated handleSendMessage to correctly handle file uploads and API calls.
     const handleSendMessage = async () => {
         if ((!userInput.trim() && !uploadedFile) || isLoading) return;
         if (!apiKey) {
@@ -287,7 +306,7 @@ export const AIMentorView: React.FC<AIMentorViewProps> = ({ onSetView, onExecute
         stopSpeaking();
         setError(null);
 
-        // Redirect file uploads to the AI Backtester's analyzer tab, which is the new intended behavior.
+        // Redirect file uploads to the AI Backtester's analyzer tab
         if (uploadedFile) {
             const userMessage: Message = { 
                 id: Date.now(), 
@@ -326,24 +345,35 @@ export const AIMentorView: React.FC<AIMentorViewProps> = ({ onSetView, onExecute
                 .filter(l => completedLessons.has(l.key))
                 .map(l => l.title);
             
-            // Removed 'image' property from destructuring and file argument, as it's handled separately.
-            const { text: responseText, groundingChunks, functionCalls } = await generateMentorResponse(apiKey, userMessage.text, completedLessonTitles, personaId);
+            const { text: responseText, groundingChunks } = await generateMentorResponse(apiKey, userMessage.text, completedLessonTitles, personaId);
             
             const modelMessageId = Date.now() + 1;
             
-            const chartRegex = /\[CHART:\s*(.*?)\]/s;
-            const chartMatch = responseText.match(chartRegex);
-            let cleanText = responseText.replace(chartRegex, '').trim();
+            const toolRegex = /\[TOOL_EXECUTION:(.*?)\]\s*$/;
+            const toolMatch = responseText.match(toolRegex);
+            let visibleText = responseText.replace(toolRegex, '').trim();
 
-            if (functionCalls && functionCalls.length > 0 && !cleanText) {
-                const toolName = functionCalls[0]?.args?.toolName;
-                if (toolName) {
-                    const formattedToolName = (toolName as string).replace(/_/g, ' ');
-                    cleanText = `Of course. Navigating to the ${formattedToolName} for you...`;
+            let toolCall: { toolName: string, params: any } | null = null;
+            if (toolMatch && toolMatch[1]) {
+                try {
+                    toolCall = JSON.parse(toolMatch[1]);
+                } catch (jsonError) {
+                    console.error("Failed to parse tool execution JSON:", jsonError);
                 }
             }
+            
+            if (toolCall && !visibleText) {
+                const toolName = toolCall.toolName;
+                if (toolName) {
+                    const formattedToolName = (toolName as string).replace(/_/g, ' ');
+                    visibleText = `Of course. Navigating to the ${formattedToolName} for you...`;
+                }
+            }
+            
+            const chartRegex = /\[CHART:\s*(.*?)\]/s;
+            const chartMatch = visibleText.match(chartRegex);
+            let cleanText = visibleText.replace(chartRegex, '').trim();
 
-            // Removed check for 'responseImage' as it no longer exists.
             if (cleanText) {
                 const modelMessage: Message = { 
                     id: modelMessageId, 
@@ -374,11 +404,10 @@ export const AIMentorView: React.FC<AIMentorViewProps> = ({ onSetView, onExecute
                 }
             }
 
-            if (functionCalls && functionCalls.length > 0) {
-                const funcCall = functionCalls[0];
-                if (funcCall.name === 'executeTool' && funcCall.args.toolName) {
+            if (toolCall) {
+                if (toolCall.toolName) {
                     setTimeout(() => {
-                         onExecuteTool({ toolName: funcCall.args.toolName as AppView, params: funcCall.args.params });
+                         onExecuteTool({ toolName: toolCall.toolName as AppView, params: toolCall.params || {} });
                     }, 1500); 
                 }
             }
@@ -405,6 +434,32 @@ export const AIMentorView: React.FC<AIMentorViewProps> = ({ onSetView, onExecute
             }
         }
     };
+    
+    const handlePaste = useCallback(async (event: React.ClipboardEvent<HTMLTextAreaElement>) => {
+        if (uploadedFile || voiceState !== 'idle') return;
+
+        const items = event.clipboardData?.items;
+        if (!items) return;
+
+        let imageFile: File | null = null;
+        for (let i = 0; i < items.length; i++) {
+            if (items[i].type.indexOf('image') !== -1) {
+                imageFile = items[i].getAsFile();
+                break; 
+            }
+        }
+
+        if (imageFile) {
+            event.preventDefault(); 
+            try {
+                const fileData = await readFileAndConvertToBase64(imageFile);
+                setUploadedFile(fileData);
+            } catch (err) {
+                console.error("Error reading pasted file:", err);
+                setError("Could not process the pasted image.");
+            }
+        }
+    }, [uploadedFile, voiceState]);
 
     const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
         if (e.key === 'Enter' && !e.shiftKey) {
@@ -445,11 +500,12 @@ export const AIMentorView: React.FC<AIMentorViewProps> = ({ onSetView, onExecute
         return () => {
             stopVoiceChat();
             stopSpeaking();
+            ttsAudioContextRef.current?.close();
         };
     }, [stopVoiceChat, stopSpeaking]);
 
 
-    const handleToggleVoiceChat = async () => {
+    const handleToggleVoiceChat = useCallback(async () => {
         if (voiceState === 'active' || voiceState === 'connecting') {
             stopVoiceChat();
             return;
@@ -520,7 +576,7 @@ export const AIMentorView: React.FC<AIMentorViewProps> = ({ onSetView, onExecute
                         }
 
                         const base64EncodedAudioString = message.serverContent?.modelTurn?.parts[0]?.inlineData?.data;
-                        if (base64EncodedAudioString) {
+                        if (base64EncodedAudioString && isTtsEnabled) {
                             const { nextStartTime, sources, outputNode: outNode, outputAudioContext: outCtx } = audioResourcesRef.current;
                             if (!outNode || !outCtx) return;
 
@@ -549,6 +605,9 @@ export const AIMentorView: React.FC<AIMentorViewProps> = ({ onSetView, onExecute
                     responseModalities: [Modality.AUDIO],
                     inputAudioTranscription: {},
                     outputAudioTranscription: {},
+                    speechRecognitionConfig: {
+                        languageCodes: ['en-US'],
+                    },
                     speechConfig: {
                       voiceConfig: {prebuiltVoiceConfig: {voiceName: 'Zephyr'}},
                     },
@@ -560,7 +619,7 @@ export const AIMentorView: React.FC<AIMentorViewProps> = ({ onSetView, onExecute
             setError("Could not access microphone. Please check permissions and try again.");
             setVoiceState('error');
         }
-    };
+    }, [apiKey, openKeyModal, stopVoiceChat, isTtsEnabled]);
     
     const getVoiceButton = () => {
         const classMap = {
@@ -702,8 +761,8 @@ export const AIMentorView: React.FC<AIMentorViewProps> = ({ onSetView, onExecute
                         </div>
                     )}
                     <div className="flex items-end space-x-2">
-                        <textarea value={userInput} onChange={(e) => setUserInput(e.target.value)} onKeyDown={handleKeyDown} placeholder="Ask the AI Mentor..." className="flex-1 bg-transparent p-2 text-slate-200 resize-none focus:outline-none placeholder-slate-500" rows={1} disabled={voiceState !== 'idle'}/>
-                        <input type="file" accept="image/*,text/plain,text/csv,application/pdf,.doc,.docx,.xls,.xlsx" ref={fileInputRef} onChange={handleFileUpload} className="hidden" />
+                        <textarea value={userInput} onChange={(e) => setUserInput(e.target.value)} onKeyDown={handleKeyDown} onPaste={handlePaste} placeholder="Ask the AI Mentor..." className="flex-1 bg-transparent p-2 text-slate-200 resize-none focus:outline-none placeholder-slate-500" rows={1} disabled={voiceState !== 'idle'}/>
+                        <input type="file" accept="image/*" ref={fileInputRef} onChange={handleFileUpload} className="hidden" />
                         <button onClick={() => fileInputRef.current?.click()} className="p-2 text-slate-400 hover:text-cyan-400 rounded-full hover:bg-slate-700 transition-colors" aria-label="Upload file" title="Upload file" disabled={voiceState !== 'idle'}><PaperClipIcon className="w-6 h-6" /></button>
                         <button
                             onClick={handleToggleTts}

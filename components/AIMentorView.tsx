@@ -14,7 +14,7 @@ import { SpeakerXMarkIcon } from './icons/SpeakerXMarkIcon';
 import { useApiKey } from '../hooks/useApiKey';
 import { DocumentTextIcon } from './icons/DocumentTextIcon';
 import { LinkIcon } from './icons/LinkIcon';
-import { AppView, Lesson } from '../types';
+import { AppView, Lesson, UploadedFile } from '../types';
 import { LightBulbIcon } from './icons/LightBulbIcon';
 import { RocketLaunchIcon } from './icons/RocketLaunchIcon';
 import { MagnifyingGlassIcon } from './icons/MagnifyingGlassIcon';
@@ -25,11 +25,6 @@ import { MENTOR_PERSONAS } from '../constants/mentorSettings';
 import { BeakerIcon } from './icons/BeakerIcon';
 
 // --- Types ---
-interface UploadedFile {
-    data: string; // base64 data without the prefix
-    mimeType: string;
-    name: string;
-}
 interface Message {
     id: number;
     role: 'user' | 'model';
@@ -286,7 +281,7 @@ export const AIMentorView: React.FC<AIMentorViewProps> = ({ onSetView, onExecute
         stopSpeaking();
         setError(null);
 
-        // FIX: Redirect file uploads to the AI Backtester's analyzer tab, which is the new intended behavior.
+        // Redirect file uploads to the AI Backtester's analyzer tab
         if (uploadedFile) {
             const userMessage: Message = { 
                 id: Date.now(), 
@@ -325,24 +320,35 @@ export const AIMentorView: React.FC<AIMentorViewProps> = ({ onSetView, onExecute
                 .filter(l => completedLessons.has(l.key))
                 .map(l => l.title);
             
-            // FIX: Removed 'image' property from destructuring, as it's not returned by generateMentorResponse.
-            const { text: responseText, groundingChunks, functionCalls } = await generateMentorResponse(apiKey, userMessage.text, completedLessonTitles, personaId);
+            const { text: responseText, groundingChunks } = await generateMentorResponse(apiKey, userMessage.text, completedLessonTitles, personaId);
             
             const modelMessageId = Date.now() + 1;
             
-            const chartRegex = /\[CHART:\s*(.*?)\]/s;
-            const chartMatch = responseText.match(chartRegex);
-            let cleanText = responseText.replace(chartRegex, '').trim();
+            const toolRegex = /\[TOOL_EXECUTION:(.*?)\]\s*$/;
+            const toolMatch = responseText.match(toolRegex);
+            let visibleText = responseText.replace(toolRegex, '').trim();
 
-            if (functionCalls && functionCalls.length > 0 && !cleanText) {
-                const toolName = functionCalls[0]?.args?.toolName;
-                if (toolName) {
-                    const formattedToolName = (toolName as string).replace(/_/g, ' ');
-                    cleanText = `Of course. Navigating to the ${formattedToolName} for you...`;
+            let toolCall: { toolName: string, params: any } | null = null;
+            if (toolMatch && toolMatch[1]) {
+                try {
+                    toolCall = JSON.parse(toolMatch[1]);
+                } catch (jsonError) {
+                    console.error("Failed to parse tool execution JSON:", jsonError);
                 }
             }
+            
+            if (toolCall && !visibleText) {
+                const toolName = toolCall.toolName;
+                if (toolName) {
+                    const formattedToolName = (toolName as string).replace(/_/g, ' ');
+                    visibleText = `Of course. Navigating to the ${formattedToolName} for you...`;
+                }
+            }
+            
+            const chartRegex = /\[CHART:\s*(.*?)\]/s;
+            const chartMatch = visibleText.match(chartRegex);
+            let cleanText = visibleText.replace(chartRegex, '').trim();
 
-            // FIX: Removed check for 'responseImage' as it no longer exists.
             if (cleanText) {
                 const modelMessage: Message = { 
                     id: modelMessageId, 
@@ -373,11 +379,10 @@ export const AIMentorView: React.FC<AIMentorViewProps> = ({ onSetView, onExecute
                 }
             }
 
-            if (functionCalls && functionCalls.length > 0) {
-                const funcCall = functionCalls[0];
-                if (funcCall.name === 'executeTool' && funcCall.args.toolName) {
+            if (toolCall) {
+                if (toolCall.toolName) {
                     setTimeout(() => {
-                         onExecuteTool({ toolName: funcCall.args.toolName as AppView, params: funcCall.args.params });
+                         onExecuteTool({ toolName: toolCall.toolName as AppView, params: toolCall.params || {} });
                     }, 1500); 
                 }
             }
@@ -404,6 +409,32 @@ export const AIMentorView: React.FC<AIMentorViewProps> = ({ onSetView, onExecute
             }
         }
     };
+    
+    const handlePaste = useCallback(async (event: React.ClipboardEvent<HTMLTextAreaElement>) => {
+        if (uploadedFile || voiceState !== 'idle') return;
+
+        const items = event.clipboardData?.items;
+        if (!items) return;
+
+        let imageFile: File | null = null;
+        for (let i = 0; i < items.length; i++) {
+            if (items[i].type.indexOf('image') !== -1) {
+                imageFile = items[i].getAsFile();
+                break; 
+            }
+        }
+
+        if (imageFile) {
+            event.preventDefault(); 
+            try {
+                const fileData = await readFileAndConvertToBase64(imageFile);
+                setUploadedFile(fileData);
+            } catch (err) {
+                console.error("Error reading pasted file:", err);
+                setError("Could not process the pasted image.");
+            }
+        }
+    }, [uploadedFile, voiceState]);
 
     const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
         if (e.key === 'Enter' && !e.shiftKey) {
@@ -701,8 +732,8 @@ export const AIMentorView: React.FC<AIMentorViewProps> = ({ onSetView, onExecute
                         </div>
                     )}
                     <div className="flex items-end space-x-2">
-                        <textarea value={userInput} onChange={(e) => setUserInput(e.target.value)} onKeyDown={handleKeyDown} placeholder="Ask the AI Mentor..." className="flex-1 bg-transparent p-2 text-slate-200 resize-none focus:outline-none placeholder-slate-500" rows={1} disabled={voiceState !== 'idle'}/>
-                        <input type="file" accept="image/*,text/plain,text/csv,application/pdf,.doc,.docx,.xls,.xlsx" ref={fileInputRef} onChange={handleFileUpload} className="hidden" />
+                        <textarea value={userInput} onChange={(e) => setUserInput(e.target.value)} onKeyDown={handleKeyDown} onPaste={handlePaste} placeholder="Ask the AI Mentor..." className="flex-1 bg-transparent p-2 text-slate-200 resize-none focus:outline-none placeholder-slate-500" rows={1} disabled={voiceState !== 'idle'}/>
+                        <input type="file" accept="image/*" ref={fileInputRef} onChange={handleFileUpload} className="hidden" />
                         <button onClick={() => fileInputRef.current?.click()} className="p-2 text-slate-400 hover:text-cyan-400 rounded-full hover:bg-slate-700 transition-colors" aria-label="Upload file" title="Upload file" disabled={voiceState !== 'idle'}><PaperClipIcon className="w-6 h-6" /></button>
                         <button
                             onClick={handleToggleTts}

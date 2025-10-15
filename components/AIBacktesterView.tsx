@@ -1,35 +1,36 @@
-import React, { useState, useRef, useEffect } from 'react';
-import { runBacktestOnHistoricalData, parseStrategyFromText, analyzeBacktestResults, analyzeLiveChart, generateSimulatedOhlcData } from '../services/geminiService';
+import React, { useState, useRef, useEffect, useCallback } from 'react';
+import { runBacktestOnHistoricalData, parseStrategyFromText, analyzeBacktestResults, analyzeLiveChart, generateSimulatedOhlcData, parseTradeLogFromAnalysis } from '../services/geminiService';
 import { MarketDataManager } from '../services/marketDataService';
 import { LoadingSpinner } from './LoadingSpinner';
 import { SparklesIcon } from './icons/SparklesIcon';
 import { BeakerIcon } from './icons/BeakerIcon';
 import { useApiKey } from '../hooks/useApiKey';
-import { StrategyParams, BacktestResults, AnalysisResult, OhlcData } from '../types';
-import { PaperClipIcon } from './icons/PaperClipIcon';
+import { StrategyParams, BacktestResults, AnalysisResult, OhlcData, UploadedFile, AppView, TradeLog } from '../types';
 import { XMarkIcon } from './icons/XMarkIcon';
 import { PhotoIcon } from './icons/PhotoIcon';
 import { LinkIcon } from './icons/LinkIcon';
 import { OhlcChart } from './OhlcChart';
 import { EquityCurveChart } from './EquityCurveChart';
+import { useCompletion } from '../hooks/useCompletion';
+import { useBadges } from '../hooks/useBadges';
+import { BookmarkSquareIcon } from './icons/BookmarkSquareIcon';
+import { ClipboardDocumentListIcon } from './icons/ClipboardDocumentListIcon';
 
 const MAJOR_PAIRS = ['EUR/USD', 'GBP/USD', 'USD/JPY', 'USD/CAD', 'AUD/USD', 'NZD/USD', 'USD/CHF'];
 const TIMEFRAMES = ['1M', '5M', '15M', '1H', '4H', 'Daily'];
 const PERIODS = ['Last Month', 'Last 3 Months', 'Last 6 Months', 'Last Year'];
 const MAX_UPLOADS = 4;
-
-interface UploadedFile {
-    data: string; // base64 data without the prefix
-    mimeType: string;
-    name: string;
-}
+const TRADING_JOURNAL_KEY = 'tradingJournalEntries';
 
 interface AIBacktesterViewProps {
+    onSetView: (view: AppView) => void;
     initialRequest?: {
-        pair: string;
-        timeframe: string;
-        period: string;
-        strategyDescription: string;
+        pair?: string;
+        timeframe?: string;
+        period?: string;
+        strategyDescription?: string;
+        uploadedFiles?: UploadedFile[];
+        chartAnalysisPrompt?: string;
     }
 }
 
@@ -100,8 +101,8 @@ const FormattedContent: React.FC<{ text: string }> = ({ text }) => {
 };
 
 const MetricCard: React.FC<{ label: string; value: string; className?: string }> = ({ label, value, className }) => (
-    <div className={`bg-gray-800/60 p-4 rounded-lg ${className}`}>
-        <p className="text-sm text-gray-400">{label}</p>
+    <div className={`bg-[--color-dark-matter]/60 p-4 rounded-lg ${className}`}>
+        <p className="text-sm text-[--color-muted-grey]">{label}</p>
         <p className="text-2xl font-bold text-white">{value}</p>
     </div>
 );
@@ -112,9 +113,12 @@ type ActiveTab = 'lab' | 'analyzer';
 type ChartTab = 'ohlc' | 'equity';
 
 
-export const AIBacktesterView: React.FC<AIBacktesterViewProps> = ({ initialRequest }) => {
+export const AIBacktesterView: React.FC<AIBacktesterViewProps> = ({ initialRequest, onSetView }) => {
     const [activeTab, setActiveTab] = useState<ActiveTab>('lab');
     const { apiKey, openKeyModal } = useApiKey();
+    const { logSavedAnalysis, logTradeLogged, getCompletionCount } = useCompletion();
+    const { unlockBadge } = useBadges();
+    const ARCHIVIST_GOAL = 3;
 
     // --- State for Strategy Lab ---
     const [strategyText, setStrategyText] = useState('');
@@ -136,6 +140,10 @@ export const AIBacktesterView: React.FC<AIBacktesterViewProps> = ({ initialReque
     const [analyzerState, setAnalyzerState] = useState<AnalyzerState>('idle');
     const [analyzerError, setAnalyzerError] = useState('');
     const [analysisResult, setAnalysisResult] = useState<AnalysisResult | null>(null);
+    const [isAnalysisSaved, setIsAnalysisSaved] = useState(false);
+    const [isLoggingTrade, setIsLoggingTrade] = useState(false);
+    const [isLogged, setIsLogged] = useState(false);
+    const [logTradeError, setLogTradeError] = useState<string | null>(null);
     const fileInputRef = useRef<HTMLInputElement>(null);
 
      const getDatesForPeriod = (period: string): { startDate: string, endDate: string } => {
@@ -151,7 +159,30 @@ export const AIBacktesterView: React.FC<AIBacktesterViewProps> = ({ initialReque
         return { startDate: toYYYYMMDD(startDate), endDate: toYYYYMMDD(endDate) };
     }
 
-    const handleRunLab = async (strategyOverride?: string) => {
+    const handleAnalyzeChart = useCallback(async () => {
+        if (!apiKey) { setAnalyzerError("Please set your Gemini API key."); openKeyModal(); return; }
+        if (uploadedFiles.length === 0) { setAnalyzerError("Please upload at least one chart screenshot."); return; }
+
+        setAnalyzerError('');
+        setAnalysisResult(null);
+        setAnalyzerState('analyzing');
+        setIsAnalysisSaved(false);
+        setIsLoggingTrade(false);
+        setIsLogged(false);
+        setLogTradeError(null);
+
+        try {
+            const result = await analyzeLiveChart(apiKey, chartAnalysisPrompt, uploadedFiles);
+            setAnalysisResult(result);
+            setAnalyzerState('results');
+        } catch (e) {
+            console.error(e);
+            setAnalyzerError(e instanceof Error ? e.message : "An unknown error occurred during analysis.");
+            setAnalyzerState('error');
+        }
+    }, [apiKey, uploadedFiles, chartAnalysisPrompt, openKeyModal]);
+
+    const handleRunLab = useCallback(async (strategyOverride?: string) => {
         const finalStrategyText = strategyOverride || strategyText;
         if (!apiKey) { setLabError("Please set your Gemini API key."); openKeyModal(); return; }
         if (!finalStrategyText.trim()) { setLabError("Please describe your trading strategy."); return; }
@@ -206,37 +237,31 @@ export const AIBacktesterView: React.FC<AIBacktesterViewProps> = ({ initialReque
             setLabError(e instanceof Error ? e.message : "An unknown error occurred.");
             setLabState('error');
         }
-    };
+    }, [apiKey, openKeyModal, strategyText, pair, timeframe, period]);
 
     useEffect(() => {
         if (initialRequest) {
-            setPair(initialRequest.pair);
-            setTimeframe(initialRequest.timeframe);
-            setPeriod(initialRequest.period);
-            setStrategyText(initialRequest.strategyDescription);
-            handleRunLab(initialRequest.strategyDescription);
+            if (initialRequest.strategyDescription) {
+                setActiveTab('lab');
+                setPair(initialRequest.pair || 'EUR/USD');
+                setTimeframe(initialRequest.timeframe || '15M');
+                setPeriod(initialRequest.period || 'Last 3 Months');
+                setStrategyText(initialRequest.strategyDescription);
+                setTimeout(() => handleRunLab(initialRequest.strategyDescription), 100);
+            } 
+            else if (initialRequest.uploadedFiles && initialRequest.uploadedFiles.length > 0) {
+                setActiveTab('analyzer');
+                setUploadedFiles(initialRequest.uploadedFiles);
+                if (initialRequest.chartAnalysisPrompt) {
+                    setChartAnalysisPrompt(initialRequest.chartAnalysisPrompt);
+                }
+                setTimeout(() => {
+                    handleAnalyzeChart();
+                }, 100);
+            }
         }
-    }, [initialRequest]);
+    }, [initialRequest, handleRunLab, handleAnalyzeChart]);
 
-
-    const handleAnalyzeChart = async () => {
-        if (!apiKey) { setAnalyzerError("Please set your Gemini API key."); openKeyModal(); return; }
-        if (uploadedFiles.length === 0) { setAnalyzerError("Please upload at least one chart screenshot."); return; }
-
-        setAnalyzerError('');
-        setAnalysisResult(null);
-        setAnalyzerState('analyzing');
-
-        try {
-            const result = await analyzeLiveChart(apiKey, chartAnalysisPrompt, uploadedFiles);
-            setAnalysisResult(result);
-            setAnalyzerState('results');
-        } catch (e) {
-            console.error(e);
-            setAnalyzerError(e instanceof Error ? e.message : "An unknown error occurred during analysis.");
-            setAnalyzerState('error');
-        }
-    };
 
     const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
         const files = e.target.files;
@@ -266,12 +291,129 @@ export const AIBacktesterView: React.FC<AIBacktesterViewProps> = ({ initialReque
         }
     };
 
+    const handlePaste = useCallback(async (event: ClipboardEvent) => {
+        if (activeTab !== 'analyzer') return;
+    
+        const items = event.clipboardData?.items;
+        if (!items) return;
+    
+        const imageFiles: File[] = [];
+        for (let i = 0; i < items.length; i++) {
+            if (items[i].type.indexOf('image') !== -1) {
+                const file = items[i].getAsFile();
+                if (file) imageFiles.push(file);
+            }
+        }
+    
+        if (imageFiles.length > 0) {
+            event.preventDefault();
+    
+            if (uploadedFiles.length + imageFiles.length > MAX_UPLOADS) {
+                setAnalyzerError(`You can upload a maximum of ${MAX_UPLOADS} images.`);
+                return;
+            }
+    
+            try {
+                const newFilesPromises = imageFiles.map(file => readFileAndConvertToBase64(file));
+                const newFilesData = await Promise.all(newFilesPromises);
+                setUploadedFiles(prev => [...prev, ...newFilesData]);
+            } catch (err) {
+                console.error("Error reading pasted file:", err);
+                setAnalyzerError("Could not process the pasted image.");
+            }
+        }
+    }, [activeTab, uploadedFiles.length]);
+
+    useEffect(() => {
+        window.addEventListener('paste', handlePaste);
+        return () => {
+            window.removeEventListener('paste', handlePaste);
+        };
+    }, [handlePaste]);
+    
+    const handleSaveAnalysis = () => {
+        if (uploadedFiles.length === 0 || !analysisResult) return;
+        const canvas = document.createElement('canvas');
+        const ctx = canvas.getContext('2d');
+        if (!ctx) return;
+        const img = new Image();
+        img.crossOrigin = "anonymous";
+        img.src = `data:${uploadedFiles[0].mimeType};base64,${uploadedFiles[0].data}`;
+        img.onload = () => {
+            canvas.width = img.width;
+            canvas.height = img.height + 200; // Extra space for text
+            ctx.fillStyle = '#12141D';
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+            ctx.drawImage(img, 0, 0);
+            ctx.fillStyle = '#F8F8F8';
+            ctx.font = '16px Inter, sans-serif';
+            const words = analysisResult.text.split(' ');
+            let line = '';
+            let y = img.height + 40;
+            for(let n = 0; n < words.length; n++) {
+                const testLine = line + words[n] + ' ';
+                const metrics = ctx.measureText(testLine);
+                const testWidth = metrics.width;
+                if (testWidth > canvas.width - 40 && n > 0) {
+                    ctx.fillText(line, 20, y);
+                    line = words[n] + ' ';
+                    y += 24;
+                } else {
+                    line = testLine;
+                }
+            }
+            ctx.fillText(line, 20, y);
+            const dataUrl = canvas.toDataURL('image/png');
+            try {
+                const existing = JSON.parse(localStorage.getItem('savedAnalyses') || '[]');
+                const newItem = { id: Date.now(), imageData: dataUrl };
+                localStorage.setItem('savedAnalyses', JSON.stringify([newItem, ...existing]));
+                setIsAnalysisSaved(true);
+                logSavedAnalysis();
+                if (getCompletionCount('savedAnalyses') + 1 >= ARCHIVIST_GOAL) {
+                    unlockBadge('archivist');
+                }
+            } catch (error) { setAnalyzerError("Could not save analysis."); }
+        };
+    };
+    
+    const handleLogTrade = async () => {
+        if (!apiKey || !analysisResult || uploadedFiles.length === 0) return;
+        setIsLoggingTrade(true);
+        setLogTradeError(null);
+        try {
+            const parsedDetails = await parseTradeLogFromAnalysis(apiKey, analysisResult.text);
+            const newTrade: TradeLog = {
+                id: Date.now(),
+                date: new Date().toISOString().split('T')[0],
+                pair: parsedDetails.pair || 'Other',
+                direction: parsedDetails.direction || 'Buy',
+                outcome: 'Win',
+                rr: 2,
+                setup: parsedDetails.setup || 'From Live Chart Analysis',
+                emotion: 'Confident',
+                notes: 'Auto-logged from AI Live Chart Analysis.',
+                chartScreenshot: uploadedFiles[0],
+                aiReview: analysisResult.text,
+            };
+            const existingEntries: TradeLog[] = JSON.parse(localStorage.getItem(TRADING_JOURNAL_KEY) || '[]');
+            localStorage.setItem(TRADING_JOURNAL_KEY, JSON.stringify([newTrade, ...existingEntries]));
+            logTradeLogged();
+            setIsLoggingTrade(false);
+            setIsLogged(true);
+            setTimeout(() => onSetView('trading_journal'), 1500);
+        } catch(e) {
+            setLogTradeError(e instanceof Error ? e.message : "Unknown error.");
+            setIsLoggingTrade(false);
+        }
+    };
+
     const removeFile = (indexToRemove: number) => {
         setUploadedFiles(prev => prev.filter((_, index) => index !== indexToRemove));
     };
 
     const resetLab = () => { setLabState('idle'); setLabError(''); setParsedStrategy(null); setBacktestResults(null); setCoachingAnalysis(''); setOhlcData([]); };
-    const resetAnalyzer = () => { setAnalyzerState('idle'); setAnalyzerError(''); setUploadedFiles([]); setChartAnalysisPrompt(''); setAnalysisResult(null); };
+    const resetAnalyzer = () => { setAnalyzerState('idle'); setAnalyzerError(''); setUploadedFiles([]); setChartAnalysisPrompt(''); setAnalysisResult(null); setIsAnalysisSaved(false); setIsLogged(false); setLogTradeError(null); };
 
     const getLabLoadingMessage = () => {
         switch(labState) {
@@ -305,7 +447,7 @@ export const AIBacktesterView: React.FC<AIBacktesterViewProps> = ({ initialReque
     return (
         <div className="max-w-7xl mx-auto">
             <h1 className="text-4xl font-extrabold text-white mb-2 tracking-tight">AI Strategy Lab</h1>
-            <p className="text-gray-400 mb-6">Design, test, and analyze trading strategies using natural language and real-time chart data.</p>
+            <p className="text-[--color-muted-grey] mb-6">Design, test, and analyze trading strategies using natural language and real-time chart data.</p>
             
             <div className="flex space-x-2 mb-6 border-b border-slate-700">
                 <TabButton tab="lab" label="Strategy Lab" />
@@ -318,23 +460,23 @@ export const AIBacktesterView: React.FC<AIBacktesterViewProps> = ({ initialReque
                     <div className="space-y-6">
                         <div>
                             <label htmlFor="strategyText" className="block text-lg font-semibold text-white mb-2">1. Describe Your Trading Strategy</label>
-                            <textarea id="strategyText" value={strategyText} onChange={e => setStrategyText(e.target.value)} placeholder='e.g., "Enter short when price sweeps a major high then breaks the last low. Place stop loss above the sweep and target a 1:3 RR."' rows={8} className="w-full p-3 bg-gray-800 border border-gray-600 rounded-lg text-gray-300 focus:ring-2 focus:ring-cyan-500" />
+                            <textarea id="strategyText" value={strategyText} onChange={e => setStrategyText(e.target.value)} placeholder='e.g., "Enter short when price sweeps a major high then breaks the last low. Place stop loss above the sweep and target a 1:3 RR."' rows={8} className="w-full p-3 bg-[--color-dark-matter] border border-[--color-border] rounded-lg text-gray-300 focus:ring-2 focus:ring-cyan-500" />
                         </div>
                         <div>
                             <label className="block text-lg font-semibold text-white mb-2">2. Set Parameters</label>
                             <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-                                <select value={pair} onChange={e => setPair(e.target.value)} className="w-full bg-gray-800 border border-gray-600 rounded-md px-3 py-2 text-white font-semibold focus:ring-2 focus:ring-cyan-500"><option disabled>Pair</option>{MAJOR_PAIRS.map(p => <option key={p} value={p}>{p}</option>)}</select>
-                                <select value={timeframe} onChange={e => setTimeframe(e.target.value)} className="w-full bg-gray-800 border border-gray-600 rounded-md px-3 py-2 text-white font-semibold focus:ring-2 focus:ring-cyan-500"><option disabled>Timeframe</option>{TIMEFRAMES.map(t => <option key={t} value={t}>{t}</option>)}</select>
-                                <select value={period} onChange={e => setPeriod(e.target.value)} className="w-full bg-gray-800 border border-gray-600 rounded-md px-3 py-2 text-white font-semibold focus:ring-2 focus:ring-cyan-500"><option disabled>Period</option>{PERIODS.map(p => <option key={p} value={p}>{p}</option>)}</select>
+                                <select value={pair} onChange={e => setPair(e.target.value)} className="w-full bg-[--color-dark-matter] border border-[--color-border] rounded-md px-3 py-2 text-white font-semibold focus:ring-2 focus:ring-cyan-500"><option disabled>Pair</option>{MAJOR_PAIRS.map(p => <option key={p} value={p}>{p}</option>)}</select>
+                                <select value={timeframe} onChange={e => setTimeframe(e.target.value)} className="w-full bg-[--color-dark-matter] border border-[--color-border] rounded-md px-3 py-2 text-white font-semibold focus:ring-2 focus:ring-cyan-500"><option disabled>Timeframe</option>{TIMEFRAMES.map(t => <option key={t} value={t}>{t}</option>)}</select>
+                                <select value={period} onChange={e => setPeriod(e.target.value)} className="w-full bg-[--color-dark-matter] border border-[--color-border] rounded-md px-3 py-2 text-white font-semibold focus:ring-2 focus:ring-cyan-500"><option disabled>Period</option>{PERIODS.map(p => <option key={p} value={p}>{p}</option>)}</select>
                             </div>
                         </div>
-                        <button onClick={() => handleRunLab()} disabled={labState !== 'idle' && labState !== 'error'} className="w-full py-3 bg-cyan-500 text-gray-900 font-bold rounded-lg shadow-md hover:bg-cyan-400 disabled:bg-gray-600 flex items-center justify-center"><SparklesIcon className="w-6 h-6 mr-2" />Analyze Strategy</button>
+                        <button onClick={() => handleRunLab()} disabled={labState !== 'idle' && labState !== 'error'} className="w-full py-3 bg-cyan-500 text-slate-900 font-bold rounded-lg shadow-md hover:bg-cyan-400 disabled:bg-slate-600 flex items-center justify-center"><SparklesIcon className="w-6 h-6 mr-2" />Analyze Strategy</button>
                     </div>
                     {/* Strategy Lab Output Panel */}
-                    <div className="bg-gray-800/50 border border-gray-700 rounded-lg p-6 min-h-[400px] flex flex-col">
+                    <div className="bg-[--color-dark-matter]/50 border border-[--color-border] rounded-lg p-6 min-h-[400px] flex flex-col">
                         {labState === 'idle' && <div className="m-auto text-center"><BeakerIcon className="w-12 h-12 mx-auto text-slate-500" /><p className="mt-2 text-slate-400">Results will appear here.</p></div>}
-                        {labState !== 'idle' && labState !== 'results' && labState !== 'error' && <div className="m-auto text-center"><LoadingSpinner /><p className="mt-3 text-gray-400">{getLabLoadingMessage()}</p></div>}
-                        {labState === 'error' && <div className="m-auto text-center"><p className="text-red-400 bg-red-500/10 p-4 rounded-md">{labError}</p><button onClick={resetLab} className="mt-4 px-4 py-2 bg-gray-600 rounded-md hover:bg-gray-500">Try Again</button></div>}
+                        {labState !== 'idle' && labState !== 'results' && labState !== 'error' && <div className="m-auto text-center"><LoadingSpinner /><p className="mt-3 text-[--color-muted-grey]">{getLabLoadingMessage()}</p></div>}
+                        {labState === 'error' && <div className="m-auto text-center"><p className="text-red-400 bg-red-500/10 p-4 rounded-md">{labError}</p><button onClick={resetLab} className="mt-4 px-4 py-2 bg-slate-600 rounded-md hover:bg-slate-500">Try Again</button></div>}
                         {labState === 'results' && backtestResults && coachingAnalysis && (
                             <div className="animate-[fade-in_0.5s] space-y-6 overflow-y-auto">
                                 <div>
@@ -342,12 +484,12 @@ export const AIBacktesterView: React.FC<AIBacktesterViewProps> = ({ initialReque
                                         <h3 className="text-xl font-bold text-white">
                                             Chart ({dataSource === 'real' ? 'Real Historical Data' : 'AI-Generated Simulation'})
                                         </h3>
-                                        <div className="flex space-x-1 p-1 bg-slate-900/50 rounded-lg">
+                                        <div className="flex space-x-1 p-1 bg-[--color-obsidian-slate]/50 rounded-lg">
                                             <ChartTabButton tab="ohlc" label="Price Chart" />
                                             <ChartTabButton tab="equity" label="Equity Curve" />
                                         </div>
                                     </div>
-                                    <div className="w-full aspect-video bg-slate-900 rounded-md">
+                                    <div className="w-full aspect-video bg-[--color-obsidian-slate] rounded-md">
                                         {chartTab === 'ohlc' ? (
                                              <OhlcChart data={ohlcData} trades={backtestResults.tradeLog} />
                                         ) : (
@@ -369,7 +511,7 @@ export const AIBacktesterView: React.FC<AIBacktesterViewProps> = ({ initialReque
                                     </div>
                                 </div>
                                 <div className="pt-6 border-t border-gray-700"><h3 className="text-xl font-bold text-white mb-3">AI Coaching Analysis</h3><div className="prose prose-invert prose-sm max-w-none text-gray-300"><FormattedContent text={coachingAnalysis} /></div></div>
-                                <button onClick={resetLab} className="w-full mt-4 py-2 bg-gray-600 font-semibold rounded-md hover:bg-gray-500">Test Another Strategy</button>
+                                <button onClick={resetLab} className="w-full mt-4 py-2 bg-slate-600 font-semibold rounded-md hover:bg-slate-500">Test Another Strategy</button>
                             </div>
                         )}
                     </div>
@@ -383,12 +525,12 @@ export const AIBacktesterView: React.FC<AIBacktesterViewProps> = ({ initialReque
                         <div>
                             <label className="block text-lg font-semibold text-white mb-2">1. Upload Chart Screenshots</label>
                             <input type="file" accept="image/*" ref={fileInputRef} onChange={handleFileUpload} className="hidden" multiple />
-                             <div className="p-4 bg-gray-800/50 border border-gray-700 rounded-lg">
+                             <div className="p-4 bg-[--color-dark-matter]/50 border border-[--color-border] rounded-lg">
                                 {uploadedFiles.length > 0 && (
                                     <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-4">
                                         {uploadedFiles.map((file, index) => (
-                                            <div key={index} className="relative group aspect-square">
-                                                <img src={`data:${file.mimeType};base64,${file.data}`} alt={`Chart preview ${index + 1}`} className="w-full h-full object-cover rounded-md border border-gray-600" />
+                                            <div key={index} className="relative group aspect-video">
+                                                <img src={`data:${file.mimeType};base64,${file.data}`} alt={`Chart preview ${index + 1}`} className="w-full h-full object-cover rounded-md border border-slate-600" />
                                                 <button onClick={() => removeFile(index)} className="absolute top-1 right-1 p-0.5 bg-black/60 rounded-full text-white hover:bg-red-500 opacity-0 group-hover:opacity-100 transition-opacity" aria-label={`Remove image ${index + 1}`}>
                                                     <XMarkIcon className="w-4 h-4" />
                                                 </button>
@@ -397,10 +539,10 @@ export const AIBacktesterView: React.FC<AIBacktesterViewProps> = ({ initialReque
                                     </div>
                                 )}
                                 {uploadedFiles.length < MAX_UPLOADS ? (
-                                    <button onClick={() => fileInputRef.current?.click()} className="w-full flex flex-col items-center justify-center p-6 bg-gray-800 border-2 border-dashed border-gray-600 rounded-lg hover:border-cyan-500 transition-colors">
+                                    <button onClick={() => fileInputRef.current?.click()} className="w-full flex flex-col items-center justify-center p-6 bg-[--color-dark-matter] border-2 border-dashed border-[--color-border] rounded-lg hover:border-cyan-500 transition-colors">
                                         <PhotoIcon className="w-10 h-10 text-gray-500" />
                                         <span className="mt-2 text-sm font-semibold text-gray-400">
-                                            {uploadedFiles.length === 0 ? 'Click to upload images' : 'Add another image'}
+                                            Click to upload, or paste an image
                                         </span>
                                         <span className="text-xs text-gray-500">Up to {MAX_UPLOADS} images</span>
                                     </button>
@@ -411,28 +553,37 @@ export const AIBacktesterView: React.FC<AIBacktesterViewProps> = ({ initialReque
                         </div>
                         <div>
                              <label htmlFor="chartAnalysisPrompt" className="block text-lg font-semibold text-white mb-2">2. Add Context (Optional)</label>
-                             <textarea id="chartAnalysisPrompt" value={chartAnalysisPrompt} onChange={e => setChartAnalysisPrompt(e.target.value)} placeholder='e.g., "Is there a valid long setup here on EUR/USD 15M, considering the 4H trend?"' rows={4} className="w-full p-3 bg-gray-800 border border-gray-600 rounded-lg text-gray-300 focus:ring-2 focus:ring-cyan-500" />
+                             <textarea id="chartAnalysisPrompt" value={chartAnalysisPrompt} onChange={e => setChartAnalysisPrompt(e.target.value)} placeholder='e.g., "Is there a valid long setup here on EUR/USD 15M, considering the 4H trend?"' rows={4} className="w-full p-3 bg-[--color-dark-matter] border border-[--color-border] rounded-lg text-gray-300 focus:ring-2 focus:ring-cyan-500" />
                         </div>
-                        <button onClick={handleAnalyzeChart} disabled={analyzerState !== 'idle' && analyzerState !== 'error'} className="w-full py-3 bg-cyan-500 text-gray-900 font-bold rounded-lg shadow-md hover:bg-cyan-400 disabled:bg-gray-600 flex items-center justify-center"><SparklesIcon className="w-6 h-6 mr-2" />Analyze Live Chart</button>
+                        <button onClick={handleAnalyzeChart} disabled={analyzerState !== 'idle' && analyzerState !== 'error' && analyzerState !== 'results'} className="w-full py-3 bg-cyan-500 text-slate-900 font-bold rounded-lg shadow-md hover:bg-cyan-400 disabled:bg-slate-600 flex items-center justify-center"><SparklesIcon className="w-6 h-6 mr-2" />Analyze Live Chart</button>
                     </div>
                      {/* Live Chart Analyzer Output Panel */}
-                    <div className="bg-gray-800/50 border border-gray-700 rounded-lg p-6 min-h-[400px] flex flex-col">
+                    <div className="bg-[--color-dark-matter]/50 border border-[--color-border] rounded-lg p-6 min-h-[400px] flex flex-col">
                         {analyzerState === 'idle' && <div className="m-auto text-center"><BeakerIcon className="w-12 h-12 mx-auto text-slate-500" /><p className="mt-2 text-slate-400">Upload a chart to get started.</p></div>}
-                        {analyzerState === 'analyzing' && <div className="m-auto text-center"><LoadingSpinner /><p className="mt-3 text-gray-400">AI is analyzing the chart and fetching live data...</p></div>}
-                        {analyzerState === 'error' && <div className="m-auto text-center"><p className="text-red-400 bg-red-500/10 p-4 rounded-md">{analyzerError}</p><button onClick={resetAnalyzer} className="mt-4 px-4 py-2 bg-gray-600 rounded-md hover:bg-gray-500">Try Again</button></div>}
+                        {analyzerState === 'analyzing' && <div className="m-auto text-center"><LoadingSpinner /><p className="mt-3 text-[--color-muted-grey]">AI is analyzing the chart and fetching live data...</p></div>}
+                        {analyzerState === 'error' && <div className="m-auto text-center"><p className="text-red-400 bg-red-500/10 p-4 rounded-md">{analyzerError}</p><button onClick={resetAnalyzer} className="mt-4 px-4 py-2 bg-slate-600 rounded-md hover:bg-slate-500">Try Again</button></div>}
                         {analyzerState === 'results' && analysisResult && (
-                             <div className="animate-[fade-in_0.5s] space-y-6">
-                                <div>
+                             <div className="animate-[fade-in_0.5s] space-y-6 flex-1 flex flex-col">
+                                <div className="flex-1 overflow-y-auto">
                                     <h3 className="text-xl font-bold text-white mb-3">Live Analysis & Trade Idea</h3>
                                     <div className="prose prose-invert prose-sm max-w-none text-gray-300"><FormattedContent text={analysisResult.text} /></div>
+                                    {analysisResult.sources && analysisResult.sources.length > 0 && (
+                                        <div className="pt-6 border-t border-gray-700">
+                                            <h4 className="text-sm font-semibold text-gray-400 uppercase mb-2 flex items-center"><LinkIcon className="w-4 h-4 mr-1.5" /> Sources</h4>
+                                            <ul className="space-y-1.5">{analysisResult.sources.map((chunk, index) => chunk.web && <li key={index}><a href={chunk.web.uri} target="_blank" rel="noopener noreferrer" className="text-xs text-cyan-400 hover:underline truncate block" title={chunk.web.title}>{chunk.web.title}</a></li>)}</ul>
+                                        </div>
+                                    )}
                                 </div>
-                                {analysisResult.sources && analysisResult.sources.length > 0 && (
-                                    <div className="pt-6 border-t border-gray-700">
-                                        <h4 className="text-sm font-semibold text-gray-400 uppercase mb-2 flex items-center"><LinkIcon className="w-4 h-4 mr-1.5" /> Sources</h4>
-                                        <ul className="space-y-1.5">{analysisResult.sources.map((chunk, index) => chunk.web && <li key={index}><a href={chunk.web.uri} target="_blank" rel="noopener noreferrer" className="text-xs text-cyan-400 hover:underline truncate block" title={chunk.web.title}>{chunk.web.title}</a></li>)}</ul>
-                                    </div>
-                                )}
-                                <button onClick={resetAnalyzer} className="w-full mt-4 py-2 bg-gray-600 font-semibold rounded-md hover:bg-gray-500">Analyze Another Chart</button>
+                                <div className="mt-6 pt-6 border-t border-slate-700 flex flex-col sm:flex-row gap-3">
+                                    <button onClick={handleSaveAnalysis} disabled={isAnalysisSaved} className="flex-1 inline-flex items-center justify-center px-4 py-2 bg-indigo-500 text-white font-semibold rounded-md hover:bg-indigo-400 disabled:bg-slate-600">
+                                        <BookmarkSquareIcon className="w-5 h-5 mr-2" /> {isAnalysisSaved ? 'Saved!' : 'Save Analysis'}
+                                    </button>
+                                    <button onClick={handleLogTrade} disabled={isLoggingTrade || isLogged} className="flex-1 inline-flex items-center justify-center px-4 py-2 bg-green-600 text-white font-semibold rounded-md hover:bg-green-500 disabled:bg-slate-600">
+                                        {isLoggingTrade ? <LoadingSpinner /> : <><ClipboardDocumentListIcon className="w-5 h-5 mr-2" /> {isLogged ? 'Logged!' : 'Log Trade'}</>}
+                                    </button>
+                                </div>
+                                {logTradeError && <p className="text-sm text-red-400 mt-2 text-center">{logTradeError}</p>}
+                                <button onClick={resetAnalyzer} className="w-full mt-3 py-2 bg-slate-600 font-semibold rounded-md hover:bg-slate-500">Analyze Another Chart</button>
                              </div>
                         )}
                     </div>

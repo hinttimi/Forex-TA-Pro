@@ -2,8 +2,6 @@
 
 import React, { useState, useEffect, useCallback } from 'react';
 import { generateChartImage } from '../../services/geminiService';
-import { MODULES } from '../../constants';
-import { Lesson } from '../../types';
 import { LoadingSpinner } from '../LoadingSpinner';
 import { ArrowRightIcon } from '../icons/ArrowRightIcon';
 import { ChartDisplay } from '../ChartDisplay';
@@ -11,14 +9,30 @@ import { useCompletion } from '../../hooks/useCompletion';
 import { useBadges } from '../../hooks/useBadges';
 import { useApiKey } from '../../hooks/useApiKey';
 
-const getRandomElement = <T,>(arr: T[]): T => arr[Math.floor(Math.random() * arr.length)];
+interface ChartPattern {
+    name: string;
+    prompt: string;
+}
 
-const allVisualLessons = MODULES.flatMap(m => m.lessons).filter(l =>
-  !l.key.includes('forex-basics') &&
-  !l.key.includes('what-is-liquidity') &&
-  !l.key.includes('risk-management') &&
-  !l.key.includes('psychology')
-);
+const IDENTIFIABLE_PATTERNS: ChartPattern[] = [
+    { name: 'Bullish Engulfing Pattern', prompt: 'A dark-theme forex chart showing a clear bullish engulfing candlestick pattern at the bottom of a downtrend, leading to a reversal.' },
+    { name: 'Bearish Engulfing Pattern', prompt: 'A dark-theme forex chart showing a clear bearish engulfing candlestick pattern at the top of an uptrend, leading to a reversal.' },
+    { name: 'Hammer Candlestick', prompt: 'A dark-theme forex chart showing a Hammer candlestick with a long lower wick at the end of a downtrend, signaling a potential bullish reversal.' },
+    { name: 'Shooting Star Candlestick', prompt: 'A dark-theme forex chart showing a Shooting Star candlestick with a long upper wick at the top of an uptrend, signaling a potential bearish reversal.' },
+    { name: 'Doji Candlestick', prompt: 'A dark-theme forex chart showing a Doji candlestick at a key support or resistance level, indicating market indecision.' },
+    { name: 'Head and Shoulders Pattern', prompt: 'A dark-theme forex chart showing a classic Head and Shoulders reversal pattern at a market top, with a clear neckline.' },
+    { name: 'Inverse Head and Shoulders', prompt: 'A dark-theme forex chart showing an Inverse Head and Shoulders pattern at a market bottom, signaling a bullish reversal.' },
+    { name: 'Ascending Triangle', prompt: 'A dark-theme forex chart showing an ascending triangle pattern, with a flat top resistance and rising trendline support.' },
+    { name: 'Descending Triangle', prompt: 'A dark-theme forex chart showing a descending triangle pattern, with a flat bottom support and a falling trendline resistance.' },
+    { name: 'Bull Flag Pattern', prompt: 'A dark-theme forex chart showing a clear bull flag continuation pattern after a strong upward impulse move.' },
+    { name: 'Bear Flag Pattern', prompt: 'A dark-theme forex chart showing a clear bear flag continuation pattern after a strong downward impulse move.' },
+    { name: 'Double Top Pattern', prompt: 'A dark-theme forex chart showing a double top "M" shaped reversal pattern at a resistance level.' },
+    { name: 'Double Bottom Pattern', prompt: 'A dark-theme forex chart showing a double bottom "W" shaped reversal pattern at a support level.' },
+    { name: 'Support/Resistance Flip', prompt: 'A dark-theme forex chart showing a clear break of a support level, which then acts as new resistance on a retest.' },
+];
+
+
+const getRandomElement = <T,>(arr: T[]): T => arr[Math.floor(Math.random() * arr.length)];
 
 const shuffleArray = <T,>(array: T[]): T[] => {
   const newArray = [...array];
@@ -34,8 +48,8 @@ const SHARP_EYE_GOAL = 10;
 export const PatternRecognitionView: React.FC = () => {
     const [isLoading, setIsLoading] = useState(true);
     const [chartImageUrl, setChartImageUrl] = useState('');
-    const [correctAnswer, setCorrectAnswer] = useState<Lesson | null>(null);
-    const [options, setOptions] = useState<Lesson[]>([]);
+    const [correctAnswer, setCorrectAnswer] = useState<ChartPattern | null>(null);
+    const [options, setOptions] = useState<ChartPattern[]>([]);
     const [selectedAnswer, setSelectedAnswer] = useState<string | null>(null);
     const [isCorrect, setIsCorrect] = useState<boolean | null>(null);
     const [score, setScore] = useState({ correct: 0, total: 0 });
@@ -59,23 +73,18 @@ export const PatternRecognitionView: React.FC = () => {
         }
 
         try {
-            const answerLesson = getRandomElement(allVisualLessons);
-            setCorrectAnswer(answerLesson);
+            const answerPattern = getRandomElement(IDENTIFIABLE_PATTERNS);
+            setCorrectAnswer(answerPattern);
 
-            const distractors = allVisualLessons
-                .filter(l => l.key !== answerLesson.key)
+            const distractors = IDENTIFIABLE_PATTERNS
+                .filter(p => p.name !== answerPattern.name)
                 .sort(() => 0.5 - Math.random())
                 .slice(0, 3);
 
-            setOptions(shuffleArray([...distractors, answerLesson]));
+            setOptions(shuffleArray([...distractors, answerPattern]));
 
-            // FIX: The 'Lesson' type does not have a 'chartPrompt' property.
-            // The chart prompt should be extracted from the lesson's 'content' string.
-            // A regex is used to find a [CHART:...] block, with a fallback to generate a prompt from the lesson title.
-            const chartPromptRegex = /\[CHART:\s*(.*?)\]/s;
-            const match = answerLesson.content.match(chartPromptRegex);
-            const chartPrompt = match ? match[1] : `A dark-theme forex chart that clearly demonstrates the concept of "${answerLesson.title}".`;
-            const imageUrl = await generateChartImage(apiKey, chartPrompt, `pattern-recog-${answerLesson.key}`);
+            const chartPrompt = answerPattern.prompt;
+            const imageUrl = await generateChartImage(apiKey, chartPrompt, `pattern-recog-${answerPattern.name.replace(/\s/g, '')}`);
             setChartImageUrl(imageUrl);
 
         } catch (error) {
@@ -90,11 +99,11 @@ export const PatternRecognitionView: React.FC = () => {
         loadNewPattern();
     }, [loadNewPattern]);
 
-    const handleAnswer = (lessonKey: string) => {
+    const handleAnswer = (patternName: string) => {
         if (selectedAnswer) return;
 
-        setSelectedAnswer(lessonKey);
-        const correct = lessonKey === correctAnswer?.key;
+        setSelectedAnswer(patternName);
+        const correct = patternName === correctAnswer?.name;
         setIsCorrect(correct);
         setScore(prev => ({
             correct: prev.correct + (correct ? 1 : 0),
@@ -109,14 +118,14 @@ export const PatternRecognitionView: React.FC = () => {
         }
     };
 
-    const getButtonClass = (lessonKey: string) => {
+    const getButtonClass = (patternName: string) => {
         if (!selectedAnswer) {
             return 'bg-[--color-dark-matter] hover:bg-slate-600';
         }
-        if (lessonKey === correctAnswer?.key) {
+        if (patternName === correctAnswer?.name) {
             return 'bg-green-500/80 ring-2 ring-green-400';
         }
-        if (lessonKey === selectedAnswer && !isCorrect) {
+        if (patternName === selectedAnswer && !isCorrect) {
             return 'bg-red-500/80';
         }
         return 'bg-[--color-dark-matter] opacity-50';
@@ -149,14 +158,14 @@ export const PatternRecognitionView: React.FC = () => {
             />
             
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                {options.map(lesson => (
+                {options.map(pattern => (
                     <button
-                        key={lesson.key}
-                        onClick={() => handleAnswer(lesson.key)}
+                        key={pattern.name}
+                        onClick={() => handleAnswer(pattern.name)}
                         disabled={!!selectedAnswer || isLoading}
-                        className={`w-full text-center p-4 rounded-lg font-semibold text-[--color-ghost-white] transition-all duration-300 ${getButtonClass(lesson.key)} disabled:cursor-not-allowed`}
+                        className={`w-full text-center p-4 rounded-lg font-semibold text-[--color-ghost-white] transition-all duration-300 ${getButtonClass(pattern.name)} disabled:cursor-not-allowed`}
                     >
-                        {lesson.title}
+                        {pattern.name}
                     </button>
                 ))}
             </div>
@@ -166,7 +175,7 @@ export const PatternRecognitionView: React.FC = () => {
                     <p className={`text-2xl font-bold ${isCorrect ? 'text-green-400' : 'text-red-400'}`}>
                         {isCorrect ? 'Correct!' : 'Not quite.'}
                     </p>
-                    {!isCorrect && <p className="text-[--color-ghost-white]/80 mt-1">The correct pattern was: <strong>{correctAnswer?.title}</strong></p>}
+                    {!isCorrect && <p className="text-[--color-ghost-white]/80 mt-1">The correct pattern was: <strong>{correctAnswer?.name}</strong></p>}
                     
                     <button onClick={loadNewPattern} className="mt-4 inline-flex items-center px-6 py-3 bg-cyan-500 text-gray-900 font-semibold rounded-lg shadow-md hover:bg-cyan-400 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-offset-gray-900 focus:ring-cyan-500 transition-all duration-200">
                         Next Pattern

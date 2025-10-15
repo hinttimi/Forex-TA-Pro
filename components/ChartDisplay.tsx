@@ -1,6 +1,3 @@
-
-
-
 import React, { useState, useEffect, useRef } from 'react';
 import { PhotoIcon } from './icons/PhotoIcon';
 import { ArrowsPointingOutIcon } from './icons/ArrowsPointingOutIcon';
@@ -61,7 +58,6 @@ export const ChartDisplay: React.FC<ChartDisplayProps> = ({
     const minScale = 0.5;
     const maxScale = 5;
 
-    // Clamp the scale
     const clampedScale = Math.max(minScale, Math.min(newScale, maxScale));
 
     if (imageRef.current) {
@@ -69,7 +65,6 @@ export const ChartDisplay: React.FC<ChartDisplayProps> = ({
         const mouseX = e.clientX - rect.left;
         const mouseY = e.clientY - rect.top;
 
-        // Calculate new position to keep mouse position stable during zoom
         const newX = mouseX - (mouseX - position.x) * (clampedScale / scale);
         const newY = mouseY - (mouseY - position.y) * (clampedScale / scale);
 
@@ -98,29 +93,44 @@ export const ChartDisplay: React.FC<ChartDisplayProps> = ({
   const handleMouseUpOrLeave = () => {
     setIsPanning(false);
   };
+  
+  const Placeholder = () => (
+      <div className="relative w-full h-full flex flex-col items-center justify-center text-center text-[--color-muted-grey]">
+        <div className="absolute inset-0 overflow-hidden rounded-md">
+            <svg width="100%" height="100%" xmlns="http://www.w3.org/2000/svg">
+                <defs>
+                    <pattern id="grid" width="20" height="20" patternUnits="userSpaceOnUse">
+                        <path d="M 20 0 L 0 0 0 20" fill="none" stroke="rgba(51, 56, 71, 0.5)" strokeWidth="1"/>
+                    </pattern>
+                </defs>
+                <rect width="100%" height="100%" fill="url(#grid)" />
+            </svg>
+        </div>
+        <div className="relative z-10">
+            <PhotoIcon className="w-16 h-16 mx-auto mb-2 opacity-50" />
+            <p>Your generated chart will appear here.</p>
+        </div>
+      </div>
+  );
 
   return (
     <>
       <div className={containerClassName}>
         {isLoading && <ChartSkeleton loadingText={loadingText} />}
-        {!isLoading && !imageUrl && (
-          <div className="text-center text-[--color-muted-grey]">
-            <PhotoIcon className="w-16 h-16 mx-auto mb-2" />
-            <p>Your generated chart will appear here.</p>
-          </div>
-        )}
+        {!isLoading && !imageUrl && <Placeholder />}
         {!isLoading && imageUrl && (
           <button
             onClick={handleOpenModal}
-            className="relative group w-full h-full flex items-center justify-center cursor-pointer focus:outline-none"
+            className="relative group w-full h-full flex items-center justify-center cursor-pointer focus:outline-none focus-visible:ring-2 focus-visible:ring-cyan-500 rounded-md"
             aria-label="Enlarge chart image"
           >
             <img
               src={imageUrl}
               alt="AI-generated chart"
-              className="w-full h-full object-cover rounded-md transition-opacity duration-300 group-hover:opacity-40"
+              className="w-full h-full object-cover rounded-md transition-transform duration-300 group-hover:scale-[1.03]"
             />
-            <div className="absolute inset-0 flex flex-col items-center justify-center bg-black bg-opacity-60 opacity-0 group-hover:opacity-100 transition-opacity duration-300 rounded-md">
+            <div className="absolute inset-0 rounded-md ring-1 ring-inset ring-cyan-500/30 opacity-0 group-hover:opacity-100 transition-opacity duration-300" />
+            <div className="absolute inset-0 flex flex-col items-center justify-center bg-black/70 opacity-0 group-hover:opacity-100 transition-opacity duration-300 rounded-md">
                 <ArrowsPointingOutIcon className="w-10 h-10 text-[--color-ghost-white] mb-2" />
                 <p className="text-[--color-ghost-white] font-semibold">Click to enlarge</p>
             </div>
@@ -130,14 +140,14 @@ export const ChartDisplay: React.FC<ChartDisplayProps> = ({
 
       {isModalOpen && (
         <div 
-            className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm animate-[fade-in_0.2s_ease-out]"
+            className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-md animate-[fade-in_0.2s_ease-out]"
             onMouseMove={handleMouseMove}
             onMouseUp={handleMouseUpOrLeave}
             onMouseLeave={handleMouseUpOrLeave}
             onClick={handleCloseModal}
         >
           <div 
-            className="relative w-full h-full flex items-center justify-center overflow-hidden"
+            className="relative w-[95vw] h-[95vh] flex items-center justify-center overflow-hidden"
             onClick={(e) => e.stopPropagation()}
           >
             <img 

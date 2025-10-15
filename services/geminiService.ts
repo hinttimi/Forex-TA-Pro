@@ -1,6 +1,4 @@
-import { GoogleGenAI, Type, GenerateContentResponse, GenerateImagesResponse, FunctionDeclaration, Modality } from "@google/genai";
-// FIX: Add missing type imports
-// FIX: Corrected typo from TopMoverData to TopMoverData
+import { GoogleGenAI, Type, GenerateContentResponse, GenerateImagesResponse, Modality, FunctionDeclaration } from "@google/genai";
 import { NewsArticle, MarketUpdate, EconomicEvent, MultipleChoiceQuestion, StrategyParams, BacktestResults, AnalysisResult, AppView, OhlcData, CurrencyStrengthData, VolatilityData, MarketSentimentData, TopMoverData, DailyMission, TradeLog } from '../types';
 import { MENTOR_PERSONAS } from "../constants/mentorSettings";
 import { LEARNING_PATHS } from "../constants";
@@ -341,42 +339,12 @@ For each question, provide 4 options in total (one correct, three plausible dist
     }
 };
 
-const executeToolFunctionDeclaration: FunctionDeclaration = {
-  name: 'executeTool',
-  description: 'Navigates the user to a specific tool and can optionally pre-fill parameters or execute an action. Use this to make the app feel agentic and responsive to user commands.',
-  parameters: {
-    type: Type.OBJECT,
-    properties: {
-      toolName: {
-        type: Type.STRING,
-        description: "The name of the tool to navigate to or execute.",
-        enum: [
-            'dashboard', 'simulator', 'live_simulator', 'backtester', 'pattern', 'timed', 
-            'canvas', 'market_dynamics', 'market_pulse', 'news_feed', 'market_analyzer', 
-            'economic_calendar', 'trading_journal', 'trading_plan', 'saved', 'achievements', 'settings'
-        ]
-      },
-      params: {
-          type: Type.OBJECT,
-          description: "Optional parameters to pass to the tool. For 'backtester', include 'pair', 'timeframe', 'period', and 'strategyDescription'. For 'market_analyzer', include 'pair'.",
-          properties: {
-              pair: { type: Type.STRING, description: "The currency pair for the tool, e.g., 'EUR/USD'" },
-              timeframe: { type: Type.STRING, description: "The timeframe for the backtester, e.g., '15M' or '1H'" },
-              period: { type: Type.STRING, description: "The historical period for the backtester, e.g., 'Last 6 Months'" },
-              strategyDescription: { type: Type.STRING, description: "The user's strategy in their own words for the backtester."}
-          }
-      }
-    },
-    required: ['toolName'],
-  },
-};
-
 export const generateMentorResponse = async (
     apiKey: string, 
     prompt: string, 
     completedLessonTitles: string[],
     personaId: string
-): Promise<{ text: string; groundingChunks: any[]; functionCalls?: any[] }> => {
+): Promise<{ text: string; groundingChunks: any[]; }> => {
     
     const selectedPersona = MENTOR_PERSONAS.find(p => p.id === personaId) || MENTOR_PERSONAS[0];
 
@@ -402,14 +370,15 @@ You are an AI assistant deeply integrated within the "Forex TA Pro" learning app
     -   **Economic Calendar:** Details about upcoming high-impact economic events.
     When a user asks a question about the current market, use your search tool to provide a comprehensive, real-time answer as if you are accessing these tools directly.
 
-2.  **In-App Navigation (via Function Calling):** You can help the user navigate the app by calling the \`executeTool\` function. When a user's request clearly maps to a tool's function, use it. Here are the tools you can navigate to:
-    -   **dashboard**: The main home screen.
-    -   **simulator**: A practice environment for analyzing static charts.
-    -   **live_simulator**: A real-time simulated price feed.
-    -   **backtester**: The AI Strategy Lab. Use this when a user says "backtest a strategy..." and pass their strategy details in the \`params\`.
-    -   **pattern**: A flashcard-style game to practice pattern recognition.
-    -   **market_analyzer**: A tool for instant analysis of a pair. Use this when a user asks "why is EUR/USD moving?". Pass the pair in \`params\`.
-    -   You can also generate new charts to explain concepts using the format \`[CHART: a detailed prompt...]\`.
+2.  **In-App Navigation (via Text Command):** You can help the user navigate the app. If a user's request clearly maps to a tool's function, you MUST embed a special command at the very end of your response. The command must be on its own line and in this exact format: \`[TOOL_EXECUTION:{"toolName":"view_name","params":{"key":"value"}}]\`. Do not add any text or formatting after this command.
+    Here are the available 'view_name' values: 'dashboard', 'simulator', 'live_simulator', 'backtester', 'pattern', 'timed', 'canvas', 'market_dynamics', 'market_pulse', 'news_feed', 'market_analyzer', 'economic_calendar', 'trading_journal', 'trading_plan', 'saved', 'achievements', 'settings'.
+    For 'backtester', include 'pair', 'timeframe', 'period', and 'strategyDescription' in params. For 'market_analyzer', include 'pair'.
+    
+    Example: If a user says "take me to the trade simulator", you could respond with:
+    "Right away! Opening the Trade Simulator for you.
+    [TOOL_EXECUTION:{\"toolName\":\"simulator\",\"params\":{}}]"
+    
+    You can also generate new charts to explain concepts using the format \`[CHART: a detailed prompt...]\`.
 `;
 
     const systemInstruction = `${selectedPersona.systemInstruction}
@@ -440,18 +409,45 @@ ${completedLessonsText}
             contents: prompt,
             config: {
                 systemInstruction: systemInstruction,
-                tools: [{ functionDeclarations: [executeToolFunctionDeclaration] }, {googleSearch: {}}]
+                tools: [{googleSearch: {}}]
             },
         }));
 
         return {
             text: response.text,
             groundingChunks: response.candidates?.[0]?.groundingMetadata?.groundingChunks || [],
-            functionCalls: response.functionCalls,
         };
         
     } catch (error) {
         console.error("Error generating mentor response:", error);
+        throw error;
+    }
+};
+
+export const generateSpeech = async (apiKey: string, text: string, voiceName: string): Promise<string> => {
+    try {
+        const ai = getAiClient(apiKey);
+        const response = await withRetry<GenerateContentResponse>(() => ai.models.generateContent({
+            model: "gemini-2.5-flash-preview-tts",
+            contents: [{ parts: [{ text }] }],
+            config: {
+                responseModalities: [Modality.AUDIO],
+                speechConfig: {
+                    voiceConfig: {
+                        prebuiltVoiceConfig: { voiceName },
+                    },
+                },
+            },
+        }));
+
+        const base64Audio = response.candidates?.[0]?.content?.parts?.[0]?.inlineData?.data;
+        if (base64Audio) {
+            return base64Audio;
+        } else {
+            throw new Error("AI did not return audio data for the TTS request.");
+        }
+    } catch (error) {
+        console.error("Error generating speech:", error);
         throw error;
     }
 };
@@ -1029,13 +1025,15 @@ export const analyzeBacktestResults = async (apiKey: string, strategy: StrategyP
 };
 
 export const analyzeLiveChart = async (apiKey: string, userPrompt: string, files: { data: string; mimeType: string }[]): Promise<AnalysisResult> => {
-    const systemInstruction = `You are an expert forex trading mentor specializing in Smart Money Concepts (SMC) and ICT methodologies. Analyze the user-uploaded chart image(s) and their optional prompt. Your goal is to identify high-probability trade setups or critique the user's analysis.
+    const systemInstruction = `You are an expert forex trading mentor specializing in Smart Money Concepts (SMC) and ICT methodologies. Analyze the user-uploaded chart image(s) and their optional text prompt. Your goal is to provide a comprehensive trade analysis.
 
 Your analysis MUST include:
 1.  **Context:** Use your real-time search tool to find the current market narrative for the currency pair mentioned or shown. Is there recent news or data driving price?
-2.  **Technical Analysis:** Identify key SMC concepts on the chart: market structure (BOS/CHoCH), liquidity pools, order blocks, FVGs, premium/discount zones.
-3.  **Trade Idea (if applicable):** If a valid setup exists, formulate a clear trade idea with an entry, stop loss, and take profit level. Explain your reasoning based on the technicals and market context.
-4.  **Critique (if applicable):** If the user has provided their own analysis in the prompt, critique it constructively.
+2.  **Technical Analysis:** Identify key SMC concepts on the chart: market structure (BOS/CHoCH), **liquidity pools**, **order blocks**, **Fair Value Gaps (FVGs)**, and premium/discount zones. Be specific about their locations.
+3.  **Critique of User's Analysis:**
+    - If the user has provided their own analysis in the text prompt, critique it constructively.
+    - **Crucially, examine the chart image for any user-drawn shapes, lines, or annotations.** If you find any, provide a detailed critique. Are their trendlines valid? Is their identified 'Order Block' correctly placed? Is their proposed entry logical? Be specific and educational in your feedback.
+4.  **Trade Idea (if applicable):** If a valid setup exists (or if the user's setup can be improved), formulate a clear trade idea with an entry, stop loss, and take profit level. Explain your reasoning based on the technicals and market context.
 
 Structure your response clearly in markdown. Use **bold** for key terms.`;
 
@@ -1233,5 +1231,57 @@ ${lessonContent}
     } catch (error) {
         console.error("Error generating multimedia summary:", error);
         throw error;
+    }
+};
+
+const tradeLogParseSchema = {
+    type: Type.OBJECT,
+    properties: {
+        pair: { 
+            type: Type.STRING,
+            description: "The currency pair discussed, e.g., 'EUR/USD' or 'GBP/JPY'."
+        },
+        direction: { 
+            type: Type.STRING,
+            enum: ['Buy', 'Sell'],
+            description: "The direction of the trade idea, either 'Buy' or 'Sell'."
+        },
+        setup: { 
+            type: Type.STRING,
+            description: "A concise, one-sentence summary of the reason for the trade, e.g., 'Entry on FVG after a 15M change of character'."
+        },
+    },
+};
+
+export const parseTradeLogFromAnalysis = async (apiKey: string, analysisText: string): Promise<Partial<TradeLog>> => {
+    const prompt = `You are a system that extracts structured data from a forex trade analysis. Based on the following text, extract the currency pair, the trade direction (Buy or Sell), and a concise summary of the trade setup.
+    
+    The analysis might describe a hypothetical trade idea. If any of these details are not clearly mentioned in the text, omit the corresponding key from your JSON response. For example, if the direction isn't clear, do not include the "direction" key.
+
+    Analysis Text:
+    ---
+    ${analysisText}
+    ---
+    
+    Return ONLY the JSON object.`;
+
+    try {
+        const ai = getAiClient(apiKey);
+        const response = await withRetry<GenerateContentResponse>(() => ai.models.generateContent({
+            model: 'gemini-2.5-flash',
+            contents: prompt,
+            config: {
+                responseMimeType: "application/json",
+                responseSchema: tradeLogParseSchema,
+            },
+        }));
+
+        const jsonText = response.text.trim();
+        const parsed = JSON.parse(jsonText);
+        return parsed as Partial<TradeLog>;
+
+    } catch (error) {
+        console.error("Error parsing trade log from analysis:", error);
+        throw new Error("AI could not extract trade details from the analysis. Please log it manually.");
     }
 };

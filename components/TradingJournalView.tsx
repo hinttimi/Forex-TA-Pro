@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { TradeLog, TradeOutcome, EmotionalState } from '../types';
+import { TradeLog, TradeOutcome, EmotionalState, UploadedFile } from '../types';
 import { ClipboardDocumentListIcon } from './icons/ClipboardDocumentListIcon';
 import { PlusIcon } from './icons/PlusIcon';
 import { XMarkIcon } from './icons/XMarkIcon';
@@ -8,7 +8,8 @@ import { useCompletion } from '../hooks/useCompletion';
 import { SparklesIcon } from './icons/SparklesIcon';
 import { LoadingSpinner } from './LoadingSpinner';
 import { useApiKey } from '../hooks/useApiKey';
-import { analyzeTradeJournal } from '../services/geminiService';
+import { analyzeLiveChart, analyzeTradeJournal } from '../services/geminiService';
+import { PaperClipIcon } from './icons/PaperClipIcon';
 
 const TRADING_JOURNAL_KEY = 'tradingJournalEntries';
 
@@ -26,6 +27,19 @@ const initialTradeState: Omit<TradeLog, 'id'> = {
     emotion: 'Patient',
     notes: '',
 };
+
+// Helper to read file for screenshot upload
+const readFileAndConvertToBase64 = (file: File): Promise<UploadedFile> =>
+  new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.readAsDataURL(file);
+    reader.onload = () => {
+        const result = reader.result as string;
+        const base64Data = result.split(',')[1];
+        resolve({ data: base64Data, mimeType: file.type, name: file.name });
+    };
+    reader.onerror = error => reject(error);
+  });
 
 // Helper to render markdown from AI
 const FormattedContent: React.FC<{ text: string }> = ({ text }) => {
@@ -80,6 +94,7 @@ export const TradingJournalView: React.FC = () => {
     const [entries, setEntries] = useState<TradeLog[]>([]);
     const [isModalOpen, setIsModalOpen] = useState(false);
     const [editingTrade, setEditingTrade] = useState<Omit<TradeLog, 'id'> | TradeLog>(initialTradeState);
+    const [screenshot, setScreenshot] = useState<UploadedFile | null>(null);
     const [filter, setFilter] = useState<'all' | TradeOutcome>('all');
     const { logTradeLogged } = useCompletion();
     
@@ -87,6 +102,7 @@ export const TradingJournalView: React.FC = () => {
     const [isAnalyzing, setIsAnalyzing] = useState(false);
     const [analysisResult, setAnalysisResult] = useState<string | null>(null);
     const [analysisError, setAnalysisError] = useState<string | null>(null);
+    const [analyzingTradeId, setAnalyzingTradeId] = useState<number | null>(null);
     const { apiKey } = useApiKey();
 
     useEffect(() => {
@@ -108,8 +124,10 @@ export const TradingJournalView: React.FC = () => {
     const handleOpenModal = (trade: TradeLog | null = null) => {
         if (trade) {
             setEditingTrade(trade);
+            setScreenshot(trade.chartScreenshot || null);
         } else {
             setEditingTrade(initialTradeState);
+            setScreenshot(null);
         }
         setIsModalOpen(true);
     };
@@ -120,16 +138,26 @@ export const TradingJournalView: React.FC = () => {
 
     const handleSaveTrade = (e: React.FormEvent) => {
         e.preventDefault();
+        const tradeDataWithScreenshot = { ...editingTrade, chartScreenshot: screenshot || undefined };
+
         if ('id' in editingTrade) { // Update existing trade
-            const updatedEntries = entries.map(entry => entry.id === editingTrade.id ? editingTrade : entry);
+            const updatedEntries = entries.map(entry => entry.id === editingTrade.id ? tradeDataWithScreenshot as TradeLog : entry);
             saveEntries(updatedEntries);
         } else { // Add new trade
-            const newTrade = { ...editingTrade, id: Date.now() };
+            const newTrade = { ...tradeDataWithScreenshot, id: Date.now() };
             const updatedEntries = [newTrade, ...entries];
             saveEntries(updatedEntries);
             logTradeLogged();
         }
         handleCloseModal();
+    };
+    
+    const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+        const file = e.target.files?.[0];
+        if (file) {
+            const fileData = await readFileAndConvertToBase64(file);
+            setScreenshot(fileData);
+        }
     };
 
     const handleDeleteTrade = (id: number) => {
@@ -156,6 +184,29 @@ export const TradingJournalView: React.FC = () => {
         }
     }
     
+    const handleGetTradeReview = async (trade: TradeLog) => {
+        if (!apiKey || !trade.chartScreenshot) return;
+        setAnalyzingTradeId(trade.id);
+        
+        const prompt = `You are a professional trading coach. Please review the following trade based on the chart I've uploaded and my notes. Analyze the quality of the setup according to Smart Money Concepts. Was the entry logical? Was the stop loss safe? Was the target reasonable?
+        
+        My Setup Notes: "${trade.setup}"
+        My Post-Trade Notes: "${trade.notes || 'None'}"`;
+
+        try {
+            const result = await analyzeLiveChart(apiKey, prompt, [trade.chartScreenshot]);
+            const updatedEntries = entries.map(entry => 
+                entry.id === trade.id ? { ...entry, aiReview: result.text } : entry
+            );
+            saveEntries(updatedEntries);
+        } catch(e) {
+            console.error(e);
+            alert("Failed to get AI review. Please check your API key.");
+        } finally {
+            setAnalyzingTradeId(null);
+        }
+    };
+
     const outcomeColorClass = (outcome: TradeOutcome) => {
         return {
             'Win': 'bg-green-500/10 text-green-400 border-green-500/20',
@@ -231,10 +282,27 @@ export const TradingJournalView: React.FC = () => {
                                     <button onClick={() => handleDeleteTrade(entry.id)} className="p-1.5 text-red-400 hover:bg-red-500/20 rounded-full"><TrashIcon className="w-4 h-4" /></button>
                                 </div>
                            </div>
-                           <div className="mt-3 pt-3 border-t border-slate-700/50 space-y-2 text-sm">
-                                <p><strong className="text-gray-300">Setup:</strong> <span className="text-[--color-muted-grey]">{entry.setup}</span></p>
-                                <p><strong className="text-gray-300">Emotion:</strong> <span className="text-[--color-muted-grey]">{entry.emotion}</span></p>
-                                {entry.notes && <p><strong className="text-gray-300">Notes:</strong> <span className="text-[--color-muted-grey]">{entry.notes}</span></p>}
+                           <div className="mt-3 pt-3 border-t border-slate-700/50 flex gap-4">
+                                <div className="flex-1 space-y-2 text-sm">
+                                    <p><strong className="text-gray-300">Setup:</strong> <span className="text-[--color-muted-grey]">{entry.setup}</span></p>
+                                    <p><strong className="text-gray-300">Emotion:</strong> <span className="text-[--color-muted-grey]">{entry.emotion}</span></p>
+                                    {entry.notes && <p><strong className="text-gray-300">Notes:</strong> <span className="text-[--color-muted-grey]">{entry.notes}</span></p>}
+                                    {entry.aiReview ? (
+                                        <div className="mt-3 pt-3 border-t border-slate-700">
+                                             <h4 className="text-sm font-bold text-cyan-400 mb-2">AI Coach's Analysis</h4>
+                                             <div className="prose prose-invert prose-xs max-w-none text-slate-300"><FormattedContent text={entry.aiReview} /></div>
+                                        </div>
+                                    ) : analyzingTradeId === entry.id ? (
+                                        <div className="flex items-center gap-2 text-sm text-cyan-400"><LoadingSpinner /> Analyzing chart...</div>
+                                    ) : (
+                                        entry.chartScreenshot && (
+                                            <button onClick={() => handleGetTradeReview(entry)} className="mt-2 text-sm inline-flex items-center px-3 py-1.5 bg-purple-600/50 text-purple-200 font-semibold rounded-md hover:bg-purple-600/80">
+                                                <SparklesIcon className="w-4 h-4 mr-2" /> AI Review
+                                            </button>
+                                        )
+                                    )}
+                                </div>
+                                {entry.chartScreenshot && <img src={`data:${entry.chartScreenshot.mimeType};base64,${entry.chartScreenshot.data}`} alt="Trade chart" className="w-48 h-auto rounded-md border border-slate-600 object-cover" />}
                            </div>
                         </div>
                     ))}
@@ -243,7 +311,7 @@ export const TradingJournalView: React.FC = () => {
 
             {isModalOpen && (
                 <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm animate-[fade-in_0.3s]" onClick={handleCloseModal}>
-                    <div className="bg-slate-800 border border-slate-700 rounded-xl shadow-2xl p-6 w-full max-w-lg mx-4" onClick={e => e.stopPropagation()}>
+                    <div className="bg-slate-800 border border-slate-700 rounded-xl shadow-2xl p-6 w-full max-w-2xl mx-4" onClick={e => e.stopPropagation()}>
                         <div className="flex justify-between items-center mb-4">
                             <h2 className="text-xl font-bold text-white">{'id' in editingTrade ? 'Edit' : 'Log'} Trade</h2>
                             <button onClick={handleCloseModal}><XMarkIcon className="w-6 h-6 text-slate-400" /></button>
@@ -287,11 +355,27 @@ export const TradingJournalView: React.FC = () => {
                             </div>
                             <div>
                                 <label className="block text-sm font-medium text-slate-300 mb-1">Setup / Reason for Entry</label>
-                                <textarea value={editingTrade.setup} onChange={e => setEditingTrade(p => ({...p, setup: e.target.value}))} rows={4} required className="input-field" placeholder="e.g., 15M CHoCH after 4H liquidity sweep, entered on FVG retest..."/>
+                                <textarea value={editingTrade.setup} onChange={e => setEditingTrade(p => ({...p, setup: e.target.value}))} rows={3} required className="input-field" placeholder="e.g., 15M CHoCH after 4H liquidity sweep..."/>
                             </div>
                             <div>
                                 <label className="block text-sm font-medium text-slate-300 mb-1">Notes / Mistakes (Optional)</label>
-                                <textarea value={editingTrade.notes} onChange={e => setEditingTrade(p => ({...p, notes: e.target.value}))} rows={3} className="input-field" placeholder="e.g., Entered slightly too early, stop loss was too tight..."/>
+                                <textarea value={editingTrade.notes} onChange={e => setEditingTrade(p => ({...p, notes: e.target.value}))} rows={2} className="input-field" placeholder="e.g., Entered slightly too early..."/>
+                            </div>
+                             <div>
+                                <label className="block text-sm font-medium text-slate-300 mb-1">Chart Screenshot (Optional)</label>
+                                <div className="flex items-center gap-4">
+                                    <input type="file" id="screenshot-upload" accept="image/*" onChange={handleFileUpload} className="hidden" />
+                                    <label htmlFor="screenshot-upload" className="cursor-pointer inline-flex items-center px-4 py-2 bg-slate-600 text-slate-200 text-sm font-semibold rounded-md hover:bg-slate-500">
+                                        <PaperClipIcon className="w-4 h-4 mr-2" /> Upload Image
+                                    </label>
+                                    {screenshot && (
+                                        <div className="flex items-center gap-2">
+                                            <img src={`data:${screenshot.mimeType};base64,${screenshot.data}`} alt="preview" className="h-10 w-auto rounded" />
+                                            <span className="text-xs text-slate-400 truncate max-w-xs">{screenshot.name}</span>
+                                            <button type="button" onClick={() => setScreenshot(null)} className="p-1 text-slate-400 hover:text-white"><XMarkIcon className="w-4 h-4"/></button>
+                                        </div>
+                                    )}
+                                </div>
                             </div>
                             <div className="flex justify-end pt-2">
                                 <button type="submit" className="px-5 py-2 bg-cyan-500 text-slate-900 font-semibold rounded-lg hover:bg-cyan-400">Save Trade</button>

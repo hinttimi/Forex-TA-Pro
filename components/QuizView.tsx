@@ -1,5 +1,3 @@
-
-
 import React, { useState, useEffect, useCallback } from 'react';
 import { Lesson, MultipleChoiceQuestion } from '../types';
 import { generateQuizSet } from '../services/geminiService';
@@ -42,7 +40,6 @@ export const QuizView: React.FC<QuizViewProps> = ({ lesson, onComplete, onNextLe
         return;
     }
     try {
-      // FIX: The 'Lesson' type does not have a 'contentPrompt' property.
       // The lesson's 'content' string, which contains the concept, should be used to generate the quiz.
       const generatedQuestions = await generateQuizSet(apiKey, lesson.content, QUIZ_LENGTH, `quiz-set-${lesson.key}`);
       
