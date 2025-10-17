@@ -158,3 +158,10 @@ export interface MarketSentimentData {
     score: number; // A numeric score from 0 (extreme risk-off) to 10 (extreme risk-on)
     reasoning: string;
 }
+
+export interface UserProfile {
+    email: string;
+    username: string;
+    createdAt: any; // Firestore timestamp
+    apiKey: string | null;
+}

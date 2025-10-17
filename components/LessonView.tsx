@@ -1,7 +1,6 @@
 import React, { useState, useCallback, useEffect, useRef } from 'react';
-import { Lesson, LearningPath, OhlcData } from '../types';
-import { ExclamationTriangleIcon } from './icons/ExclamationTriangleIcon';
-import { generateChartDataForLesson, generateLessonSummary, generateMultimediaSummary } from '../services/geminiService';
+import { Lesson, LearningPath } from '../types';
+import { generateChartImage, generateLessonSummary, generateMultimediaSummary } from '../services/geminiService';
 import { SparklesIcon } from './icons/SparklesIcon';
 import { QuestionMarkCircleIcon } from './icons/QuestionMarkCircleIcon';
 import { useApiKey } from '../hooks/useApiKey';
@@ -11,11 +10,10 @@ import { ChevronRightIcon } from './icons/ChevronRightIcon';
 import { DocumentTextIcon } from './icons/DocumentTextIcon';
 import { LoadingSpinner } from './LoadingSpinner';
 import { LessonSkeleton } from './LessonSkeleton';
-import { ChartSkeleton } from './ChartSkeleton';
-import { InteractiveChart } from './InteractiveChart';
 import { VideoCameraIcon } from './icons/VideoCameraIcon';
 import { PlayIcon } from './icons/PlayIcon';
 import { PauseIcon } from './icons/PauseIcon';
+import { ChartDisplay } from './ChartDisplay';
 
 interface LessonViewProps {
   lesson: Lesson;
@@ -104,44 +102,55 @@ const TextSegment: React.FC<{ text: string }> = ({ text }) => {
     );
 };
 
-// This component will handle fetching and displaying a single interactive chart.
+// This component will handle fetching and displaying a single static chart image.
 const EmbeddedChart: React.FC<{ prompt: string; lessonKey: string }> = ({ prompt, lessonKey }) => {
-    const [chartData, setChartData] = useState<OhlcData[] | null>(null);
+    const [imageUrl, setImageUrl] = useState<string>('');
     const [isLoading, setIsLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
     const { apiKey } = useApiKey();
 
     useEffect(() => {
-        const generateData = async () => {
+        const generateImage = async () => {
             if (!apiKey) {
-                setError('API key not set.'); 
-                setIsLoading(false); 
+                setError('API key not set.');
+                setIsLoading(false);
                 return;
             }
-            setIsLoading(true); 
+            setIsLoading(true);
             setError(null);
             try {
-                const cacheKey = `lesson-chart-data-${lessonKey}-${prompt.slice(0, 30).replace(/\s/g, '')}`;
-                const data = await generateChartDataForLesson(apiKey, prompt, cacheKey);
-                setChartData(data);
+                // Create a simple, stable cache key
+                const promptSnippet = prompt.slice(0, 50).replace(/\s/g, '');
+                const cacheKey = `lesson-chart-img-${lessonKey}-${promptSnippet}`;
+                
+                const url = await generateChartImage(apiKey, prompt, cacheKey);
+                setImageUrl(url);
             } catch (e) {
-                console.error("Failed to generate embedded chart data:", e);
-                setError('Failed to load chart data.');
+                console.error("Failed to generate embedded chart image:", e);
+                setError('Failed to load chart image.');
             } finally {
                 setIsLoading(false);
             }
         };
-        generateData();
+        generateImage();
     }, [prompt, apiKey, lessonKey]);
 
     return (
         <div className="my-8 w-full aspect-video bg-slate-800 rounded-lg border border-slate-700 flex items-center justify-center shadow-sm">
-            {isLoading && <ChartSkeleton loadingText="AI is generating chart data..." />}
-            {error && <p className="text-xs text-red-400 text-center">{error}</p>}
-            {chartData && <InteractiveChart data={chartData} />}
+            {error ? (
+                <p className="text-xs text-red-400 text-center">{error}</p>
+            ) : (
+                <ChartDisplay 
+                    imageUrl={imageUrl} 
+                    isLoading={isLoading}
+                    loadingText="AI is drawing the chart..."
+                    containerClassName="w-full h-full"
+                />
+            )}
         </div>
     );
 };
+
 
 interface DynamicLessonContentProps {
     text: string;

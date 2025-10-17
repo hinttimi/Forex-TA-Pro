@@ -16,6 +16,7 @@ import { CheckCircleIcon } from './icons/CheckCircleIcon';
 import { RocketLaunchIcon } from './icons/RocketLaunchIcon';
 import { ClipboardDocumentListIcon } from './icons/ClipboardDocumentListIcon';
 import { LockClosedIcon } from './icons/LockClosedIcon';
+import { WeeklyMarketBriefing } from './WeeklyMarketBriefing';
 
 interface DashboardViewProps {
   onSelectLesson: (lesson: Lesson) => void;
@@ -29,33 +30,37 @@ const foundationLessons = foundationPath?.modules.flatMap(m => m.lessons) || [];
 const getTodayDateString = () => new Date().toISOString().split('T')[0];
 
 const DailyMissionWidget: React.FC<{onSetView: (view: AppView) => void}> = ({ onSetView }) => {
-    const { getCompletedLessons, getCompletionCount } = useCompletion();
+    const { completedLessons, getCompletionCount, incrementCount } = useCompletion();
     const { apiKey } = useApiKey();
-    const completedLessons = getCompletedLessons();
 
     const [dailyMission, setDailyMission] = useState<DailyMission | null>(null);
     const [isMissionLoading, setIsMissionLoading] = useState(false);
     const [missionError, setMissionError] = useState<string | null>(null);
     const [isMissionComplete, setIsMissionComplete] = useState(false);
 
-    useEffect(() => {
-        const today = getTodayDateString();
-        const missionDataStr = localStorage.getItem(`dailyMission_${today}`);
-        if (missionDataStr) {
-            const data = JSON.parse(missionDataStr);
-            setDailyMission(data.mission);
-            
-            const initialCount = data.initialCount;
-            const currentCount = getCompletionCount(data.mission.completion_criteria as any);
+    const missionKey = `dailyMission_${getTodayDateString()}`;
 
-            if (data.isComplete || currentCount > initialCount) {
-                 setIsMissionComplete(true);
-                 if (!data.isComplete) {
-                    localStorage.setItem(`dailyMission_${today}`, JSON.stringify({ ...data, isComplete: true }));
-                 }
+    useEffect(() => {
+        const checkMissionCompletion = () => {
+            const missionDataStr = localStorage.getItem(missionKey);
+            if (missionDataStr) {
+                const data = JSON.parse(missionDataStr);
+                setDailyMission(data.mission);
+                
+                const initialCount = data.initialCount;
+                const currentCount = getCompletionCount(data.mission.completion_criteria as any);
+
+                if (data.isComplete || currentCount > initialCount) {
+                     setIsMissionComplete(true);
+                     if (!data.isComplete) {
+                        localStorage.setItem(missionKey, JSON.stringify({ ...data, isComplete: true }));
+                     }
+                }
             }
-        }
-    }, [getCompletionCount]);
+        };
+        checkMissionCompletion();
+        // Check completion every time the view changes, in case a mission was completed
+    }, [getCompletionCount, missionKey, onSetView]);
 
     const handleGenerateMission = useCallback(async () => {
         if (!apiKey) {
@@ -73,9 +78,8 @@ const DailyMissionWidget: React.FC<{onSetView: (view: AppView) => void}> = ({ on
           setDailyMission(mission);
           setIsMissionComplete(false);
 
-          const today = getTodayDateString();
           const initialCount = getCompletionCount(mission.completion_criteria as any);
-          localStorage.setItem(`dailyMission_${today}`, JSON.stringify({ mission, initialCount, isComplete: false }));
+          localStorage.setItem(missionKey, JSON.stringify({ mission, initialCount, isComplete: false }));
 
         } catch (e) {
           console.error(e);
@@ -83,7 +87,7 @@ const DailyMissionWidget: React.FC<{onSetView: (view: AppView) => void}> = ({ on
         } finally {
           setIsMissionLoading(false);
         }
-    }, [apiKey, completedLessons, getCompletionCount]);
+    }, [apiKey, completedLessons, getCompletionCount, missionKey]);
 
     return (
          <div className="p-6 bg-[--color-dark-matter] border border-[--color-border] rounded-xl shadow-sm">
@@ -150,15 +154,16 @@ const LearningPathCard: React.FC<{ path: LearningPath; completedLessons: Set<str
 
 
 export const DashboardView: React.FC<DashboardViewProps> = ({ onSelectLesson, onSetView }) => {
-  const { getCompletedLessons, getCompletionCount } = useCompletion();
+  const { completedLessons, getCompletionCount } = useCompletion();
   const { unlockedIds } = useBadges();
-  const completedLessons = getCompletedLessons();
 
   const nextLesson = useMemo(() => {
     return allLessons.find(lesson => !completedLessons.has(lesson.key)) || allLessons[0];
   }, [completedLessons]);
 
-  const foundationComplete = foundationLessons.every(l => completedLessons.has(l.key));
+  const foundationComplete = useMemo(() => {
+    return foundationLessons.every(l => completedLessons.has(l.key));
+  }, [completedLessons]);
 
   const progressPercentage = (completedLessons.size / allLessons.length) * 100;
   
@@ -205,6 +210,8 @@ export const DashboardView: React.FC<DashboardViewProps> = ({ onSelectLesson, on
         {/* Main Column */}
         <div className="lg:col-span-2 space-y-8">
           <UpNextCard />
+
+          <WeeklyMarketBriefing />
           
           <div>
             <h2 className="text-2xl font-bold text-white mb-4">Learning Paths</h2>

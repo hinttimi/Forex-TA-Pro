@@ -157,14 +157,28 @@ const generateMultimediaSceneImage = async (apiKey: string, prompt: string): Pro
 /**
  * This is the primary function for generating functional charts across the app.
  * It uses 'gemini-2.5-flash-image' (nano-banana) with a blank image trick to mitigate rate limits.
+ * Includes localStorage caching to prevent re-generating images on every view.
  * @param apiKey User's API Key
  * @param prompt The text prompt describing the chart to generate.
+ * @param cacheKey A unique key for caching the image in localStorage.
  * @returns A base64 data URL for the generated chart image.
  */
 export const generateChartImage = async (apiKey: string, prompt: string, cacheKey?: string): Promise<string> => {
+  if (cacheKey) {
+    try {
+      const cachedImage = localStorage.getItem(cacheKey);
+      if (cachedImage) {
+        console.log(`Loaded chart from cache for key: ${cacheKey}`);
+        return cachedImage;
+      }
+    } catch (e) {
+      console.warn("Could not access localStorage for caching.", e);
+    }
+  }
+
   try {
     const ai = getAiClient(apiKey);
-    const fullPrompt = `Completely replace the provided blank image with a new one based on this request: ${prompt}. The chart should fill the entire 16:9 image canvas. Do not add any extra padding, margins, or borders. The style should be a dark-themed, clear, educational forex chart.`;
+    const fullPrompt = `Completely replace the provided blank image with a new one based on this request: ${prompt}. The chart should fill the entire 16:9 image canvas. Do not add any extra padding, margins, or borders. The style should be a dark-themed, clear, educational forex chart. Ensure all labels and annotations are accurate and clearly visible.`;
     
     // A base64-encoded 1x1 transparent PNG. This serves as the required image input for the model.
     const blankImageBase64 = 'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNkYAAAAAYAAjCB0C8AAAAASUVORK5CYII=';
@@ -186,7 +200,19 @@ export const generateChartImage = async (apiKey: string, prompt: string, cacheKe
 
     if (imagePart && imagePart.inlineData) {
         const base64ImageBytes = imagePart.inlineData.data;
-        return `data:image/png;base64,${base64ImageBytes}`;
+        const dataUrl = `data:image/png;base64,${base64ImageBytes}`;
+        
+        if (cacheKey) {
+            try {
+                localStorage.setItem(cacheKey, dataUrl);
+                console.log(`Cached chart for key: ${cacheKey}`);
+            } catch (e) {
+                // This can happen if localStorage is full.
+                console.error("Failed to cache generated image. LocalStorage might be full.", e);
+            }
+        }
+
+        return dataUrl;
     } else {
         console.error("gemini-2.5-flash-image response did not contain an image part:", JSON.stringify(response, null, 2));
         throw new Error("The AI did not generate a chart image. The response was in an unexpected format.");
@@ -339,12 +365,38 @@ For each question, provide 4 options in total (one correct, three plausible dist
     }
 };
 
+const executeToolFunctionDeclaration: FunctionDeclaration = {
+  name: 'executeTool',
+  description: 'Navigates the user to a specific tool within the application or performs a specific analysis for them. Use this whenever a user asks to go to a tool, practice a concept, or run an analysis that maps to a tool\'s capability.',
+  parameters: {
+    type: Type.OBJECT,
+    properties: {
+      toolName: {
+        type: Type.STRING,
+        description: 'The name of the tool/view to navigate to.',
+        enum: ['dashboard', 'simulator', 'live_simulator', 'backtester', 'pattern', 'timed', 'canvas', 'market_dynamics', 'market_pulse', 'news_feed', 'market_analyzer', 'economic_calendar', 'trading_journal', 'trading_plan', 'saved', 'achievements', 'settings']
+      },
+      params: {
+        type: Type.OBJECT,
+        description: 'An optional object of parameters for the tool. For "backtester", this can include "pair", "timeframe", and "strategyDescription". For "market_analyzer", this can include "pair".',
+        properties: {
+            pair: { type: Type.STRING },
+            timeframe: { type: Type.STRING },
+            strategyDescription: { type: Type.STRING },
+        }
+      }
+    },
+    required: ['toolName']
+  },
+};
+
+
 export const generateMentorResponse = async (
     apiKey: string, 
     prompt: string, 
     completedLessonTitles: string[],
     personaId: string
-): Promise<{ text: string; groundingChunks: any[]; }> => {
+): Promise<{ text: string; functionCalls: any[] | undefined; groundingChunks: any[]; }> => {
     
     const selectedPersona = MENTOR_PERSONAS.find(p => p.id === personaId) || MENTOR_PERSONAS[0];
 
@@ -363,22 +415,15 @@ export const generateMentorResponse = async (
 ### Your Capabilities & In-App Tools
 You are an AI assistant deeply integrated within the "Forex TA Pro" learning application. You have two primary types of capabilities:
 
-1.  **Autonomous Information Retrieval (via Search):** You can access real-time, up-to-the-minute information about the market using your Google Search tool. This means you can answer questions related to:
-    -   **Market Dynamics:** Current currency strength, volatility, and top-moving pairs.
-    -   **Market Pulse & News:** The latest forex news, dominant market narratives, and upcoming catalysts.
-    -   **Market Analysis:** The fundamental or technical reasons why a specific currency pair is moving.
-    -   **Economic Calendar:** Details about upcoming high-impact economic events.
-    When a user asks a question about the current market, use your search tool to provide a comprehensive, real-time answer as if you are accessing these tools directly.
+1.  **Autonomous Information Retrieval (via Google Search):** You can access real-time, up-to-the-minute information about the market using your Google Search tool. This is for questions about current market conditions, news, economic events, and why a pair is moving.
 
-2.  **In-App Navigation (via Text Command):** You can help the user navigate the app. If a user's request clearly maps to a tool's function, you MUST embed a special command at the very end of your response. The command must be on its own line and in this exact format: \`[TOOL_EXECUTION:{"toolName":"view_name","params":{"key":"value"}}]\`. Do not add any text or formatting after this command.
-    Here are the available 'view_name' values: 'dashboard', 'simulator', 'live_simulator', 'backtester', 'pattern', 'timed', 'canvas', 'market_dynamics', 'market_pulse', 'news_feed', 'market_analyzer', 'economic_calendar', 'trading_journal', 'trading_plan', 'saved', 'achievements', 'settings'.
-    For 'backtester', include 'pair', 'timeframe', 'period', and 'strategyDescription' in params. For 'market_analyzer', include 'pair'.
-    
-    Example: If a user says "take me to the trade simulator", you could respond with:
-    "Right away! Opening the Trade Simulator for you.
-    [TOOL_EXECUTION:{\"toolName\":\"simulator\",\"params\":{}}]"
-    
-    You can also generate new charts to explain concepts using the format \`[CHART: a detailed prompt...]\`.
+2.  **In-App Actions (via Function Calling):** You can directly help the user by executing tools within the app. If a user's request clearly maps to a tool's function, you MUST call the \`executeTool\` function. Do not describe the tool; instead, call the function to take the user there. For example:
+    - User: "Take me to the simulator" -> Call \`executeTool({ toolName: 'simulator' })\`.
+    - User: "Why is EUR/USD moving?" -> Call \`executeTool({ toolName: 'market_analyzer', params: { pair: 'EUR/USD' } })\`.
+    - User: "Backtest a 15M EUR/USD strategy for me" -> Call \`executeTool({ toolName: 'backtester', params: { pair: 'EUR/USD', timeframe: '15M', strategyDescription: '...' } })\`.
+    - Always respond with a brief conversational text before the tool call, like "Of course, opening the simulator for you now."
+
+You can also generate new charts to explain concepts using the format \`[CHART: a detailed prompt...]\`.
 `;
 
     const systemInstruction = `${selectedPersona.systemInstruction}
@@ -390,14 +435,12 @@ You are an agentic AI assistant inside the "Forex TA Pro" app. You have complete
 ${toolManifest}
 
 ### App Curriculum Overview
-The app contains the following learning paths and lessons:
 ${curriculumOverview}
 
 ### User Progress
 ${completedLessonsText}
 - Use this knowledge to tailor your explanations.
 - If a user asks about a concept they haven't learned yet, you can say, "That's a great question. It's covered in the 'Foundation' path. Would you like me to explain it, or would you prefer to jump to that lesson?"
-- Acknowledge their progress and be encouraging.
 ---
 `;
 
@@ -405,16 +448,17 @@ ${completedLessonsText}
         const ai = getAiClient(apiKey);
         
         const response = await withRetry<GenerateContentResponse>(() => ai.models.generateContent({
-            model: 'gemini-2.5-flash',
+            model: 'gemini-2.5-pro', // Using a more powerful model for better function calling
             contents: prompt,
             config: {
                 systemInstruction: systemInstruction,
-                tools: [{googleSearch: {}}]
+                tools: [{ functionDeclarations: [executeToolFunctionDeclaration] }, {googleSearch: {}}]
             },
         }));
 
         return {
             text: response.text,
+            functionCalls: response.functionCalls,
             groundingChunks: response.candidates?.[0]?.groundingMetadata?.groundingChunks || [],
         };
         

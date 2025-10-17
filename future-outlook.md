@@ -6,20 +6,18 @@ This document outlines the potential future development paths for the Forex TA P
 
 ## 1. Backend Integration (Authentication, User Profiles, etc.)
 
-**Possibility:** Yes, this is absolutely possible and a natural next step for an application like this.
+**Status: Completed!** This foundational step has been implemented.
 
-Currently, the app uses the browser's `localStorage` to save everything (lesson progress, API key, saved analyses). This is great for getting started quickly, but it has limitations: the data is stuck on one device and in one browser.
+The application has been successfully migrated from using the browser's `localStorage` to a secure, scalable backend powered by **Firebase**.
 
-**How we would make the transition:**
+**What has been achieved:**
 
-*   **Authentication:** We would integrate a backend service (like Firebase, Supabase, or a custom one) for user sign-up and sign-in. When a user logs in, the app would receive a secure token (like a JWT).
-*   **API Calls:** Instead of saving progress to `localStorage`, we would make secure API calls to our backend. Every request (e.g., "complete lesson," "save trading plan") would include the user's token to identify them.
-*   **User Profiles:** The backend would store all user-specific data: their completed lessons, unlocked badges, saved trading plan, simulator history, and settings. This means a user could log in on their laptop, continue a lesson, and then pick up right where they left off on their tablet.
+*   **Authentication:** The app now features a complete user authentication system. Users can sign up, sign in with email/password, or use Google Sign-In.
+*   **Firestore Database:** A Firestore database has been integrated to serve as the single source of truth for all user data.
+*   **User Profiles:** When a new user signs up, a profile document is automatically created for them in the database.
+*   **Data Persistence:** All user-specific data—including lesson progress, API keys, trading plans, journal entries, saved analyses, and achievements—is now securely stored in the cloud and synced across devices.
 
-**My Role:** While I can't build the backend server itself, my role would be to handle the entire frontend integration. This would involve:
-*   Building the sign-up, sign-in, and profile pages.
-*   Managing the user's authentication state (logged in/out) throughout the app.
-*   Refactoring all the parts of the app that currently use `localStorage` to instead fetch and save data from the new backend API.
+This completes the transition from a standalone, single-device app to a true, multi-platform web application, setting the stage for all future development.
 
 ---
 
@@ -331,3 +329,59 @@ This feature would add a powerful new dimension to the learning experience, cate
     4.  **Video Display:** Once the video is ready, the API provides a download link. The application will fetch the MP4 video file and display it in a modern, in-app video player.
 
 This feature would significantly enhance the educational value of the app, turning static lessons into multi-modal learning experiences and making market analysis more digestible and engaging.
+
+---
+
+## 8. Custom Domain Mapping for Production
+
+**Possibility:** Yes, this is a standard and essential step for production deployment.
+
+Connecting a custom domain name (e.g., `www.forextapro.com`) is handled through the hosting platform, which in our case is **Google Cloud Run**. This process does not involve code changes within the application itself but is a critical configuration step.
+
+### The Process Overview
+
+The process involves proving ownership of the domain to Google, mapping the domain to our specific Cloud Run service, and then updating the domain's DNS records at the registrar (e.g., GoDaddy, Namecheap).
+
+### Step-by-Step Guide
+
+**Step 1: Add and Verify Your Domain in Google Cloud**
+*   Navigate to the **Cloud Run** service in the Google Cloud Console.
+*   Select our service (`forex-ta-pro-...`).
+*   Go to the **"Custom Domains"** tab and click **"ADD MAPPING"**.
+*   Enter the desired domain name (e.g., `www.yourdomain.com` or `yourdomain.com`).
+*   Google will provide a **TXT record** for verification (e.g., `google-site-verification=...`). This value must be copied.
+
+**Step 2: Add Verification Record at Domain Registrar**
+*   Log into your domain registrar's website (e.g., GoDaddy, Namecheap).
+*   Navigate to the DNS management section for your domain.
+*   Add a new **TXT record** using the value provided by Google Cloud:
+    *   **Type:** `TXT`
+    *   **Host/Name:** Use `www` if you're setting up `www.yourdomain.com`. Use `@` if you're setting up the root `yourdomain.com`.
+    *   **Value:** Paste the entire `google-site-verification=...` string.
+    *   **TTL:** Leave at the default.
+*   Save the record.
+
+**Step 3: Complete Verification in Google Cloud**
+*   Go back to the Google Cloud Console page where you copied the TXT record.
+*   Click the **"VERIFY"** or "DONE" button. This may take a few minutes to succeed as DNS changes can take time to propagate.
+*   If verification fails, wait a few more minutes and try again.
+
+**Step 4: Add A and AAAA Records at Domain Registrar**
+*   Once verification is successful, the Google Cloud mapping screen will provide a list of **A** and **AAAA** records. These are IP addresses.
+*   Return to your domain registrar's DNS management page.
+*   For the **Host/Name** field, use `www` for a subdomain or **`@`** for the root domain. **Just use the `@` symbol, not `@yourdomain.com`**. If `@` is not accepted, try leaving the field blank.
+*   Add a new **A record** for each IP address listed in the 'A' section by Google:
+    *   **Type:** `A`
+    *   **Host/Name:** `@` (or blank)
+    *   **Value:** Paste the IP address from Google.
+    *   **TTL:** Leave at the default.
+*   Add a new **AAAA record** for each IP address listed in the 'AAAA' section by Google:
+    *   **Type:** `AAAA`
+    *   **Host/Name:** `@` (or blank)
+    *   **Value:** Paste the IP address from Google.
+    *   **TTL:** Leave at the default.
+
+**Step 5: Wait for Propagation**
+*   DNS changes are not instant and can take anywhere from a few minutes to several hours to fully propagate across the internet.
+*   Once the changes are live, Google Cloud Run will automatically provision a free SSL certificate for your domain.
+*   Your application will then be accessible at `https://yourdomain.com`. Congratulations!

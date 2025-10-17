@@ -1,6 +1,8 @@
 import React, { createContext, useState, useEffect, ReactNode, useCallback, useMemo } from 'react';
+import { useAuth } from './AuthContext';
+import { db } from '../firebase';
+import { doc, getDoc, updateDoc } from 'firebase/firestore';
 
-const API_KEY_STORAGE_KEY = 'gemini_api_key';
 
 interface ApiKeyContextType {
   apiKey: string | null;
@@ -14,44 +16,57 @@ interface ApiKeyContextType {
 export const ApiKeyContext = createContext<ApiKeyContextType | undefined>(undefined);
 
 export const ApiKeyProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
+  const { currentUser } = useAuth();
   const [apiKey, setApiKeyState] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [isKeyModalOpen, setIsKeyModalOpen] = useState(false);
   const [wasKeyJustSet, setWasKeyJustSet] = useState(false);
 
   useEffect(() => {
-    try {
-        const storedKey = localStorage.getItem(API_KEY_STORAGE_KEY);
-        if (storedKey) {
-          setApiKeyState(storedKey);
+    const fetchApiKey = async () => {
+      if (currentUser) {
+        setIsLoading(true);
+        try {
+            const userDocRef = doc(db, 'users', currentUser.uid);
+            const docSnap = await getDoc(userDocRef);
+            if (docSnap.exists() && docSnap.data().apiKey) {
+              setApiKeyState(docSnap.data().apiKey);
+            } else {
+              setApiKeyState(null);
+              // If user is logged in but has no key, prompt them to set it.
+              setIsKeyModalOpen(true);
+            }
+        } catch (error) {
+            console.error("Error fetching API key from Firestore:", error);
+            setApiKeyState(null);
+        } finally {
+            setIsLoading(false);
         }
-    } catch (error) {
-        console.error('Could not access localStorage:', error);
-    } finally {
+      } else {
+        // When user logs out
+        setApiKeyState(null);
         setIsLoading(false);
-    }
-  }, []);
+      }
+    };
+    fetchApiKey();
+  }, [currentUser]);
 
-  const setApiKey = useCallback((key: string | null) => {
-    setApiKeyState(key);
-    if (key) {
-      try {
-        localStorage.setItem(API_KEY_STORAGE_KEY, key);
+  const setApiKey = useCallback(async (key: string | null) => {
+    if (!currentUser) return;
+
+    const userDocRef = doc(db, 'users', currentUser.uid);
+    try {
+      await updateDoc(userDocRef, { apiKey: key });
+      setApiKeyState(key);
+      if (key) {
         setIsKeyModalOpen(false);
         setWasKeyJustSet(true);
-        // Reset after a short delay so tour doesn't re-trigger on refresh
         setTimeout(() => setWasKeyJustSet(false), 1000); 
-      } catch (error) {
-        console.error('Could not save API key to localStorage:', error);
       }
-    } else {
-      try {
-        localStorage.removeItem(API_KEY_STORAGE_KEY);
-      } catch (error) {
-        console.error('Could not remove API key from localStorage:', error);
-      }
+    } catch (error) {
+      console.error('Could not save API key to Firestore:', error);
     }
-  }, []);
+  }, [currentUser]);
 
   const openKeyModal = useCallback(() => setIsKeyModalOpen(true), []);
   

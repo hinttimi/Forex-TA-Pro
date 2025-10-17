@@ -1,8 +1,10 @@
 import React, { createContext, useState, useCallback, useEffect, ReactNode, useMemo } from 'react';
 import { Badge } from '../types';
 import { ALL_BADGES } from '../constants/badges';
+import { useAuth } from './AuthContext';
+import { db } from '../firebase';
+import { doc, getDoc, updateDoc, arrayUnion } from 'firebase/firestore';
 
-const BADGES_KEY = 'unlockedBadges';
 
 interface BadgesContextType {
   unlockedIds: Set<string>;
@@ -17,42 +19,46 @@ export const BadgesContext = createContext<BadgesContextType>({
 });
 
 export const BadgesProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
+  const { currentUser } = useAuth();
   const [unlockedIds, setUnlockedIds] = useState<Set<string>>(new Set());
   const [lastUnlocked, setLastUnlocked] = useState<Badge | null>(null);
 
   useEffect(() => {
-    try {
-      const storedBadges = localStorage.getItem(BADGES_KEY);
-      if (storedBadges) {
-        setUnlockedIds(new Set(JSON.parse(storedBadges)));
-      }
-    } catch (error) {
-      console.error("Failed to load unlocked badges from localStorage:", error);
-    }
-  }, []);
-
-  const unlockBadge = useCallback((id: string) => {
-    setUnlockedIds(prevIds => {
-      if (!prevIds.has(id)) {
-        const newIds = new Set(prevIds);
-        newIds.add(id);
-        
-        try {
-          localStorage.setItem(BADGES_KEY, JSON.stringify(Array.from(newIds)));
-        } catch (error) {
-          console.error("Failed to save unlocked badges to localStorage:", error);
+    const fetchBadges = async () => {
+        if (currentUser) {
+            const userDocRef = doc(db, 'users', currentUser.uid);
+            const docSnap = await getDoc(userDocRef);
+            if (docSnap.exists()) {
+                setUnlockedIds(new Set(docSnap.data().unlockedBadges || []));
+            }
+        } else {
+            setUnlockedIds(new Set());
         }
+    };
+    fetchBadges();
+  }, [currentUser]);
+
+  const unlockBadge = useCallback(async (id: string) => {
+    if (!currentUser || unlockedIds.has(id)) return;
+
+    const newIds = new Set(unlockedIds);
+    newIds.add(id);
+    setUnlockedIds(newIds);
+    
+    const userDocRef = doc(db, 'users', currentUser.uid);
+    try {
+        await updateDoc(userDocRef, {
+            unlockedBadges: arrayUnion(id)
+        });
 
         const badgeInfo = ALL_BADGES.find(b => b.id === id);
         if (badgeInfo) {
           setLastUnlocked(badgeInfo);
         }
-
-        return newIds;
-      }
-      return prevIds;
-    });
-  }, []);
+    } catch (error) {
+        console.error("Failed to save unlocked badge to Firestore:", error);
+    }
+  }, [currentUser, unlockedIds]);
 
   const value = useMemo(() => ({
     unlockedIds,

@@ -1,7 +1,8 @@
 import React, { createContext, useState, useEffect, ReactNode, useMemo } from 'react';
 import { MENTOR_PERSONAS, MENTOR_VOICES } from '../constants/mentorSettings';
-
-const SETTINGS_KEY = 'mentorSettings';
+import { useAuth } from './AuthContext';
+import { db } from '../firebase';
+import { doc, getDoc, updateDoc } from 'firebase/firestore';
 
 interface MentorSettings {
     personaId: string;
@@ -16,36 +17,45 @@ interface MentorSettingsContextType extends MentorSettings {
 export const MentorSettingsContext = createContext<MentorSettingsContextType | undefined>(undefined);
 
 export const MentorSettingsProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
-    const [settings, setSettings] = useState<MentorSettings>(() => {
-        try {
-            const storedSettings = localStorage.getItem(SETTINGS_KEY);
-            if (storedSettings) {
-                return JSON.parse(storedSettings);
-            }
-        } catch (error) {
-            console.error("Failed to load mentor settings from localStorage:", error);
-        }
-        // Default settings
-        return {
-            personaId: MENTOR_PERSONAS[0].id,
-            voiceId: MENTOR_VOICES[0].id,
-        };
+    const { currentUser } = useAuth();
+    const [settings, setSettings] = useState<MentorSettings>({
+        personaId: MENTOR_PERSONAS[0].id,
+        voiceId: MENTOR_VOICES[0].id,
     });
 
     useEffect(() => {
+        const fetchSettings = async () => {
+            if (currentUser) {
+                const userDocRef = doc(db, 'users', currentUser.uid);
+                const docSnap = await getDoc(userDocRef);
+                if (docSnap.exists() && docSnap.data().mentorSettings) {
+                    setSettings(docSnap.data().mentorSettings);
+                }
+            }
+        };
+        fetchSettings();
+    }, [currentUser]);
+
+    const updateSettingsInFirestore = async (newSettings: Partial<MentorSettings>) => {
+        if (!currentUser) return;
+        const userDocRef = doc(db, 'users', currentUser.uid);
         try {
-            localStorage.setItem(SETTINGS_KEY, JSON.stringify(settings));
+            await updateDoc(userDocRef, {
+                mentorSettings: { ...settings, ...newSettings }
+            });
         } catch (error) {
-            console.error("Failed to save mentor settings to localStorage:", error);
+            console.error("Failed to save mentor settings:", error);
         }
-    }, [settings]);
+    };
 
     const setPersonaId = (id: string) => {
         setSettings(prev => ({ ...prev, personaId: id }));
+        updateSettingsInFirestore({ personaId: id });
     };
 
     const setVoiceId = (id: string) => {
         setSettings(prev => ({ ...prev, voiceId: id }));
+        updateSettingsInFirestore({ voiceId: id });
     };
 
     const value = useMemo(() => ({

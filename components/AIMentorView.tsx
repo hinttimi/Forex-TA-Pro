@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect, useCallback } from 'react';
-import { generateMentorResponse, getAiClient, generateChartImage } from '../services/geminiService';
+import { generateMentorResponse, getAiClient, generateChartImage, generateSpeech } from '../services/geminiService';
 import { SparklesIcon } from './icons/SparklesIcon';
 import { PaperAirplaneIcon } from './icons/PaperAirplaneIcon';
 import { PaperClipIcon } from './icons/PaperClipIcon';
@@ -21,7 +21,7 @@ import { MagnifyingGlassIcon } from './icons/MagnifyingGlassIcon';
 import { useCompletion } from '../hooks/useCompletion';
 import { LEARNING_PATHS } from '../constants';
 import { useMentorSettings } from '../hooks/useMentorSettings';
-import { MENTOR_PERSONAS } from '../constants/mentorSettings';
+import { MENTOR_PERSONAS, MENTOR_VOICES } from '../constants/mentorSettings';
 import { BeakerIcon } from './icons/BeakerIcon';
 
 // --- Types ---
@@ -183,8 +183,8 @@ export const AIMentorView: React.FC<AIMentorViewProps> = ({ onSetView, onExecute
     const [isLoading, setIsLoading] = useState(false);
     const [error, setError] = useState<string | null>(null);
     const { apiKey, openKeyModal } = useApiKey();
-    const { getCompletedLessons } = useCompletion();
-    const { personaId, setPersonaId } = useMentorSettings();
+    const { completedLessons } = useCompletion();
+    const { personaId, setPersonaId, voiceId } = useMentorSettings();
     
     // Voice state
     const [voiceState, setVoiceState] = useState<VoiceState>('idle');
@@ -205,33 +205,57 @@ export const AIMentorView: React.FC<AIMentorViewProps> = ({ onSetView, onExecute
     // Text-to-Speech state
     const [isTtsEnabled, setIsTtsEnabled] = useState(false);
     const [isSpeaking, setIsSpeaking] = useState(false);
+    const ttsAudioContextRef = useRef<AudioContext | null>(null);
+    const ttsActiveSourceRef = useRef<AudioBufferSourceNode | null>(null);
 
     const fileInputRef = useRef<HTMLInputElement>(null);
     const chatContainerRef = useRef<HTMLDivElement>(null);
 
-    // --- Text-to-Speech Handlers ---
+     // --- Text-to-Speech Handlers (using Gemini TTS) ---
     const stopSpeaking = useCallback(() => {
-        if (window.speechSynthesis) {
-            window.speechSynthesis.cancel();
-            setIsSpeaking(false);
+        if (ttsActiveSourceRef.current) {
+            ttsActiveSourceRef.current.stop();
+            ttsActiveSourceRef.current = null;
         }
+        setIsSpeaking(false);
     }, []);
 
-    const speak = useCallback((text: string) => {
-        if (!window.speechSynthesis || !text) return;
+    const speak = useCallback(async (text: string) => {
+        if (!apiKey || !text || voiceState !== 'idle') return;
         
         stopSpeaking();
-        
-        // Clean up any potential markdown for better speech flow
-        const cleanedText = text.replace(/\*\*/g, '').replace(/\[CHART:.*?\]/s, '');
 
-        const utterance = new SpeechSynthesisUtterance(cleanedText);
-        utterance.onstart = () => setIsSpeaking(true);
-        utterance.onend = () => setIsSpeaking(false);
-        utterance.onerror = () => setIsSpeaking(false);
-        
-        window.speechSynthesis.speak(utterance);
-    }, [stopSpeaking]);
+        try {
+            setIsSpeaking(true);
+            const selectedVoice = MENTOR_VOICES.find(v => v.id === voiceId) || MENTOR_VOICES[0];
+            const cleanedText = text.replace(/\[CHART:.*?\]/gs, '');
+            const base64Audio = await generateSpeech(apiKey, cleanedText, selectedVoice.name);
+
+            if (!ttsAudioContextRef.current || ttsAudioContextRef.current.state === 'closed') {
+                ttsAudioContextRef.current = new (window.AudioContext || (window as any).webkitAudioContext)({ sampleRate: 24000 });
+            }
+            const audioContext = ttsAudioContextRef.current;
+            
+            const audioBuffer = await decodeAudioData(decode(base64Audio), audioContext, 24000, 1);
+            const source = audioContext.createBufferSource();
+            source.buffer = audioBuffer;
+            source.connect(audioContext.destination);
+            
+            source.onended = () => {
+                setIsSpeaking(false);
+                ttsActiveSourceRef.current = null;
+            };
+
+            source.start();
+            ttsActiveSourceRef.current = source;
+
+        } catch (e) {
+            console.error("TTS Error:", e);
+            setError("Could not generate audio for the response.");
+            setIsSpeaking(false);
+        }
+    }, [apiKey, voiceId, stopSpeaking, voiceState]);
+
 
     const handleToggleTts = () => {
         const newIsEnabled = !isTtsEnabled;
@@ -240,6 +264,7 @@ export const AIMentorView: React.FC<AIMentorViewProps> = ({ onSetView, onExecute
             stopSpeaking();
         }
     };
+
 
     // Load chat history from localStorage on component mount
     useEffect(() => {
@@ -315,39 +340,40 @@ export const AIMentorView: React.FC<AIMentorViewProps> = ({ onSetView, onExecute
         setUploadedFile(null);
 
         try {
-            const completedLessons = getCompletedLessons();
             const completedLessonTitles = allLessons
                 .filter(l => completedLessons.has(l.key))
                 .map(l => l.title);
             
-            const { text: responseText, groundingChunks } = await generateMentorResponse(apiKey, userMessage.text, completedLessonTitles, personaId);
+            const { text: responseText, functionCalls, groundingChunks } = await generateMentorResponse(apiKey, userMessage.text, completedLessonTitles, personaId);
             
             const modelMessageId = Date.now() + 1;
             
-            const toolRegex = /\[TOOL_EXECUTION:(.*?)\]\s*$/;
-            const toolMatch = responseText.match(toolRegex);
-            let visibleText = responseText.replace(toolRegex, '').trim();
+            // Handle function calls
+            if (functionCalls && functionCalls.length > 0) {
+                for (const funcCall of functionCalls) {
+                    if (funcCall.name === 'executeTool' && funcCall.args) {
+                        const { toolName, params } = funcCall.args;
+                        
+                        let toolText = `Of course. Navigating to the ${toolName.replace(/_/g, ' ')}...`;
+                        const modelMessage: Message = { id: modelMessageId, role: 'model', text: toolText };
+                        setMessages(prev => [...prev, modelMessage]);
+                        if(isTtsEnabled) speak(toolText);
 
-            let toolCall: { toolName: string, params: any } | null = null;
-            if (toolMatch && toolMatch[1]) {
-                try {
-                    toolCall = JSON.parse(toolMatch[1]);
-                } catch (jsonError) {
-                    console.error("Failed to parse tool execution JSON:", jsonError);
+                        // Delay execution to allow user to read the message
+                        setTimeout(() => {
+                            onExecuteTool({ toolName, params: params || {} });
+                        }, 1500);
+
+                        setIsLoading(false);
+                        return; // Stop further processing for this message
+                    }
                 }
             }
-            
-            if (toolCall && !visibleText) {
-                const toolName = toolCall.toolName;
-                if (toolName) {
-                    const formattedToolName = (toolName as string).replace(/_/g, ' ');
-                    visibleText = `Of course. Navigating to the ${formattedToolName} for you...`;
-                }
-            }
-            
+
+            // Handle text and chart responses if no function call was made (or if it was a search)
             const chartRegex = /\[CHART:\s*(.*?)\]/s;
-            const chartMatch = visibleText.match(chartRegex);
-            let cleanText = visibleText.replace(chartRegex, '').trim();
+            const chartMatch = responseText.match(chartRegex);
+            let cleanText = responseText.replace(chartRegex, '').trim();
 
             if (cleanText) {
                 const modelMessage: Message = { 
@@ -376,14 +402,6 @@ export const AIMentorView: React.FC<AIMentorViewProps> = ({ onSetView, onExecute
                     setMessages(prev => prev.map(m => 
                         m.id === modelMessageId ? { ...m, isImageLoading: false } : m
                     ));
-                }
-            }
-
-            if (toolCall) {
-                if (toolCall.toolName) {
-                    setTimeout(() => {
-                         onExecuteTool({ toolName: toolCall.toolName as AppView, params: toolCall.params || {} });
-                    }, 1500); 
                 }
             }
 
@@ -475,11 +493,12 @@ export const AIMentorView: React.FC<AIMentorViewProps> = ({ onSetView, onExecute
         return () => {
             stopVoiceChat();
             stopSpeaking();
+            ttsAudioContextRef.current?.close();
         };
     }, [stopVoiceChat, stopSpeaking]);
 
 
-    const handleToggleVoiceChat = async () => {
+    const handleToggleVoiceChat = useCallback(async () => {
         if (voiceState === 'active' || voiceState === 'connecting') {
             stopVoiceChat();
             return;
@@ -550,7 +569,7 @@ export const AIMentorView: React.FC<AIMentorViewProps> = ({ onSetView, onExecute
                         }
 
                         const base64EncodedAudioString = message.serverContent?.modelTurn?.parts[0]?.inlineData?.data;
-                        if (base64EncodedAudioString) {
+                        if (base64EncodedAudioString && isTtsEnabled) {
                             const { nextStartTime, sources, outputNode: outNode, outputAudioContext: outCtx } = audioResourcesRef.current;
                             if (!outNode || !outCtx) return;
 
@@ -579,6 +598,9 @@ export const AIMentorView: React.FC<AIMentorViewProps> = ({ onSetView, onExecute
                     responseModalities: [Modality.AUDIO],
                     inputAudioTranscription: {},
                     outputAudioTranscription: {},
+                    speechRecognitionConfig: {
+                        languageCodes: ['en-US'],
+                    },
                     speechConfig: {
                       voiceConfig: {prebuiltVoiceConfig: {voiceName: 'Zephyr'}},
                     },
@@ -590,7 +612,7 @@ export const AIMentorView: React.FC<AIMentorViewProps> = ({ onSetView, onExecute
             setError("Could not access microphone. Please check permissions and try again.");
             setVoiceState('error');
         }
-    };
+    }, [apiKey, openKeyModal, stopVoiceChat, isTtsEnabled]);
     
     const getVoiceButton = () => {
         const classMap = {

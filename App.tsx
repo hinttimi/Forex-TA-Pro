@@ -1,47 +1,53 @@
-import React, { useState, useCallback, useEffect } from 'react';
+import React, { useState, useCallback, useEffect, lazy, Suspense } from 'react';
 import { Sidebar } from './components/Sidebar';
-import { LessonView } from './components/LessonView';
 import { Header } from './components/Header';
 import { Lesson, AppView, MarketUpdate } from './types';
 import { generateMarketUpdateSnippet } from './services/geminiService';
 import { LEARNING_PATHS } from './constants';
-import { PatternRecognitionView } from './components/practice/PatternRecognitionView';
-import { TimedChallengeView } from './components/practice/TimedChallengeView';
-import { FreePracticeCanvasView } from './components/practice/FreePracticeCanvasView';
-import { TradeSimulatorView } from './components/practice/TradeSimulatorView';
-import { SavedAnalysisView } from './components/practice/SavedAnalysisView';
 // Badge Imports
-import { AchievementsView } from './components/AchievementsView';
 import { BadgesProvider } from './context/BadgesContext';
 import { BadgeNotification } from './components/BadgeNotification';
 import { useCompletion } from './hooks/useCompletion';
 import { useBadges } from './hooks/useBadges';
-import { TradingPlanView } from './components/TradingPlanView';
-import { AIMentorView } from './components/AIMentorView';
-import { QuizView } from './components/QuizView';
-import { MarketPulseView } from './components/MarketPulseView';
-import { NewsFeedView } from './components/NewsFeedView';
 import { MarketUpdateToast } from './components/MarketUpdateToast';
-import { WhyIsItMovingView } from './components/WhyIsItMovingView';
-import { EconomicCalendarView } from './components/EconomicCalendarView';
-import { AIBacktesterView } from './components/AIBacktesterView';
-import { LiveChartSimulatorView } from './components/practice/LiveChartSimulatorView';
 import { ApiKeyProvider } from './context/ApiKeyContext';
 import { useApiKey } from './hooks/useApiKey';
 import { ApiKeyModal } from './components/ApiKeyModal';
-import { SettingsView } from './components/SettingsView';
 import { FeedbackModal } from './components/FeedbackModal';
-import { DashboardView } from './components/DashboardView';
-import { OnboardingWizard } from './components/OnboardingWizard';
 import { BottomNavBar } from './components/BottomNavBar';
 import { FloatingActionButton } from './components/FloatingActionButton';
 import { WelcomeTour } from './components/WelcomeTour';
 import { LiveSimulatorProvider } from './context/LiveSimulatorContext';
-import { TradingJournalView } from './components/TradingJournalView';
 import { MentorSettingsProvider } from './context/MentorSettingsContext';
-import { MarketDynamicsDashboard } from './components/MarketDynamicsDashboard';
 import { MarketDynamicsProvider } from './context/MarketDynamicsContext';
 import { MentorSuggestionToast } from './components/MentorSuggestionToast';
+import { LoadingSpinner } from './components/LoadingSpinner';
+import { AuthProvider, useAuth } from './context/AuthContext';
+import { AuthView } from './components/AuthView';
+import { CompletionProvider } from './context/CompletionContext';
+
+// --- Lazy-loaded View Components ---
+const LessonView = lazy(() => import('./components/LessonView').then(module => ({ default: module.LessonView })));
+const PatternRecognitionView = lazy(() => import('./components/practice/PatternRecognitionView').then(module => ({ default: module.PatternRecognitionView })));
+const TimedChallengeView = lazy(() => import('./components/practice/TimedChallengeView').then(module => ({ default: module.TimedChallengeView })));
+const FreePracticeCanvasView = lazy(() => import('./components/practice/FreePracticeCanvasView').then(module => ({ default: module.FreePracticeCanvasView })));
+const TradeSimulatorView = lazy(() => import('./components/practice/TradeSimulatorView').then(module => ({ default: module.TradeSimulatorView })));
+const SavedAnalysisView = lazy(() => import('./components/practice/SavedAnalysisView').then(module => ({ default: module.SavedAnalysisView })));
+const AchievementsView = lazy(() => import('./components/AchievementsView').then(module => ({ default: module.AchievementsView })));
+const TradingPlanView = lazy(() => import('./components/TradingPlanView').then(module => ({ default: module.TradingPlanView })));
+const AIMentorView = lazy(() => import('./components/AIMentorView').then(module => ({ default: module.AIMentorView })));
+const QuizView = lazy(() => import('./components/QuizView').then(module => ({ default: module.QuizView })));
+const MarketPulseView = lazy(() => import('./components/MarketPulseView').then(module => ({ default: module.MarketPulseView })));
+const NewsFeedView = lazy(() => import('./components/NewsFeedView').then(module => ({ default: module.NewsFeedView })));
+const WhyIsItMovingView = lazy(() => import('./components/WhyIsItMovingView').then(module => ({ default: module.WhyIsItMovingView })));
+const EconomicCalendarView = lazy(() => import('./components/EconomicCalendarView').then(module => ({ default: module.EconomicCalendarView })));
+const AIBacktesterView = lazy(() => import('./components/AIBacktesterView').then(module => ({ default: module.AIBacktesterView })));
+const LiveChartSimulatorView = lazy(() => import('./components/practice/LiveChartSimulatorView').then(module => ({ default: module.LiveChartSimulatorView })));
+const SettingsView = lazy(() => import('./components/SettingsView').then(module => ({ default: module.SettingsView })));
+const DashboardView = lazy(() => import('./components/DashboardView').then(module => ({ default: module.DashboardView })));
+const TradingJournalView = lazy(() => import('./components/TradingJournalView').then(module => ({ default: module.TradingJournalView })));
+const MarketDynamicsDashboard = lazy(() => import('./components/MarketDynamicsDashboard').then(module => ({ default: module.MarketDynamicsDashboard })));
+
 
 const allLessons = LEARNING_PATHS.flatMap(path => path.modules.flatMap(module => module.lessons));
 
@@ -71,10 +77,10 @@ const AppContent: React.FC = () => {
   const [toolExecutionParams, setToolExecutionParams] = useState<{ toolName: AppView, params: any } | null>(null);
   const [mentorSuggestion, setMentorSuggestion] = useState<{ message: string; tool: AppView; params?: any } | null>(null);
 
+  const { currentUser } = useAuth();
   const { apiKey, isKeyModalOpen, wasKeyJustSet } = useApiKey();
-  const { logLessonCompleted, getCompletedLessons, getCompletionCount } = useCompletion();
+  const { completedLessons, logLessonCompleted, getCompletionCount } = useCompletion();
   const { unlockBadge } = useBadges();
-  const completedLessons = getCompletedLessons();
   
   const handleSelectLesson = useCallback((lesson: Lesson) => {
     // If already on lesson view and selecting a new lesson, show loading skeleton briefly
@@ -167,22 +173,21 @@ const AppContent: React.FC = () => {
 
   // Badge check effect for lesson completions
   useEffect(() => {
-    const completed = getCompletedLessons();
-    if (completed.size === 0) return;
+    if (completedLessons.size === 0) return;
 
     const firstLessonKey = LEARNING_PATHS[0].modules[0].lessons[0].key;
-    if (completed.has(firstLessonKey)) {
+    if (completedLessons.has(firstLessonKey)) {
       unlockBadge('first-step');
     }
     
     const foundationPath = LEARNING_PATHS.find(p => p.isFoundation);
     if (foundationPath) {
         const foundationLessonKeys = foundationPath.modules.flatMap(m => m.lessons.map(l => l.key));
-        if (foundationLessonKeys.every(key => completed.has(key))) {
+        if (foundationLessonKeys.every(key => completedLessons.has(key))) {
             unlockBadge('foundation-builder');
         }
     }
-  }, [getCompletedLessons, unlockBadge]);
+  }, [completedLessons, unlockBadge]);
 
   // Badge check for journal entries (listens for view change)
   useEffect(() => {
@@ -215,9 +220,19 @@ const AppContent: React.FC = () => {
   
   // --- END OF HOOKS ---
 
-  // Show onboarding wizard if no API key is set. This MUST be after all hooks.
+  // Show AuthView if no user is logged in. This MUST be after all hooks.
+  if (!currentUser) {
+    return <AuthView />;
+  }
+
+  // Show onboarding wizard if API key is not set for a logged-in user.
   if (!apiKey && !isKeyModalOpen) {
-    return <OnboardingWizard />;
+    return (
+        <div className="fixed inset-0 z-50 flex flex-col items-center justify-center p-4 bg-[--color-obsidian-slate]">
+            <ApiKeyModal /> 
+            <p className="text-white">Please set your API key to continue.</p>
+        </div>
+    );
   }
   
   const handleTourComplete = () => {
@@ -348,9 +363,15 @@ const AppContent: React.FC = () => {
           viewTitle={viewTitle}
         />
         <main className="flex-1 overflow-y-auto p-6 lg:p-10 pb-20 md:pb-10">
-          <div key={currentView} className="animate-fade-in-up">
-            {renderView()}
-          </div>
+          <Suspense fallback={
+            <div className="w-full h-full flex items-center justify-center">
+              <LoadingSpinner />
+            </div>
+          }>
+            <div key={currentView} className="animate-fade-in-up">
+              {renderView()}
+            </div>
+          </Suspense>
         </main>
       </div>
        <BadgeNotification />
@@ -367,17 +388,21 @@ const AppContent: React.FC = () => {
 };
 
 const App: React.FC = () => (
+  <AuthProvider>
     <ApiKeyProvider>
-        <BadgesProvider>
-            <MentorSettingsProvider>
-                <LiveSimulatorProvider>
-                    <MarketDynamicsProvider>
-                        <AppContent />
-                    </MarketDynamicsProvider>
-                </LiveSimulatorProvider>
-            </MentorSettingsProvider>
-        </BadgesProvider>
+        <CompletionProvider>
+            <BadgesProvider>
+                <MentorSettingsProvider>
+                    <LiveSimulatorProvider>
+                        <MarketDynamicsProvider>
+                            <AppContent />
+                        </MarketDynamicsProvider>
+                    </LiveSimulatorProvider>
+                </MentorSettingsProvider>
+            </BadgesProvider>
+        </CompletionProvider>
     </ApiKeyProvider>
+  </AuthProvider>
 );
 
 
