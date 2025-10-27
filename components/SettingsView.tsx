@@ -1,7 +1,4 @@
-import React, { useState, useEffect } from 'react';
-import { useApiKey } from '../hooks/useApiKey';
-import { KeyIcon } from './icons/KeyIcon';
-import { CheckCircleIcon } from './icons/CheckCircleIcon';
+import React from 'react';
 import { TrashIcon } from './icons/TrashIcon';
 import { ServerStackIcon } from './icons/ServerStackIcon';
 import { SparklesIcon } from './icons/SparklesIcon';
@@ -21,9 +18,9 @@ interface ApiKeyInputRowProps {
 }
 
 const ApiKeyInputRow: React.FC<ApiKeyInputRowProps> = ({ label, storageKey }) => {
-    const [storedKey, setStoredKey] = useState<string | null>(() => localStorage.getItem(storageKey));
-    const [inputKey, setInputKey] = useState('');
-    const [isEditing, setIsEditing] = useState(false);
+    const [storedKey, setStoredKey] = React.useState<string | null>(() => localStorage.getItem(storageKey));
+    const [inputKey, setInputKey] = React.useState('');
+    const [isEditing, setIsEditing] = React.useState(false);
 
     const handleSave = () => {
         if (inputKey.trim()) {
@@ -73,29 +70,14 @@ const ApiKeyInputRow: React.FC<ApiKeyInputRowProps> = ({ label, storageKey }) =>
 
 
 export const SettingsView: React.FC = () => {
-    const { apiKey, setApiKey } = useApiKey();
     const { personaId, setPersonaId, voiceId, setVoiceId } = useMentorSettings();
-    const [keyInput, setKeyInput] = useState('');
-    const [isSaved, setIsSaved] = useState(false);
-
-    useEffect(() => {
-        setKeyInput(apiKey || '');
-    }, [apiKey]);
-
-    const handleSave = () => {
-        if (keyInput.trim()) {
-            setApiKey(keyInput.trim());
-            setIsSaved(true);
-            setTimeout(() => setIsSaved(false), 3000);
-        }
-    };
 
     const handleClearData = () => {
         if (window.confirm('Are you sure you want to clear all app data? This will remove all API keys, lesson progress, and unlocked badges. This action cannot be undone.')) {
             try {
                 // Explicitly remove all known keys for robustness
                 const keysToRemove = [
-                    'gemini_api_key',
+                    'gemini_api_key', // Legacy key, remove just in case
                     'completedLessons',
                     'completionCounts',
                     'unlockedBadges',
@@ -113,8 +95,10 @@ export const SettingsView: React.FC = () => {
                 keysToRemove.forEach(key => {
                     localStorage.removeItem(key);
                 });
-
-                alert('All application data has been cleared. The app will now reload.');
+                
+                // Clear all Firebase data by signing out, which triggers data reset in contexts
+                // A more robust solution would be a cloud function to delete user doc, but sign out is sufficient for client-side clearing
+                alert('All local application data has been cleared. Please sign out and sign back in to reset server data. The app will now reload.');
                 window.location.reload();
             } catch (error) {
                 console.error('Failed to clear localStorage:', error);
@@ -132,40 +116,9 @@ export const SettingsView: React.FC = () => {
     return (
         <div className="max-w-3xl mx-auto">
             <h1 className="text-4xl font-extrabold text-white mb-2 tracking-tight">Settings</h1>
-            <p className="text-gray-400 mb-8">Manage your API keys and application data.</p>
+            <p className="text-gray-400 mb-8">Manage your AI mentor, data providers, and application data.</p>
             
             <div className="space-y-8">
-                {/* AI Model API Key */}
-                <div className="bg-gray-800/50 border border-gray-700 rounded-lg p-6">
-                    <h2 className="text-xl font-bold text-white mb-4 flex items-center">
-                        <KeyIcon className="w-6 h-6 mr-3 text-cyan-400" />
-                        AI Model API Key (Gemini)
-                    </h2>
-                    <p className="text-gray-400 text-sm mb-4">
-                        Your Google Gemini API key is required for all AI-powered features like lessons and the mentor chat.
-                    </p>
-                    <div>
-                        <label htmlFor="updateApiKey" className="block text-sm font-semibold text-gray-300 mb-1">Update Your Key</label>
-                        <div className="flex items-center gap-3">
-                            <input
-                                id="updateApiKey"
-                                type="password"
-                                value={keyInput}
-                                onChange={(e) => setKeyInput(e.target.value)}
-                                placeholder="Paste new Gemini API key here"
-                                className="flex-grow bg-gray-700 border border-gray-600 rounded-md py-2 px-3 text-white focus:ring-2 focus:ring-cyan-500"
-                            />
-                            <button
-                                onClick={handleSave}
-                                disabled={!keyInput.trim()}
-                                className="inline-flex justify-center items-center px-5 py-2 bg-cyan-500 text-gray-900 font-semibold rounded-md shadow-sm hover:bg-cyan-400 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-offset-gray-800 focus:ring-cyan-500 disabled:bg-gray-600 disabled:cursor-not-allowed"
-                            >
-                                {isSaved ? <CheckCircleIcon className="w-5 h-5"/> : 'Save'}
-                            </button>
-                        </div>
-                    </div>
-                </div>
-
                 {/* Mentor Customization */}
                 <div className="bg-gray-800/50 border border-gray-700 rounded-lg p-6">
                     <h2 className="text-xl font-bold text-white mb-4 flex items-center">
@@ -225,13 +178,13 @@ export const SettingsView: React.FC = () => {
                         Data Management
                     </h2>
                     <p className="text-red-300/80 text-sm mb-4">
-                        This will permanently delete all your data from this browser, including all saved API keys, lesson completions, and achievements.
+                        This will permanently delete all your local data from this browser, including optional market data keys. Your progress is saved to your account.
                     </p>
                     <button
                         onClick={handleClearData}
                         className="w-full sm:w-auto inline-flex justify-center items-center px-5 py-2 bg-red-600 text-white font-semibold rounded-md shadow-sm hover:bg-red-500 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-offset-red-900/50 focus:ring-red-500"
                     >
-                        Clear All App Data
+                        Clear Local App Data
                     </button>
                 </div>
             </div>

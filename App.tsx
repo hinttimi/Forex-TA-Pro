@@ -1,3 +1,5 @@
+
+
 import React, { useState, useCallback, useEffect, lazy, Suspense } from 'react';
 import { Sidebar } from './components/Sidebar';
 import { Header } from './components/Header';
@@ -10,9 +12,6 @@ import { BadgeNotification } from './components/BadgeNotification';
 import { useCompletion } from './hooks/useCompletion';
 import { useBadges } from './hooks/useBadges';
 import { MarketUpdateToast } from './components/MarketUpdateToast';
-import { ApiKeyProvider } from './context/ApiKeyContext';
-import { useApiKey } from './hooks/useApiKey';
-import { ApiKeyModal } from './components/ApiKeyModal';
 import { FeedbackModal } from './components/FeedbackModal';
 import { BottomNavBar } from './components/BottomNavBar';
 import { FloatingActionButton } from './components/FloatingActionButton';
@@ -25,6 +24,11 @@ import { LoadingSpinner } from './components/LoadingSpinner';
 import { AuthProvider, useAuth } from './context/AuthContext';
 import { AuthView } from './components/AuthView';
 import { CompletionProvider } from './context/CompletionContext';
+// @fix: Import necessary components and hooks for API key management.
+import { ApiKeyProvider } from './context/ApiKeyContext';
+import { useApiKey } from './hooks/useApiKey';
+import { ApiKeyModal } from './components/ApiKeyModal';
+import { MarketIntelProvider } from './context/MarketIntelContext';
 
 // --- Lazy-loaded View Components ---
 const LessonView = lazy(() => import('./components/LessonView').then(module => ({ default: module.LessonView })));
@@ -78,9 +82,10 @@ const AppContent: React.FC = () => {
   const [mentorSuggestion, setMentorSuggestion] = useState<{ message: string; tool: AppView; params?: any } | null>(null);
 
   const { currentUser } = useAuth();
-  const { apiKey, isKeyModalOpen, wasKeyJustSet } = useApiKey();
   const { completedLessons, logLessonCompleted, getCompletionCount } = useCompletion();
   const { unlockBadge } = useBadges();
+  // @fix: Get the API key from the context to use in API calls.
+  const { apiKey } = useApiKey();
   
   const handleSelectLesson = useCallback((lesson: Lesson) => {
     // If already on lesson view and selecting a new lesson, show loading skeleton briefly
@@ -158,18 +163,16 @@ const AppContent: React.FC = () => {
 
   // Handle tour for first-time users
   useEffect(() => {
-    if (wasKeyJustSet) {
-        const tourSeen = localStorage.getItem('forex_ta_pro_tour_seen');
-        if (!tourSeen) {
-            // Delay to allow main UI to render before starting tour
-            setTimeout(() => {
-                setIsTourActive(true);
-                // Ensure sidebar is open to highlight curriculum
-                setIsSidebarOpen(true);
-            }, 500);
-        }
+    const tourSeen = localStorage.getItem('forex_ta_pro_tour_seen');
+    if (currentUser && !tourSeen) {
+        // Delay to allow main UI to render before starting tour
+        setTimeout(() => {
+            setIsTourActive(true);
+            // Ensure sidebar is open to highlight curriculum
+            setIsSidebarOpen(true);
+        }, 500);
     }
-  }, [wasKeyJustSet]);
+  }, [currentUser]);
 
   // Badge check effect for lesson completions
   useEffect(() => {
@@ -205,7 +208,8 @@ const AppContent: React.FC = () => {
     const UPDATE_INTERVAL = 15 * 60 * 1000;
 
     const intervalId = setInterval(async () => {
-        if (apiKey && (currentView === 'lesson' || currentView === 'dashboard') && document.visibilityState === 'visible') {
+        // @fix: Pass the API key to `generateMarketUpdateSnippet` and ensure it exists.
+        if (currentUser && (currentView === 'lesson' || currentView === 'dashboard') && document.visibilityState === 'visible' && apiKey) {
             try {
                 const update = await generateMarketUpdateSnippet(apiKey);
                 setMarketUpdate(update);
@@ -216,23 +220,13 @@ const AppContent: React.FC = () => {
     }, UPDATE_INTERVAL);
 
     return () => clearInterval(intervalId);
-  }, [currentView, apiKey]);
+  }, [currentView, currentUser, apiKey]);
   
   // --- END OF HOOKS ---
 
   // Show AuthView if no user is logged in. This MUST be after all hooks.
   if (!currentUser) {
     return <AuthView />;
-  }
-
-  // Show onboarding wizard if API key is not set for a logged-in user.
-  if (!apiKey && !isKeyModalOpen) {
-    return (
-        <div className="fixed inset-0 z-50 flex flex-col items-center justify-center p-4 bg-[--color-obsidian-slate]">
-            <ApiKeyModal /> 
-            <p className="text-white">Please set your API key to continue.</p>
-        </div>
-    );
   }
   
   const handleTourComplete = () => {
@@ -343,8 +337,9 @@ const AppContent: React.FC = () => {
   return (
     <div className="relative h-screen font-sans overflow-hidden bg-[--color-obsidian-slate] text-[--color-ghost-white]">
       {isTourActive && <WelcomeTour onClose={handleTourComplete} />}
-      <ApiKeyModal />
       <FeedbackModal isOpen={isFeedbackModalOpen} onClose={closeFeedbackModal} />
+      {/* @fix: Render the ApiKeyModal to allow users to set/update their key. */}
+      <ApiKeyModal />
       {isSidebarOpen && <div onClick={() => setIsSidebarOpen(false)} className="fixed inset-0 bg-black/60 backdrop-blur-sm z-30 md:hidden" aria-hidden="true" />}
       <Sidebar
         learningPaths={LEARNING_PATHS}
@@ -389,18 +384,21 @@ const AppContent: React.FC = () => {
 
 const App: React.FC = () => (
   <AuthProvider>
+    {/* @fix: Wrap content with ApiKeyProvider to make the API key available globally. */}
     <ApiKeyProvider>
-        <CompletionProvider>
-            <BadgesProvider>
-                <MentorSettingsProvider>
-                    <LiveSimulatorProvider>
-                        <MarketDynamicsProvider>
-                            <AppContent />
-                        </MarketDynamicsProvider>
-                    </LiveSimulatorProvider>
-                </MentorSettingsProvider>
-            </BadgesProvider>
-        </CompletionProvider>
+      <CompletionProvider>
+          <BadgesProvider>
+              <MentorSettingsProvider>
+                  <LiveSimulatorProvider>
+                      <MarketDynamicsProvider>
+                          <MarketIntelProvider>
+                              <AppContent />
+                          </MarketIntelProvider>
+                      </MarketDynamicsProvider>
+                  </LiveSimulatorProvider>
+              </MentorSettingsProvider>
+          </BadgesProvider>
+      </CompletionProvider>
     </ApiKeyProvider>
   </AuthProvider>
 );

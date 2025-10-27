@@ -354,7 +354,7 @@ export const AIMentorView: React.FC<AIMentorViewProps> = ({ onSetView, onExecute
                     if (funcCall.name === 'executeTool' && funcCall.args) {
                         const { toolName, params } = funcCall.args;
                         
-                        let toolText = `Of course. Navigating to the ${toolName.replace(/_/g, ' ')}...`;
+                        let toolText = responseText || `Of course. Navigating to the ${toolName.replace(/_/g, ' ')}...`;
                         const modelMessage: Message = { id: modelMessageId, role: 'model', text: toolText };
                         setMessages(prev => [...prev, modelMessage]);
                         if(isTtsEnabled) speak(toolText);

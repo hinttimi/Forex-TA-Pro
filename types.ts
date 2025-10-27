@@ -163,5 +163,4 @@ export interface UserProfile {
     email: string;
     username: string;
     createdAt: any; // Firestore timestamp
-    apiKey: string | null;
 }

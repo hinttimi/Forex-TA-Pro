@@ -2,21 +2,12 @@ import React, { useState, useEffect } from 'react';
 import { LoadingSpinner } from './LoadingSpinner';
 import { MagnifyingGlassChartIcon } from './icons/MagnifyingGlassChartIcon';
 import { db } from '../firebase';
-import { doc, onSnapshot } from "firebase/firestore";
+import { doc, onSnapshot, query, collection, orderBy, limit } from "firebase/firestore";
 
 interface BriefingData {
     title: string;
     content: string;
 }
-
-// Helper to get the current week number
-const getWeekNumber = (d: Date): [number, number] => {
-    d = new Date(Date.UTC(d.getFullYear(), d.getMonth(), d.getDate()));
-    d.setUTCDate(d.getUTCDate() + 4 - (d.getUTCDay()||7));
-    const yearStart = new Date(Date.UTC(d.getUTCFullYear(),0,1));
-    const weekNo = Math.ceil((((d.getTime() - yearStart.getTime()) / 86400000) + 1)/7);
-    return [d.getUTCFullYear(), weekNo];
-};
 
 const FormattedContent: React.FC<{ text: string }> = ({ text }) => {
     const renderInlineMarkdown = (text: string): React.ReactNode => {
@@ -40,13 +31,8 @@ const FormattedContent: React.FC<{ text: string }> = ({ text }) => {
 
         return <>{parts}</>;
     };
-
-    const cleanedText = text
-        .replace(/\n\s*-\s/g, ' - ')
-        .replace(/\*{2,}(.*?)\*/g, '**$1**')
-        .replace(/^\s*\*\*(.*)/gm, '* **$1');
-
-    const lines = cleanedText.split('\n').filter(line => line.trim());
+    
+    const lines = text.split('\n').filter(line => line.trim());
     const elements: React.ReactElement[] = [];
     let currentListItems: React.ReactElement[] = [];
 
@@ -68,12 +54,7 @@ const FormattedContent: React.FC<{ text: string }> = ({ text }) => {
             currentListItems.push(<li key={`li-${index}`}>{renderInlineMarkdown(content)}</li>);
         } else {
             flushList();
-            const isHeading = trimmedLine.length < 50 && !trimmedLine.endsWith('.') && !trimmedLine.endsWith(':');
-            if (isHeading) {
-                 elements.push(<h3 key={`h-${index}`} className="text-xl font-semibold text-white mt-6 mb-3">{trimmedLine}</h3>);
-            } else {
-                 elements.push(<p key={`p-${index}`} className="mb-3 leading-relaxed">{renderInlineMarkdown(trimmedLine)}</p>);
-            }
+            elements.push(<p key={`p-${index}`} className="mb-3 leading-relaxed">{renderInlineMarkdown(trimmedLine)}</p>);
         }
     });
 
@@ -86,18 +67,16 @@ export const WeeklyMarketBriefing: React.FC = () => {
     const [briefing, setBriefing] = useState<BriefingData | null>(null);
     const [isLoading, setIsLoading] = useState(true);
 
-    const [year, week] = getWeekNumber(new Date());
-    const docId = `${year}-${week}`;
-
     useEffect(() => {
         setIsLoading(true);
-        const docRef = doc(db, "weeklyContent", docId);
+        const q = query(collection(db, "weeklyContent"), orderBy("createdAt", "desc"), limit(1));
 
-        const unsubscribe = onSnapshot(docRef, (docSnap) => {
-            if (docSnap.exists()) {
+        const unsubscribe = onSnapshot(q, (querySnapshot) => {
+            if (!querySnapshot.empty) {
+                const docSnap = querySnapshot.docs[0];
                 setBriefing(docSnap.data() as BriefingData);
             } else {
-                console.log("Weekly briefing document does not exist yet.");
+                console.log("No weekly briefing document found.");
                 setBriefing(null);
             }
             setIsLoading(false);
@@ -108,7 +87,7 @@ export const WeeklyMarketBriefing: React.FC = () => {
 
         // Cleanup subscription on unmount
         return () => unsubscribe();
-    }, [docId]);
+    }, []);
     
     return (
         <div className="p-6 bg-[--color-dark-matter] border border-[--color-border] rounded-xl shadow-sm">
@@ -124,13 +103,12 @@ export const WeeklyMarketBriefing: React.FC = () => {
             {!isLoading && !briefing && (
                 <div className="text-center py-10">
                     <p className="text-sm text-slate-400">This week's briefing is not yet available.</p>
-                    <p className="text-xs text-slate-500 mt-1">It is automatically published every Monday at 06:00 UTC.</p>
+                    <p className="text-xs text-slate-500 mt-1">It is automatically generated every Monday at 06:00 UTC.</p>
                 </div>
             )}
             
             {briefing && !isLoading && (
                 <div className="space-y-4 animate-[fade-in_0.5s]">
-                    <h4 className="text-xl font-semibold text-white">{briefing.title}</h4>
                     <div className="prose prose-invert prose-sm max-w-none text-slate-300">
                       <FormattedContent text={briefing.content} />
                     </div>

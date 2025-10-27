@@ -1,6 +1,6 @@
 import React, { useState, useCallback, useEffect, useRef } from 'react';
 import { Lesson, LearningPath } from '../types';
-import { generateChartImage, generateLessonSummary, generateMultimediaSummary } from '../services/geminiService';
+import { generateChartImage, generateLessonSummary, generateMultimediaSummary, generateSpeech } from '../services/geminiService';
 import { SparklesIcon } from './icons/SparklesIcon';
 import { QuestionMarkCircleIcon } from './icons/QuestionMarkCircleIcon';
 import { useApiKey } from '../hooks/useApiKey';
@@ -14,6 +14,9 @@ import { VideoCameraIcon } from './icons/VideoCameraIcon';
 import { PlayIcon } from './icons/PlayIcon';
 import { PauseIcon } from './icons/PauseIcon';
 import { ChartDisplay } from './ChartDisplay';
+import { getCache, setCache } from '../services/cacheService';
+import { useMentorSettings } from '../hooks/useMentorSettings';
+import { MENTOR_VOICES } from '../constants/mentorSettings';
 
 interface LessonViewProps {
   lesson: Lesson;
@@ -31,7 +34,39 @@ interface LessonViewProps {
 interface MultimediaSummary {
     script: string;
     images: string[];
+    storyboard: { prompt: string, duration: number }[];
 }
+
+// --- Audio Helper Functions (copied from AIMentorView) ---
+function decode(base64: string) {
+  const binaryString = atob(base64);
+  const len = binaryString.length;
+  const bytes = new Uint8Array(len);
+  for (let i = 0; i < len; i++) {
+    bytes[i] = binaryString.charCodeAt(i);
+  }
+  return bytes;
+}
+
+async function decodeAudioData(
+  data: Uint8Array,
+  ctx: AudioContext,
+  sampleRate: number,
+  numChannels: number,
+): Promise<AudioBuffer> {
+  const dataInt16 = new Int16Array(data.buffer);
+  const frameCount = dataInt16.length / numChannels;
+  const buffer = ctx.createBuffer(numChannels, frameCount, sampleRate);
+
+  for (let channel = 0; channel < numChannels; channel++) {
+    const channelData = buffer.getChannelData(channel);
+    for (let i = 0; i < frameCount; i++) {
+      channelData[i] = dataInt16[i * numChannels + channel] / 32768.0;
+    }
+  }
+  return buffer;
+}
+
 
 // Helper function to render inline markdown like **bold**
 const renderInlineMarkdown = (text: string): React.ReactNode => {
@@ -201,39 +236,42 @@ export const LessonView: React.FC<LessonViewProps> = (props) => {
     const [keyTakeaways, setKeyTakeaways] = useState('');
     const [isLoadingTakeaways, setIsLoadingTakeaways] = useState(false);
     const { apiKey } = useApiKey();
+    const { voiceId } = useMentorSettings();
     
     // Multimedia summary state
     const [multimediaSummary, setMultimediaSummary] = useState<MultimediaSummary | null>(null);
     const [isGeneratingMultimedia, setIsGeneratingMultimedia] = useState(false);
     const [multimediaError, setMultimediaError] = useState<string | null>(null);
     const [generationStatus, setGenerationStatus] = useState('');
-    const [playbackState, setPlaybackState] = useState<'paused' | 'playing'>('paused');
+    const [isSpeaking, setIsSpeaking] = useState(false);
+    const [isBuffering, setIsBuffering] = useState(false);
     const [currentSceneIndex, setCurrentSceneIndex] = useState(0);
-    const utteranceRef = useRef<SpeechSynthesisUtterance | null>(null);
+
+    const audioContextRef = useRef<AudioContext | null>(null);
+    const activeSourceRef = useRef<AudioBufferSourceNode | null>(null);
+    const sceneTimersRef = useRef<number[]>([]);
 
     // Swipe navigation state
     const [touchStart, setTouchStart] = useState<number | null>(null);
     const [touchEnd, setTouchEnd] = useState<number | null>(null);
     const minSwipeDistance = 60;
+    
+    const stopPlayback = useCallback(() => {
+        if (activeSourceRef.current) {
+            activeSourceRef.current.onended = null;
+            activeSourceRef.current.stop();
+            activeSourceRef.current = null;
+        }
+        sceneTimersRef.current.forEach(clearTimeout);
+        sceneTimersRef.current = [];
+        setIsSpeaking(false);
+        setIsBuffering(false);
+        setCurrentSceneIndex(0);
+    }, []);
 
-    // Cleanup speech synthesis on unmount or when lesson changes
-    useEffect(() => {
-        return () => {
-            if (window.speechSynthesis.speaking) {
-                window.speechSynthesis.cancel();
-            }
-        };
-    }, [lesson.key]);
-
-    // Reset state when lesson changes
+    // Reset non-multimedia state when lesson changes
     useEffect(() => {
         setKeyTakeaways('');
-        setMultimediaSummary(null);
-        setMultimediaError(null);
-        setIsGeneratingMultimedia(false);
-        setGenerationStatus('');
-        setPlaybackState('paused');
-        setCurrentSceneIndex(0);
     }, [lesson.key]);
 
     const handleGenerateTakeaways = useCallback(async () => {
@@ -249,18 +287,25 @@ export const LessonView: React.FC<LessonViewProps> = (props) => {
             setIsLoadingTakeaways(false);
         }
     }, [apiKey, lesson.content]);
-
+    
     const handleGenerateMultimedia = useCallback(async () => {
         if (!apiKey || !lesson.content) return;
         setIsGeneratingMultimedia(true);
         setMultimediaError(null);
         setMultimediaSummary(null);
         setCurrentSceneIndex(0);
-        setPlaybackState('paused');
 
         try {
             const result = await generateMultimediaSummary(apiKey, lesson.content, setGenerationStatus);
             setMultimediaSummary(result);
+            
+            const cacheKey = `multimedia-summary-${lesson.key}`;
+            try {
+                await setCache(cacheKey, result);
+            } catch (e) {
+                console.error("Failed to cache multimedia summary in IndexedDB:", e);
+            }
+
         } catch(e) {
             console.error("Failed to generate multimedia summary", e);
             setMultimediaError("Sorry, could not generate a multimedia summary at this time.");
@@ -268,52 +313,101 @@ export const LessonView: React.FC<LessonViewProps> = (props) => {
             setIsGeneratingMultimedia(false);
             setGenerationStatus('');
         }
-    }, [apiKey, lesson.content]);
+    }, [apiKey, lesson.content, lesson.key]);
 
-    const handlePlayback = () => {
-        if (!multimediaSummary) return;
+    // Proactive multimedia summary generation and caching logic
+    useEffect(() => {
+        stopPlayback();
+        setMultimediaSummary(null);
+        setMultimediaError(null);
+        setIsGeneratingMultimedia(false);
+        setGenerationStatus('');
+        setCurrentSceneIndex(0);
+    
+        if (!apiKey) {
+            setMultimediaError("Set your API key to enable AI summaries.");
+            return;
+        }
+    
+        const cacheKey = `multimedia-summary-${lesson.key}`;
+        let generationTimer: number;
 
-        if (playbackState === 'playing') { // Pause
-            window.speechSynthesis.pause();
-            setPlaybackState('paused');
-        } else { // Play or Resume
-            setPlaybackState('playing');
-            if (window.speechSynthesis.paused && utteranceRef.current) {
-                window.speechSynthesis.resume();
-            } else {
-                // Start new playback
-                setCurrentSceneIndex(0);
-                const utterance = new SpeechSynthesisUtterance(multimediaSummary.script);
-                utteranceRef.current = utterance;
-                
-                const wordBoundaries: {charIndex: number, word: string}[] = [];
-                const words = multimediaSummary.script.split(/\s+/);
-                let charCount = 0;
-                words.forEach(word => {
-                    wordBoundaries.push({ charIndex: charCount, word });
-                    charCount += word.length + 1;
-                });
-                
-                const totalDuration = multimediaSummary.images.length * 5; // Simple estimate
-                const wordsPerImage = Math.ceil(words.length / multimediaSummary.images.length);
-
-                utterance.onboundary = (event) => {
-                    if (event.name === 'word') {
-                        const currentWordIndex = wordBoundaries.findIndex(b => b.charIndex >= event.charIndex);
-                        const imageIndex = Math.floor(currentWordIndex / wordsPerImage);
-                        if (imageIndex < multimediaSummary.images.length) {
-                             setCurrentSceneIndex(imageIndex);
-                        }
-                    }
-                };
-
-                utterance.onend = () => {
-                    setPlaybackState('paused');
-                    setCurrentSceneIndex(0);
-                };
-                
-                window.speechSynthesis.speak(utterance);
+        const loadOrGenerateSummary = async () => {
+            try {
+                const cachedData = await getCache<MultimediaSummary>(cacheKey);
+                if (cachedData) {
+                    setMultimediaSummary(cachedData);
+                    return;
+                }
+            } catch (e) {
+                console.warn("Could not read multimedia summary from IndexedDB cache", e);
             }
+        
+            generationTimer = window.setTimeout(() => {
+                handleGenerateMultimedia();
+            }, 2500);
+        };
+
+        loadOrGenerateSummary();
+    
+        return () => {
+            stopPlayback();
+            clearTimeout(generationTimer);
+        };
+    
+    }, [lesson.key, apiKey, handleGenerateMultimedia, stopPlayback]);
+
+
+    const startPlayback = useCallback(async () => {
+        if (!multimediaSummary || !apiKey) return;
+        
+        setIsSpeaking(true);
+        setIsBuffering(true);
+        setCurrentSceneIndex(0);
+    
+        try {
+            const selectedVoice = MENTOR_VOICES.find(v => v.id === voiceId) || MENTOR_VOICES[0];
+            const base64Audio = await generateSpeech(apiKey, multimediaSummary.script, selectedVoice.name);
+            setIsBuffering(false);
+    
+            if (!audioContextRef.current || audioContextRef.current.state === 'closed') {
+                audioContextRef.current = new (window.AudioContext || (window as any).webkitAudioContext)({ sampleRate: 24000 });
+            }
+            const audioContext = audioContextRef.current;
+            const audioBuffer = await decodeAudioData(decode(base64Audio), audioContext, 24000, 1);
+            
+            const source = audioContext.createBufferSource();
+            source.buffer = audioBuffer;
+            source.connect(audioContext.destination);
+            source.onended = () => { stopPlayback(); };
+            source.start();
+            activeSourceRef.current = source;
+    
+            let cumulativeDelay = 0;
+            const timers: number[] = [];
+            multimediaSummary.storyboard.forEach((scene, index) => {
+                if (index > 0) {
+                    const timer = window.setTimeout(() => {
+                        setCurrentSceneIndex(index);
+                    }, cumulativeDelay * 1000);
+                    timers.push(timer);
+                }
+                cumulativeDelay += scene.duration;
+            });
+            sceneTimersRef.current = timers;
+    
+        } catch (e) {
+            console.error("Playback Error:", e);
+            setMultimediaError("Could not play audio for the summary.");
+            stopPlayback();
+        }
+    }, [apiKey, voiceId, multimediaSummary, stopPlayback]);
+    
+    const handlePlaybackToggle = () => {
+        if (isSpeaking) {
+            stopPlayback();
+        } else {
+            startPlayback();
         }
     };
     
@@ -403,45 +497,51 @@ export const LessonView: React.FC<LessonViewProps> = (props) => {
                             <VideoCameraIcon className="w-8 h-8 text-cyan-400 mr-4 mt-1 flex-shrink-0" />
                             <div>
                                 <h3 className="text-lg font-bold text-white">AI Multimedia Summary</h3>
-                                <p className="text-slate-400 text-sm">Watch an animated summary with voiceover.</p>
+                                <p className="text-slate-400 text-sm">An animated summary with voiceover, generated for you.</p>
                             </div>
                         </div>
-                        {multimediaSummary ? (
-                            <div className="mt-4 relative w-full aspect-video bg-black rounded-lg overflow-hidden border border-slate-700">
-                                <img 
-                                    key={currentSceneIndex}
-                                    src={multimediaSummary.images[currentSceneIndex]} 
-                                    alt={`Scene ${currentSceneIndex + 1}`}
-                                    className="w-full h-full object-cover animate-[fade-in_0.5s_ease-in-out]"
-                                />
-                                <div className="absolute bottom-0 left-0 right-0 p-4 bg-gradient-to-t from-black/70 to-transparent flex items-center justify-between">
-                                    <button onClick={handlePlayback} className="p-2 bg-white/20 rounded-full text-white hover:bg-white/40 backdrop-blur-sm">
-                                        {playbackState === 'playing' ? <PauseIcon className="w-6 h-6"/> : <PlayIcon className="w-6 h-6"/>}
-                                    </button>
-                                    <div className="flex space-x-1.5">
-                                        {multimediaSummary.images.map((_, index) => (
-                                            <div key={index} className={`w-2 h-2 rounded-full transition-colors ${index === currentSceneIndex ? 'bg-white' : 'bg-white/50'}`}></div>
-                                        ))}
+
+                        {(() => {
+                            if (multimediaSummary) {
+                                return (
+                                    <div className="mt-4 relative w-full aspect-video bg-black rounded-lg overflow-hidden border border-slate-700">
+                                        <img 
+                                            key={currentSceneIndex}
+                                            src={multimediaSummary.images[currentSceneIndex]} 
+                                            alt={`Scene ${currentSceneIndex + 1}`}
+                                            className="w-full h-full object-cover animate-[fade-in_0.5s_ease-in-out]"
+                                        />
+                                        <div className="absolute bottom-0 left-0 right-0 p-4 bg-gradient-to-t from-black/70 to-transparent flex items-center justify-between">
+                                            <button onClick={handlePlaybackToggle} className="p-2 w-10 h-10 flex items-center justify-center bg-white/20 rounded-full text-white hover:bg-white/40 backdrop-blur-sm">
+                                                {isBuffering ? <LoadingSpinner /> : (isSpeaking ? <PauseIcon className="w-6 h-6"/> : <PlayIcon className="w-6 h-6"/>)}
+                                            </button>
+                                            <div className="flex space-x-1.5">
+                                                {multimediaSummary.images.map((_, index) => (
+                                                    <div key={index} className={`w-2 h-2 rounded-full transition-colors ${index === currentSceneIndex ? 'bg-white' : 'bg-white/50'}`}></div>
+                                                ))}
+                                            </div>
+                                        </div>
                                     </div>
-                                </div>
-                            </div>
-                        ) : (
-                            isGeneratingMultimedia ? (
+                                );
+                            }
+                            if (isGeneratingMultimedia) {
+                                return (
+                                    <div className="mt-4 flex items-center justify-center gap-3 p-4 bg-slate-800 border border-slate-700 rounded-lg h-32">
+                                        <LoadingSpinner />
+                                        <span className="text-sm text-slate-400">{generationStatus || 'Starting summary generation...'}</span>
+                                    </div>
+                                );
+                            }
+                             if (multimediaError) {
+                                return <p className="mt-4 text-sm text-yellow-400 bg-yellow-500/10 p-3 rounded-md">{multimediaError}</p>;
+                            }
+                            return (
                                 <div className="mt-4 flex items-center justify-center gap-3 p-4 bg-slate-800 border border-slate-700 rounded-lg h-32">
                                     <LoadingSpinner />
-                                    <span className="text-sm text-slate-400">{generationStatus || 'Starting summary generation...'}</span>
+                                    <span className="text-sm text-slate-400">AI summary will generate shortly...</span>
                                 </div>
-                            ) : (
-                                 <button
-                                    onClick={handleGenerateMultimedia}
-                                    disabled={!apiKey}
-                                    className="mt-4 px-4 py-2 bg-cyan-500/10 border border-cyan-500/30 text-cyan-300 font-semibold rounded-lg hover:bg-cyan-500/20 transition-colors flex items-center disabled:opacity-50 disabled:cursor-not-allowed"
-                                >
-                                    Generate Multimedia Summary
-                                </button>
-                            )
-                        )}
-                        {multimediaError && <p className="text-xs text-red-400 mt-2">{multimediaError}</p>}
+                            );
+                        })()}
                     </div>
 
                      {/* Lesson Navigation */}
