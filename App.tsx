@@ -1,5 +1,7 @@
 
 
+
+
 import React, { useState, useCallback, useEffect, lazy, Suspense } from 'react';
 import { Sidebar } from './components/Sidebar';
 import { Header } from './components/Header';
@@ -32,11 +34,6 @@ import { MarketIntelProvider } from './context/MarketIntelContext';
 
 // --- Lazy-loaded View Components ---
 const LessonView = lazy(() => import('./components/LessonView').then(module => ({ default: module.LessonView })));
-const PatternRecognitionView = lazy(() => import('./components/practice/PatternRecognitionView').then(module => ({ default: module.PatternRecognitionView })));
-const TimedChallengeView = lazy(() => import('./components/practice/TimedChallengeView').then(module => ({ default: module.TimedChallengeView })));
-const FreePracticeCanvasView = lazy(() => import('./components/practice/FreePracticeCanvasView').then(module => ({ default: module.FreePracticeCanvasView })));
-const TradeSimulatorView = lazy(() => import('./components/practice/TradeSimulatorView').then(module => ({ default: module.TradeSimulatorView })));
-const SavedAnalysisView = lazy(() => import('./components/practice/SavedAnalysisView').then(module => ({ default: module.SavedAnalysisView })));
 const AchievementsView = lazy(() => import('./components/AchievementsView').then(module => ({ default: module.AchievementsView })));
 const TradingPlanView = lazy(() => import('./components/TradingPlanView').then(module => ({ default: module.TradingPlanView })));
 const AIMentorView = lazy(() => import('./components/AIMentorView').then(module => ({ default: module.AIMentorView })));
@@ -60,10 +57,6 @@ const findLessonIndex = (lessonKey: string) => {
 };
 
 const keyLessonsForSuggestions: Record<string, { message: string; tool: AppView; params?: any }> = {
-    'uf-m2-l6': { message: "You've learned about Engulfing Patterns! Want to practice identifying them in the Pattern Recognition tool?", tool: 'pattern' },
-    'uf-m3-l1': { message: "Great work on understanding uptrends! Ready to practice analyzing them in the Trade Simulator?", tool: 'simulator' },
-    'uf-m3-l2': { message: "You've got downtrends down. Want to apply that knowledge in the Trade Simulator?", tool: 'simulator' },
-    'uf-m4-l4': { message: "S/R Flips are a core concept. Shall we jump into the Trade Simulator to see them in action?", tool: 'simulator' },
     'uf-m6-l5': { message: "You've built your checklist! Want the AI Mentor to help you backtest a strategy based on it?", tool: 'backtester' },
 };
 
@@ -273,18 +266,8 @@ const AppContent: React.FC = () => {
             completedLessons={completedLessons}
           />
         ) : null;
-      case 'pattern':
-        return <PatternRecognitionView />;
-      case 'timed':
-        return <TimedChallengeView />;
-      case 'canvas':
-        return <FreePracticeCanvasView />;
-      case 'simulator':
-        return <TradeSimulatorView />;
       case 'live_simulator':
         return <LiveChartSimulatorView />;
-      case 'saved':
-        return <SavedAnalysisView onSetView={handleSetView} />;
       case 'achievements':
         return <AchievementsView />;
       case 'trading_plan':

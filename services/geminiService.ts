@@ -1,7 +1,11 @@
 
 
+
+
+
+
 import { GoogleGenAI, Type, GenerateContentResponse, GenerateImagesResponse, Modality, FunctionDeclaration } from "@google/genai";
-import { NewsArticle, MarketUpdate, EconomicEvent, MultipleChoiceQuestion, StrategyParams, BacktestResults, AnalysisResult, AppView, OhlcData, CurrencyStrengthData, VolatilityData, MarketSentimentData, TopMoverData, DailyMission, TradeLog } from '../types';
+import { NewsArticle, MarketUpdate, EconomicEvent, MultipleChoiceQuestion, StrategyParams, BacktestResults, AnalysisResult, AppView, OhlcData, CurrencyStrengthData, VolatilityData, MarketSentimentData, TopMoverData, DailyMission, TradeLog, UploadedFile } from '../types';
 import { MENTOR_PERSONAS } from "../constants/mentorSettings";
 import { LEARNING_PATHS } from "../constants";
 
@@ -397,7 +401,7 @@ const executeToolFunctionDeclaration: FunctionDeclaration = {
       toolName: {
         type: Type.STRING,
         description: 'The name of the tool/view to navigate to.',
-        enum: ['dashboard', 'simulator', 'live_simulator', 'backtester', 'pattern', 'timed', 'canvas', 'market_dynamics', 'market_pulse', 'news_feed', 'market_analyzer', 'economic_calendar', 'trading_journal', 'trading_plan', 'saved', 'achievements', 'settings']
+        enum: ['dashboard', 'live_simulator', 'backtester', 'market_dynamics', 'market_pulse', 'news_feed', 'market_analyzer', 'economic_calendar', 'trading_journal', 'trading_plan', 'achievements', 'settings']
       },
       params: {
         type: Type.OBJECT,
@@ -439,7 +443,7 @@ export const generateMentorResponse = async (
 You are an AI assistant deeply integrated within the "Forex TA Pro" learning application. Your capabilities are centered around education and executing actions within the app.
 
 1.  **In-App Actions (via Function Calling):** You can directly help the user by executing tools. If a user's request clearly maps to a tool's function, you MUST call the \`executeTool\` function. This is your primary way of helping with real-time market questions. Do not try to answer them yourself; use the tool.
-    - User: "Take me to the simulator" -> Call \`executeTool({ toolName: 'simulator' })\`.
+    - User: "Take me to the simulator" -> Call \`executeTool({ toolName: 'live_simulator' })\`.
     - User: "Why is EUR/USD moving right now?" -> Call \`executeTool({ toolName: 'market_analyzer', params: { pair: 'EUR/USD' } })\`.
     - User: "What are the biggest market-moving news events this week?" -> Call \`executeTool({ toolName: 'economic_calendar' })\`.
     - User: "Backtest a 15M EUR/USD strategy for me" -> Call \`executeTool({ toolName: 'backtester', params: { pair: 'EUR/USD', timeframe: '15M', strategyDescription: '...' } })\`.
@@ -454,17 +458,18 @@ You do not have direct access to real-time market data. When asked a question ab
 
 ---
 ## Application & User Context
-You are an agentic AI assistant inside the "Forex TA Pro" app. You have complete knowledge of the app's structure, content, and your own powerful capabilities.
+You are an agentic AI assistant inside the "Forex TA Pro" app. Your core expertise is in Smart Money Concepts, but you are knowledgeable in all methodologies taught in the app. Adapt your teaching style based on the user's progress and questions.
 
 ${toolManifest}
 
 ### App Curriculum Overview
+This is the full curriculum available in the app. You should be familiar with all these topics.
 ${curriculumOverview}
 
 ### User Progress
 ${completedLessonsText}
-- Use this knowledge to tailor your explanations.
-- If a user asks about a concept they haven't learned yet, you can say, "That's a great question. It's covered in the 'Foundation' path. Would you like me to explain it, or would you prefer to jump to that lesson?"
+- **Prioritize your primary expertise (SMC)** for general questions, but if the user asks about a specific topic from another path (e.g., "Elliott Wave" or "Wyckoff"), you must switch your context and answer as an expert on that topic.
+- Use the user's progress to tailor your explanations. If they ask about a concept they haven't learned, you can introduce it simply and mention which learning path covers it in detail (e.g., "That's a concept from the Wyckoff Method path. In short, it means...").
 ---
 `;
 
@@ -529,12 +534,12 @@ const dailyMissionSchema = {
         tool: {
             type: Type.STRING,
             description: "The specific tool in the app the user should use.",
-            enum: ['simulator', 'live_simulator', 'backtester', 'pattern', 'canvas']
+            enum: ['live_simulator', 'backtester']
         },
         completion_criteria: {
             type: Type.STRING,
             description: "The key that corresponds to the completion event for this tool.",
-            enum: ['simulatorRuns', 'pattern', 'timed', 'canvas', 'backtester', 'live_simulator']
+            enum: ['backtester', 'live_simulator']
         },
     },
     required: ['title', 'description', 'tool', 'completion_criteria']
@@ -549,11 +554,8 @@ Consider the following:
 - The mission must require the user to use one of the available practice tools.
 
 Available practice tools and their corresponding completion criteria:
-- 'simulator': A static chart scenario. (completion_criteria: 'simulatorRuns')
 - 'live_simulator': A live, moving chart. (completion_criteria: 'live_simulator')
 - 'backtester': The AI Strategy Lab. (completion_criteria: 'backtester')
-- 'pattern': A pattern recognition flashcard game. (completion_criteria: 'pattern')
-- 'canvas': A free-draw chart analysis tool. (completion_criteria: 'canvas')
 
 Generate a mission and return it as a single JSON object adhering to the schema. The task should be specific and clear.`;
 
@@ -951,23 +953,57 @@ const ohlcDataArraySchema = {
         data: {
             type: Type.ARRAY,
             items: ohlcDataSchema,
-            description: "An array of 100 to 150 candlestick data points."
+            description: "An array of up to 500 candlestick data points."
         }
     },
     required: ['data']
 };
 
+export const getHistoricalDataWithSearch = async (apiKey: string, pair: string, timeframe: string, startDate: string, endDate: string): Promise<OhlcData[]> => {
+    const prompt = `You are a financial data API. Use your search tool to find historical OHLC (Open, High, Low, Close) data for the forex pair ${pair} on the ${timeframe} timeframe, between ${startDate} and ${endDate}.
+Search reliable financial data sources like Google Finance, Yahoo Finance, or others.
+Return approximately 300-500 data points.
+The timestamps must be in milliseconds and sequential.
+You MUST return the data as a single JSON object that strictly adheres to the provided schema. Do not include any other text or explanations in your response.`;
 
+    try {
+        const ai = getAiClient(apiKey);
+        const response = await withRetry<GenerateContentResponse>(() => ai.models.generateContent({
+            model: 'gemini-2.5-flash',
+            contents: prompt,
+            config: {
+                tools: [{ googleSearch: {} }],
+                responseMimeType: "application/json",
+                responseSchema: ohlcDataArraySchema,
+            },
+        }));
+        
+        const jsonText = response.text.trim();
+        const parsed = JSON.parse(jsonText);
+
+        if (parsed.data && Array.isArray(parsed.data)) {
+            // Sort to be safe, as AI might not always return it perfectly sorted
+            return parsed.data.sort((a: OhlcData, b: OhlcData) => a.timestamp - b.timestamp);
+        } else {
+            throw new Error("AI returned malformed data for historical OHLC.");
+        }
+
+    } catch (error) {
+        console.error("Error getting historical data with search:", error);
+        throw new Error(`Failed to fetch historical data for ${pair}. The AI search may have failed or no data was found for the specified period.`);
+    }
+};
+
+// @fix: Added generateSimulatedOhlcData function to act as a fallback when no market data API keys are available.
 export const generateSimulatedOhlcData = async (apiKey: string, strategy: StrategyParams): Promise<OhlcData[]> => {
-    const prompt = `You are a financial data simulator. Based on the following trading strategy, generate a realistic-looking JSON array of 200 OHLC data points for the ${strategy.timeframe} timeframe. The data MUST include at least one or two clear examples of a valid trade setup according to the strategy. The timestamps must be sequential and realistic for the timeframe (e.g., increasing by 15 minutes for a 15M timeframe).
+    const prompt = `You are a financial data simulator. Based on the following trading strategy for ${strategy.pair} on the ${strategy.timeframe} timeframe, generate a JSON array of 300 to 500 realistic OHLC candlestick data points that includes at least a few valid trade setups according to the strategy rules. The timestamps must be sequential.
 
 Strategy:
-- Pair: ${strategy.pair}
-- Entry: ${strategy.entryCriteria.join(', ')}
+- Entry Criteria: ${strategy.entryCriteria.join(', ')}
 - Stop Loss: ${strategy.stopLoss}
 - Take Profit: ${strategy.takeProfit}
 
-Return ONLY the JSON object containing the data array.`;
+Return ONLY the JSON object containing the data array. Do not include any other text or explanations.`;
 
     try {
         const ai = getAiClient(apiKey);
@@ -979,18 +1015,20 @@ Return ONLY the JSON object containing the data array.`;
                 responseSchema: ohlcDataArraySchema,
             },
         }));
-
+        
         const jsonText = response.text.trim();
         const parsed = JSON.parse(jsonText);
 
         if (parsed.data && Array.isArray(parsed.data)) {
-            return parsed.data;
+            // Sort to be safe, as AI might not always return it perfectly sorted
+            return parsed.data.sort((a: OhlcData, b: OhlcData) => a.timestamp - b.timestamp);
         } else {
             throw new Error("AI returned malformed data for simulated OHLC.");
         }
+
     } catch (error) {
         console.error("Error generating simulated OHLC data:", error);
-        throw error;
+        throw new Error(`Failed to generate simulated data. The AI may have been unable to create a valid scenario for the described strategy.`);
     }
 };
 
@@ -1153,6 +1191,37 @@ Structure your response clearly in markdown. Use **bold** for key terms.`;
 
     } catch (error) {
         console.error("Error analyzing live chart:", error);
+        throw error;
+    }
+};
+
+// FIX: Add the missing analyzeGeneralImage function to resolve the import error in ImageAnalyzerView.
+export const analyzeGeneralImage = async (apiKey: string, userPrompt: string, file: UploadedFile): Promise<string> => {
+    try {
+        const ai = getAiClient(apiKey);
+        
+        const parts: any[] = [{
+            inlineData: {
+                mimeType: file.mimeType,
+                data: file.data,
+            },
+        }];
+
+        if (userPrompt) {
+            parts.push({ text: userPrompt });
+        } else {
+            parts.push({ text: "Describe this image in detail." });
+        }
+
+        const response = await withRetry<GenerateContentResponse>(() => ai.models.generateContent({
+            model: 'gemini-2.5-pro',
+            contents: { parts },
+        }));
+
+        return getTextFromResponse(response);
+
+    } catch (error) {
+        console.error("Error analyzing general image:", error);
         throw error;
     }
 };

@@ -48,7 +48,7 @@ export const createUserProfileDocument = async (user: any, additionalData: { use
         username: additionalData.username || email.split('@')[0].replace(/[^a-zA-Z0-9]/g, ''),
         // Initialize with empty/default values
         completedLessons: [],
-        completionCounts: { correctPatterns: 0, simulatorRuns: 0, savedAnalyses: 0, loggedTrades: 0 },
+        completionCounts: { loggedTrades: 0 },
         unlockedBadges: [],
         tradingPlan: { strategy: '', riskManagement: '', marketConditions: '' },
         mentorSettings: {

@@ -14,14 +14,10 @@ import { ChartBarIcon } from './icons/ChartBarIcon';
 import { RocketLaunchIcon } from './icons/RocketLaunchIcon';
 import { PlayIcon } from './icons/PlayIcon';
 import { MagnifyingGlassChartIcon } from './icons/MagnifyingGlassChartIcon';
-import { EyeIcon } from './icons/EyeIcon';
-import { ClockIcon } from './icons/ClockIcon';
-import { PencilSquareIcon } from './icons/PencilSquareIcon';
 import { SignalIcon } from './icons/SignalIcon';
 import { NewspaperIcon } from './icons/NewspaperIcon';
 import { CalendarDaysIcon } from './icons/CalendarDaysIcon';
 import { DocumentTextIcon } from './icons/DocumentTextIcon';
-import { BookmarkSquareIcon } from './icons/BookmarkSquareIcon';
 import { BeakerIcon } from './icons/BeakerIcon';
 import { ClipboardDocumentListIcon } from './icons/ClipboardDocumentListIcon';
 import { GlobeAltIcon } from './icons/GlobeAltIcon';
@@ -95,12 +91,8 @@ export const Sidebar: React.FC<SidebarProps> = ({ learningPaths, onSelectLesson,
 
   const practiceTools = [
       { label: 'AI Mentor', view: 'mentor', icon: SparklesIcon },
-      { label: 'Trade Simulator', view: 'simulator', icon: RocketLaunchIcon },
       { label: 'Live Chart Simulator', view: 'live_simulator', icon: PlayIcon },
       { label: 'AI Strategy Lab', view: 'backtester', icon: BeakerIcon },
-      { label: 'Pattern Recognition', view: 'pattern', icon: EyeIcon },
-      { label: 'Timed Challenges', view: 'timed', icon: ClockIcon },
-      { label: 'Free Practice Canvas', view: 'canvas', icon: PencilSquareIcon },
   ];
 
   const marketTools = [
@@ -215,7 +207,6 @@ export const Sidebar: React.FC<SidebarProps> = ({ learningPaths, onSelectLesson,
                 <ul className="space-y-1 mt-1">
                     <NavLink label="Trading Journal" view="trading_journal" icon={ClipboardDocumentListIcon} currentView={currentView} onClick={onSetView} />
                     <NavLink label="My Trading Plan" view="trading_plan" icon={DocumentTextIcon} currentView={currentView} onClick={onSetView} />
-                    <NavLink label="Saved Analysis" view="saved" icon={BookmarkSquareIcon} currentView={currentView} onClick={onSetView} />
                     <NavLink label="Achievements" view="achievements" icon={TrophyIcon} currentView={currentView} onClick={onSetView} />
                 </ul>
             </div>

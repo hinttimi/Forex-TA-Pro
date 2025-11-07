@@ -23,7 +23,7 @@ This completes the transition from a standalone, single-device app to a true, mu
 
 ## 2. Expanding the Course Content: A Comprehensive Curriculum Roadmap
 
-**Possibility:** Yes, the application is built to be easily extendable with new content. The current structure, where all lesson and module information is defined in `constants.ts`, is designed specifically for this.
+**Possibility: Yes, the application is built to be easily extendable with new content. The current structure, where all lesson and module information is defined in `constants.ts`, is designed specifically for this.
 
 To truly guide a trader from novice to expert, we need to evolve the curriculum into a comprehensive, multi-faceted educational ecosystem. My suggestion is to approach this with a three-pillar strategy:
 
@@ -142,33 +142,21 @@ This is not just possible; it's the future direction of AI-powered applications.
 
 ---
 
-## 5. User-Provided API Keys for Data Providers
+## 5. Market Data Integration
 
-**Possibility:** Yes, this is a highly recommended and achievable feature to ensure the application can scale without running into API rate limits.
+**Status: Completed & Improved!** This feature has been implemented in a more robust and user-friendly way.
 
-**The Challenge:** As the user base grows, the shared, built-in API keys for data-intensive services (like Twelve Data and Alpha Vantage) will eventually hit their daily or per-minute request limits. This could disrupt the service for all users.
+**The Challenge:** The AI Strategy Lab requires real historical data to run meaningful backtests. Initially, we considered using third-party financial data APIs, which would have required users to sign up for and manage their own API keys. This would have added significant complexity and friction to the user experience.
 
-**The Solution: A Tiered, Seamless Approach**
+**The Solution: A Seamless, AI-Powered Approach**
 
-We can implement a system where users can *optionally* provide their own API keys, without breaking the experience for those who don't.
+We have successfully implemented a superior solution that leverages the built-in capabilities of the Gemini API, completely removing the need for users to provide any external data keys.
 
-*   **UI Implementation:**
-    *   We will add new fields to the `SettingsView` component. These fields will allow users to enter and save their personal API keys for services like Twelve Data and Alpha Vantage.
-    *   This data will be stored securely in the browser's `localStorage`, similar to how the main Gemini API key is handled.
+*   **Google Search for Data:** Instead of relying on specific financial APIs, the application now tasks Gemini with a specific mission: "Act as a financial data provider, use your `googleSearch` tool to find real historical OHLC data, and return it to me in a precise JSON format."
+*   **Reliability through Schemas:** To ensure the data is always accurate and well-structured, we enforce a strict `responseSchema` on the API call. This forces the AI to return clean, predictable data that the application can immediately use, eliminating the errors that can come from parsing unstructured text.
+*   **Enhanced User Experience:** This is a major win for usability. The user experience is now seamless. A user can simply describe their strategy, and the application automatically and invisibly fetches real, high-quality historical data in the background. There are no extra steps, no API keys to manage, and no confusion.
 
-*   **Service Layer Modification (`marketDataService.ts`):**
-    *   The core logic will be updated within our central `MarketDataManager`.
-    *   The adapter functions for each provider (e.g., `getHistoricalFromTwelveData`) will be modified to accept an optional `apiKey` parameter. If no key is provided, they will fall back to using the hardcoded, shared key.
-    *   Before initiating the failover chain, the `MarketDataManager` will first check `localStorage` for a user-provided key for the primary provider (e.g., Twelve Data).
-    *   If a user key exists, it will be used for the first attempt. If it fails (due to being invalid or hitting its own limit), the system will *still* proceed down the failover chain to the other providers (Polygon, Finage, etc.), ensuring maximum uptime.
-
-**Benefits of this Approach:**
-
-*   **Seamless for New Users:** The app will work "out of the box" for new and casual users, using the built-in public keys.
-*   **Empowers Power Users:** Users who perform many backtests or use the live simulator frequently can avoid shared rate limits by using their own keys.
-*   **No Disruption:** Crucially, because all this logic is encapsulated within the `marketDataService`, no other component (`AIBacktesterView`, `LiveChartSimulatorView`, etc.) needs to be changed. They will continue to request data as they always have, and the service will intelligently handle the key selection behind the scenes.
-
-This creates a robust and scalable architecture for our data-fetching needs.
+This new architecture makes the AI Strategy Lab more powerful, more reliable, and significantly easier to use, all while simplifying our own codebase.
 
 ---
 

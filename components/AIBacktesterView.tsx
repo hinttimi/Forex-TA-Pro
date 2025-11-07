@@ -1,4 +1,5 @@
 import React, { useState, useRef, useEffect, useCallback } from 'react';
+// @fix: Import generateSimulatedOhlcData to be used as a fallback data source.
 import { runBacktestOnHistoricalData, parseStrategyFromText, analyzeBacktestResults, analyzeLiveChart, generateSimulatedOhlcData, parseTradeLogFromAnalysis } from '../services/geminiService';
 import { MarketDataManager } from '../services/marketDataService';
 import { LoadingSpinner } from './LoadingSpinner';
@@ -9,12 +10,13 @@ import { StrategyParams, BacktestResults, AnalysisResult, OhlcData, UploadedFile
 import { XMarkIcon } from './icons/XMarkIcon';
 import { PhotoIcon } from './icons/PhotoIcon';
 import { LinkIcon } from './icons/LinkIcon';
-import { OhlcChart } from './OhlcChart';
 import { EquityCurveChart } from './EquityCurveChart';
 import { useCompletion } from '../hooks/useCompletion';
 import { useBadges } from '../hooks/useBadges';
 import { BookmarkSquareIcon } from './icons/BookmarkSquareIcon';
 import { ClipboardDocumentListIcon } from './icons/ClipboardDocumentListIcon';
+// @fix: Renamed component from OhlcChart to the existing InteractiveBacktestChart.
+import { InteractiveBacktestChart } from './InteractiveBacktestChart';
 
 const MAJOR_PAIRS = ['EUR/USD', 'GBP/USD', 'USD/JPY', 'USD/CAD', 'AUD/USD', 'NZD/USD', 'USD/CHF'];
 const TIMEFRAMES = ['1M', '5M', '15M', '1H', '4H', 'Daily'];
@@ -107,7 +109,7 @@ const MetricCard: React.FC<{ label: string; value: string; className?: string }>
     </div>
 );
 
-type LabState = 'idle' | 'parsing' | 'fetching_data' | 'generating_simulation_data' | 'analyzing_data' | 'generating_feedback' | 'results' | 'error';
+type LabState = 'idle' | 'parsing' | 'fetching_data' | 'analyzing_data' | 'generating_feedback' | 'results' | 'error';
 type AnalyzerState = 'idle' | 'analyzing' | 'results' | 'error';
 type ActiveTab = 'lab' | 'analyzer';
 type ChartTab = 'ohlc' | 'equity';
@@ -419,8 +421,7 @@ export const AIBacktesterView: React.FC<AIBacktesterViewProps> = ({ initialReque
         switch(labState) {
             case 'parsing': return "AI is understanding your strategy...";
             case 'fetching_data': return `Fetching historical data for ${pair}...`;
-            case 'generating_simulation_data': return 'No market data key found in Settings. AI is generating a simulated dataset...';
-            case 'analyzing_data': return `AI is running backtest on ${dataSource} data...`;
+            case 'analyzing_data': return `AI is running backtest on historical data...`;
             case 'generating_feedback': return "Generating coaching feedback...";
             default: return "";
         }
@@ -482,7 +483,7 @@ export const AIBacktesterView: React.FC<AIBacktesterViewProps> = ({ initialReque
                                 <div>
                                     <div className="flex justify-between items-center mb-3">
                                         <h3 className="text-xl font-bold text-white">
-                                            Chart ({dataSource === 'real' ? 'Real Historical Data' : 'AI-Generated Simulation'})
+                                            Backtest Chart ({dataSource === 'real' ? 'Real Historical Data' : 'AI-Generated Simulation'})
                                         </h3>
                                         <div className="flex space-x-1 p-1 bg-[--color-obsidian-slate]/50 rounded-lg">
                                             <ChartTabButton tab="ohlc" label="Price Chart" />
@@ -491,13 +492,13 @@ export const AIBacktesterView: React.FC<AIBacktesterViewProps> = ({ initialReque
                                     </div>
                                     <div className="w-full aspect-video bg-[--color-obsidian-slate] rounded-md">
                                         {chartTab === 'ohlc' ? (
-                                             <OhlcChart data={ohlcData} trades={backtestResults.tradeLog} />
+                                             <InteractiveBacktestChart data={ohlcData} trades={backtestResults.tradeLog} />
                                         ) : (
                                             <EquityCurveChart tradeLog={backtestResults.tradeLog || []} avgRR={backtestResults.avgRR} />
                                         )}
                                     </div>
                                     <p className="text-xs text-slate-500 mt-1 text-center">
-                                        {chartTab === 'ohlc' ? 'Chart displays up to 500 most recent candles from the dataset.' : 'Equity curve assumes 1 unit of risk per trade.'}
+                                        {chartTab === 'ohlc' ? 'Scroll to zoom, click and drag to pan.' : 'Equity curve assumes 1 unit of risk per trade.'}
                                     </p>
                                 </div>
                                 <div>

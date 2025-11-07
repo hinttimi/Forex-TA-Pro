@@ -3,12 +3,9 @@ import { useAuth } from './AuthContext';
 import { db } from '../firebase';
 import { doc, getDoc, updateDoc, arrayUnion, increment, setDoc } from 'firebase/firestore';
 
-export type CountableEvent = 'correctPatterns' | 'simulatorRuns' | 'savedAnalyses' | 'loggedTrades';
+export type CountableEvent = 'loggedTrades';
 
 const defaultCounts: Record<CountableEvent, number> = { 
-    correctPatterns: 0, 
-    simulatorRuns: 0, 
-    savedAnalyses: 0, 
     loggedTrades: 0 
 };
 
@@ -26,7 +23,7 @@ export const CompletionContext = createContext<CompletionContextType | undefined
 export const CompletionProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
     const { currentUser } = useAuth();
     const [completedLessons, setCompletedLessons] = useState(new Set<string>());
-    const [completionCounts, setCompletionCounts] = useState<Record<CountableEvent, number>>(defaultCounts);
+    const [completionCounts, setCompletionCounts] = useState<Record<string, number>>(defaultCounts);
 
     useEffect(() => {
         const fetchData = async () => {
@@ -36,7 +33,7 @@ export const CompletionProvider: React.FC<{ children: ReactNode }> = ({ children
                 if (docSnap.exists()) {
                     const data = docSnap.data();
                     setCompletedLessons(new Set(data.completedLessons || []));
-                    setCompletionCounts(prev => ({...prev, ...data.completionCounts}));
+                    setCompletionCounts(prev => ({...defaultCounts, ...data.completionCounts}));
                 }
             } else {
                 // Reset state on logout
@@ -85,7 +82,7 @@ export const CompletionProvider: React.FC<{ children: ReactNode }> = ({ children
 
     const value = useMemo(() => ({
         completedLessons,
-        completionCounts,
+        completionCounts: completionCounts as Record<CountableEvent, number>,
         logLessonCompleted,
         getCompletionCount,
         incrementCount,

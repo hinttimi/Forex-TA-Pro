@@ -9,16 +9,10 @@ export const useCompletion = () => {
 
   const { incrementCount, ...rest } = context;
 
-  const logCorrectPattern = () => incrementCount('correctPatterns');
-  const logSimulatorCompletion = () => incrementCount('simulatorRuns');
-  const logSavedAnalysis = () => incrementCount('savedAnalyses');
   const logTradeLogged = () => incrementCount('loggedTrades');
 
   return { 
     ...rest,
-    logCorrectPattern,
-    logSimulatorCompletion,
-    logSavedAnalysis,
     logTradeLogged,
   };
 };
