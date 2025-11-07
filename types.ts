@@ -19,7 +19,7 @@ export interface LearningPath {
   modules: Module[];
 }
 
-export type AppView = 'dashboard' | 'lesson' | 'live_simulator' | 'achievements' | 'trading_plan' | 'mentor' | 'quiz' | 'market_pulse' | 'news_feed' | 'market_analyzer' | 'economic_calendar' | 'backtester' | 'settings' | 'trading_journal' | 'market_dynamics';
+export type AppView = 'intelligence_hub' | 'lesson' | 'live_simulator' | 'achievements' | 'trading_plan' | 'mentor' | 'quiz' | 'market_pulse' | 'news_feed' | 'market_analyzer' | 'economic_calendar' | 'backtester' | 'settings' | 'trading_journal' | 'market_dynamics';
 
 export interface DailyMission {
     title: string;

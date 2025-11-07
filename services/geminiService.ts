@@ -4,6 +4,8 @@
 
 
 
+
+
 import { GoogleGenAI, Type, GenerateContentResponse, GenerateImagesResponse, Modality, FunctionDeclaration } from "@google/genai";
 import { NewsArticle, MarketUpdate, EconomicEvent, MultipleChoiceQuestion, StrategyParams, BacktestResults, AnalysisResult, AppView, OhlcData, CurrencyStrengthData, VolatilityData, MarketSentimentData, TopMoverData, DailyMission, TradeLog, UploadedFile } from '../types';
 import { MENTOR_PERSONAS } from "../constants/mentorSettings";
@@ -401,7 +403,7 @@ const executeToolFunctionDeclaration: FunctionDeclaration = {
       toolName: {
         type: Type.STRING,
         description: 'The name of the tool/view to navigate to.',
-        enum: ['dashboard', 'live_simulator', 'backtester', 'market_dynamics', 'market_pulse', 'news_feed', 'market_analyzer', 'economic_calendar', 'trading_journal', 'trading_plan', 'achievements', 'settings']
+        enum: ['intelligence_hub', 'live_simulator', 'backtester', 'market_dynamics', 'market_pulse', 'news_feed', 'market_analyzer', 'economic_calendar', 'trading_journal', 'trading_plan', 'achievements', 'settings']
       },
       params: {
         type: Type.OBJECT,
@@ -443,7 +445,7 @@ export const generateMentorResponse = async (
 You are an AI assistant deeply integrated within the "Forex TA Pro" learning application. Your capabilities are centered around education and executing actions within the app.
 
 1.  **In-App Actions (via Function Calling):** You can directly help the user by executing tools. If a user's request clearly maps to a tool's function, you MUST call the \`executeTool\` function. This is your primary way of helping with real-time market questions. Do not try to answer them yourself; use the tool.
-    - User: "Take me to the simulator" -> Call \`executeTool({ toolName: 'live_simulator' })\`.
+    - User: "Take me to the live simulator" -> Call \`executeTool({ toolName: 'live_simulator' })\`.
     - User: "Why is EUR/USD moving right now?" -> Call \`executeTool({ toolName: 'market_analyzer', params: { pair: 'EUR/USD' } })\`.
     - User: "What are the biggest market-moving news events this week?" -> Call \`executeTool({ toolName: 'economic_calendar' })\`.
     - User: "Backtest a 15M EUR/USD strategy for me" -> Call \`executeTool({ toolName: 'backtester', params: { pair: 'EUR/USD', timeframe: '15M', strategyDescription: '...' } })\`.
@@ -539,7 +541,7 @@ const dailyMissionSchema = {
         completion_criteria: {
             type: Type.STRING,
             description: "The key that corresponds to the completion event for this tool.",
-            enum: ['backtester', 'live_simulator']
+            enum: ['live_simulator', 'backtester']
         },
     },
     required: ['title', 'description', 'tool', 'completion_criteria']

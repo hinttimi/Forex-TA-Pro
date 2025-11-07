@@ -31,7 +31,7 @@ export const BottomNavBar: React.FC<BottomNavBarProps> = ({ currentView, onSetVi
 
     return (
         <nav className="fixed bottom-0 left-0 right-0 h-16 bg-[--color-dark-matter]/90 backdrop-blur-lg border-t border-[--color-border] flex items-center justify-around md:hidden z-30">
-            <NavItem view="dashboard" label="Home" icon={HomeIcon} isActive={currentView === 'dashboard'} onClick={() => onSetView('dashboard')} />
+            <NavItem view="intelligence_hub" label="Home" icon={HomeIcon} isActive={currentView === 'intelligence_hub'} onClick={() => onSetView('intelligence_hub')} />
             <NavItem view="lesson" label="Lesson" icon={BookOpenIcon} isActive={isLessonRelatedView} onClick={onSelectLesson} />
             <NavItem view="mentor" label="Mentor" icon={SparklesIcon} isActive={currentView === 'mentor'} onClick={() => onSetView('mentor')} />
             <NavItem view="trading_journal" label="Journal" icon={ClipboardDocumentListIcon} isActive={currentView === 'trading_journal'} onClick={() => onSetView('trading_journal')} />

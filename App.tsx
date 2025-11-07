@@ -2,6 +2,8 @@
 
 
 
+
+
 import React, { useState, useCallback, useEffect, lazy, Suspense } from 'react';
 import { Sidebar } from './components/Sidebar';
 import { Header } from './components/Header';
@@ -45,7 +47,7 @@ const EconomicCalendarView = lazy(() => import('./components/EconomicCalendarVie
 const AIBacktesterView = lazy(() => import('./components/AIBacktesterView').then(module => ({ default: module.AIBacktesterView })));
 const LiveChartSimulatorView = lazy(() => import('./components/practice/LiveChartSimulatorView').then(module => ({ default: module.LiveChartSimulatorView })));
 const SettingsView = lazy(() => import('./components/SettingsView').then(module => ({ default: module.SettingsView })));
-const DashboardView = lazy(() => import('./components/DashboardView').then(module => ({ default: module.DashboardView })));
+const IntelligenceHubView = lazy(() => import('./components/IntelligenceHubView').then(module => ({ default: module.IntelligenceHubView })));
 const TradingJournalView = lazy(() => import('./components/TradingJournalView').then(module => ({ default: module.TradingJournalView })));
 const MarketDynamicsDashboard = lazy(() => import('./components/MarketDynamicsDashboard').then(module => ({ default: module.MarketDynamicsDashboard })));
 
@@ -64,7 +66,7 @@ const keyLessonsForSuggestions: Record<string, { message: string; tool: AppView;
 const AppContent: React.FC = () => {
   // --- ALL HOOKS MUST BE AT THE TOP AND UNCONDITIONAL ---
   const [isSidebarOpen, setIsSidebarOpen] = useState(true);
-  const [currentView, setCurrentView] = useState<AppView>('dashboard');
+  const [currentView, setCurrentView] = useState<AppView>('intelligence_hub');
   const [currentLesson, setCurrentLesson] = useState<Lesson | null>(null);
   const [isLoadingContent, setIsLoadingContent] = useState<boolean>(false);
   const [quizLesson, setQuizLesson] = useState<Lesson | null>(null);
@@ -202,7 +204,7 @@ const AppContent: React.FC = () => {
 
     const intervalId = setInterval(async () => {
         // @fix: Pass the API key to `generateMarketUpdateSnippet` and ensure it exists.
-        if (currentUser && (currentView === 'lesson' || currentView === 'dashboard') && document.visibilityState === 'visible' && apiKey) {
+        if (currentUser && (currentView === 'lesson' || currentView === 'intelligence_hub') && document.visibilityState === 'visible' && apiKey) {
             try {
                 const update = await generateMarketUpdateSnippet(apiKey);
                 setMarketUpdate(update);
@@ -249,8 +251,8 @@ const AppContent: React.FC = () => {
 
   const renderView = () => {
     switch (currentView) {
-      case 'dashboard':
-        return <DashboardView onSelectLesson={handleSelectLesson} onSetView={handleSetView} />;
+      case 'intelligence_hub':
+        return <IntelligenceHubView onSelectLesson={handleSelectLesson} onSetView={handleSetView} />;
       case 'lesson':
         return currentLesson ? (
           <LessonView
@@ -304,7 +306,7 @@ const AppContent: React.FC = () => {
     }
   };
   
-  let viewTitle = 'Dashboard';
+  let viewTitle = 'Intelligence Hub';
     if (currentView === 'lesson' && currentLesson) {
         viewTitle = currentLesson.title;
     } else if (currentView === 'backtester') {
@@ -313,7 +315,7 @@ const AppContent: React.FC = () => {
         viewTitle = 'Trading Journal';
     } else if (currentView === 'market_dynamics') {
         viewTitle = 'Market Dynamics';
-    } else if (currentView !== 'dashboard') {
+    } else if (currentView !== 'intelligence_hub') {
         viewTitle = currentView.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase());
     }
 
@@ -360,7 +362,7 @@ const AppContent: React.FC = () => {
             onClose={() => setMentorSuggestion(null)}
         />
        <BottomNavBar currentView={currentView} onSetView={handleSetView} onSelectLesson={handleGoToLessonFromNav} />
-       {currentView !== 'mentor' && currentView !== 'dashboard' && <FloatingActionButton onSetView={handleSetView} />}
+       {currentView !== 'mentor' && currentView !== 'intelligence_hub' && <FloatingActionButton onSetView={handleSetView} />}
     </div>
   );
 };

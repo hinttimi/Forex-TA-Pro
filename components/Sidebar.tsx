@@ -89,10 +89,10 @@ export const Sidebar: React.FC<SidebarProps> = ({ learningPaths, onSelectLesson,
     });
   };
 
-  const practiceTools = [
+  const agenticTools = [
       { label: 'AI Mentor', view: 'mentor', icon: SparklesIcon },
-      { label: 'Live Chart Simulator', view: 'live_simulator', icon: PlayIcon },
       { label: 'AI Strategy Lab', view: 'backtester', icon: BeakerIcon },
+      { label: 'Live Chart Simulator', view: 'live_simulator', icon: PlayIcon },
   ];
 
   const marketTools = [
@@ -149,7 +149,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ learningPaths, onSelectLesson,
           <>
             <nav>
                 <ul className="space-y-1">
-                    <NavLink label="Dashboard" view="dashboard" icon={HomeIcon} currentView={currentView} onClick={onSetView} />
+                    <NavLink label="Intelligence Hub" view="intelligence_hub" icon={HomeIcon} currentView={currentView} onClick={onSetView} />
                 </ul>
             </nav>
             <div>
@@ -196,9 +196,9 @@ export const Sidebar: React.FC<SidebarProps> = ({ learningPaths, onSelectLesson,
               </nav>
             </div>
              <div>
-                <h3 className="px-3 py-2 text-xs font-semibold text-[--color-muted-grey] uppercase">Tools & Practice</h3>
+                <h3 className="px-3 py-2 text-xs font-semibold text-[--color-muted-grey] uppercase">Agentic Tools</h3>
                 <ul className="space-y-1 mt-1">
-                    {practiceTools.map(tool => <NavLink key={tool.view} {...tool} currentView={currentView} onClick={onSetView} />)}
+                    {agenticTools.map(tool => <NavLink key={tool.view} {...tool} currentView={currentView} onClick={onSetView} />)}
                     {marketTools.map(tool => <NavLink key={tool.view} {...tool} currentView={currentView} onClick={onSetView} />)}
                 </ul>
             </div>
